@@ -1,0 +1,1436 @@
+"""
+batch_projects/api/erp_link.py
+────────────────────────────────
+The ERP bridge: linking a BP Project to its real ERPNext Project so
+the money queries (margin report, timesheets, workspace profitability,
+invoice-ready) can join through a real FK instead of matching BP Project
+names against ERPNext Project names (which can never match — BP Project is
+autonamed field:project_name, ERPNext Project is autonamed by naming series).
+
+Linking itself is free-tier plumbing — entitlement gates belong on the money
+surfaces built on top of this, not on creating the link.
+"""
+
+import frappe
+import json
+import re
+
+from frappe.utils import flt, add_days, nowdate
+
+from batch_projects.api.board import _check_permission, _require_system_user
+from batch_projects.entitlements import require_feature, require_workspace_feature
+
+
+@frappe.whitelist()
+def link_erpnext_project(project, erpnext_project):
+    """Point an existing BP Project at an existing ERPNext Project."""
+    _check_permission(project, "BP Admin")
+
+    if not frappe.db.exists("Project", erpnext_project):
+        frappe.throw(f"ERPNext Project {erpnext_project} does not exist.")
+
+    claimed_by = frappe.db.get_value("BP Project", {"erpnext_project": erpnext_project}, "name")
+    if claimed_by and claimed_by != project:
+        frappe.throw(
+            f"ERPNext Project {erpnext_project} is already linked to BP Project '{claimed_by}'."
+        )
+
+    doc = frappe.get_doc("BP Project", project)
+    doc.erpnext_project = erpnext_project
+    doc.save(ignore_permissions=True)
+    doc.add_comment("Comment", f"Linked to ERPNext Project <b>{erpnext_project}</b>.")
+    frappe.db.commit()
+    return {"ok": True, "erpnext_project": erpnext_project}
+
+
+@frappe.whitelist()
+def create_and_link_erpnext_project(project):
+    """One-click path when no matching ERPNext Project exists yet: create one
+    from this BP Project's basics and link it."""
+    _check_permission(project, "BP Admin")
+
+    doc = frappe.get_doc("BP Project", project)
+    if doc.erpnext_project:
+        frappe.throw(f"Already linked to ERPNext Project {doc.erpnext_project}.")
+
+    company = doc.company or frappe.defaults.get_global_default("company")
+    if not company:
+        frappe.throw(
+            "Set a Company on this project (or a site default Company) before "
+            "creating an ERPNext Project."
+        )
+
+    erp_doc = frappe.get_doc({
+        "doctype": "Project",
+        "project_name": doc.project_name,
+        "company": company,
+        "customer": doc.client or None,
+        "status": "Open",
+    })
+    erp_doc.insert(ignore_permissions=True)
+
+    doc.erpnext_project = erp_doc.name
+    doc.save(ignore_permissions=True)
+    doc.add_comment("Comment", f"Created and linked ERPNext Project <b>{erp_doc.name}</b>.")
+    frappe.db.commit()
+    return {"ok": True, "erpnext_project": erp_doc.name}
+
+
+@frappe.whitelist()
+def unlink_erpnext_project(project):
+    _check_permission(project, "BP Admin")
+
+    doc = frappe.get_doc("BP Project", project)
+    prev = doc.erpnext_project
+    if not prev:
+        return {"ok": True, "erpnext_project": None}
+
+    doc.erpnext_project = None
+    doc.save(ignore_permissions=True)
+    doc.add_comment("Comment", f"Unlinked ERPNext Project <b>{prev}</b>.")
+    frappe.db.commit()
+    return {"ok": True, "erpnext_project": None}
+
+
+@frappe.whitelist()
+def search_erpnext_projects(txt=""):
+    """Autocomplete for the link picker — matches name / project_name /
+    customer. No BP project context yet at this point, so the gate is just
+    "authenticated System User", same as the sibling search_erp_documents."""
+    _require_system_user()
+
+    rows = frappe.get_all(
+        "Project",
+        or_filters=(
+            [["name", "like", f"%{txt}%"], ["project_name", "like", f"%{txt}%"],
+             ["customer", "like", f"%{txt}%"]]
+            if txt else []
+        ),
+        fields=["name", "project_name", "customer", "status"],
+        limit=20,
+        order_by="modified desc",
+    )
+    already_linked = set(frappe.get_all(
+        "BP Project", filters={"erpnext_project": ["is", "set"]}, pluck="erpnext_project"
+    ))
+    return [
+        {
+            "name":           r["name"],
+            "project_name":   r.get("project_name") or r["name"],
+            "customer":       r.get("customer") or "",
+            "status":         r.get("status") or "",
+            "already_linked": r["name"] in already_linked,
+        }
+        for r in rows
+    ]
+
+
+# ─── The Money tab ───────────────────────────────────────────────────────────
+
+@frappe.whitelist()
+def get_project_money(project, period="last_30_days"):
+    """Everything the Money tab shows: revenue, labour, materials, sales
+    orders and budget for the project's linked ERPNext Project — each
+    section carries the underlying document rows so the UI can go 3 levels
+    deep (headline → rows → the real ERPNext document). Business tier."""
+    _check_permission(project, "BP Viewer")
+    from batch_projects import access
+    access.require_capability(project, "view_money")
+    require_feature("profitability")
+    require_workspace_feature("money_tab")
+
+    doc = frappe.get_doc("BP Project", project)
+    if not doc.erpnext_project:
+        return {"linked": False, "project": project}
+
+    erp_project = doc.erpnext_project
+    rate = float(doc.hourly_rate or 0)
+
+    # Currency doctrine (same as get_margin_report): everything summed on
+    # this tab is a base_* / company-currency amount — timesheet rates are
+    # written in company currency at timer-stop, and revenue/materials below
+    # read base_grand_total. Label accordingly; BP Project.currency is
+    # cosmetic and can say USD while every amount is NPR. Per-document
+    # currency belongs to the drawer, which reads the real doc.
+    from batch_projects.api.board import _company_currency
+    currency = _company_currency(doc.company) or doc.currency or "USD"
+
+    from datetime import date, timedelta
+    today = date.today()
+    period_days = {"last_7_days": 7, "last_30_days": 30, "last_90_days": 90}
+    if period in period_days:
+        from_date = today - timedelta(days=period_days[period])
+        to_date = today
+    elif period.startswith("month:"):
+        import calendar
+        ym = period.split(":")[1]
+        year, mon = int(ym.split("-")[0]), int(ym.split("-")[1])
+        from_date = date(year, mon, 1)
+        to_date = date(year, mon, calendar.monthrange(year, mon)[1])
+    else:
+        from_date = today - timedelta(days=30)
+        to_date = today
+
+    # ── Revenue: submitted Sales Invoices in period ──────────────────────────
+    revenue_rows = []
+    try:
+        revenue_rows = frappe.get_all(
+            "Sales Invoice",
+            filters={
+                "project": erp_project, "docstatus": 1,
+                "posting_date": ["between", [from_date, to_date]],
+            },
+            fields=["name", "posting_date as date", "base_grand_total as grand_total",
+                    "status", "outstanding_amount", "conversion_rate"],
+            order_by="posting_date desc",
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: revenue query failed ({project})")
+    for r in revenue_rows:
+        # outstanding_amount is party-account currency (doc currency for
+        # foreign-currency receivables) — bring it to company currency with
+        # the invoice's own rate so it can sit next to base_grand_total.
+        r["outstanding"] = round(float(r.pop("outstanding_amount", 0) or 0) * float(r.pop("conversion_rate", 1) or 1), 2)
+    revenue_total = round(sum(float(r.grand_total or 0) for r in revenue_rows), 2)
+
+    # ── Labour: submitted Timesheet Detail rows in period ────────────────────
+    ts_rows = []
+    try:
+        ts_rows = frappe.db.sql(
+            """
+            SELECT tsd.hours, tsd.costing_amount, tsd.billing_rate,
+                   tsd.is_billable, tsd.sales_invoice
+            FROM `tabTimesheet Detail` tsd
+            JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
+            WHERE tsd.project = %(proj)s
+              AND tsd.from_time >= %(from_dt)s AND tsd.from_time <= %(to_dt)s
+            """,
+            {"proj": erp_project, "from_dt": f"{from_date} 00:00:00", "to_dt": f"{to_date} 23:59:59"},
+            as_dict=True,
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: labour query failed ({project})")
+
+    labour_hours = round(sum(float(r.hours or 0) for r in ts_rows), 2)
+    # Per-row costing fallback — see batch_projects/costing.py:labour_cost,
+    # the single shared implementation get_margin_report also calls. A row
+    # with costing_amount 0 (no employee cost configured when it was
+    # logged) is estimated at the project rate; rows with real costing
+    # keep it.
+    from batch_projects.costing import labour_cost as _labour_cost
+    labour_cost = _labour_cost(ts_rows, rate)
+
+    # Unbilled: all-time (not period-scoped) — "what could I invoice right
+    # now", regardless of when the work happened.
+    unbilled_rows = []
+    try:
+        unbilled_rows = frappe.db.sql(
+            """
+            SELECT tsd.hours, tsd.billing_rate
+            FROM `tabTimesheet Detail` tsd
+            JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
+            WHERE tsd.project = %(proj)s
+              AND tsd.is_billable = 1
+              AND (tsd.sales_invoice IS NULL OR tsd.sales_invoice = '')
+            """,
+            {"proj": erp_project},
+            as_dict=True,
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: unbilled query failed ({project})")
+    unbilled_hours = round(sum(float(r.hours or 0) for r in unbilled_rows), 2)
+    unbilled_value = round(sum(float(r.hours or 0) * float(r.billing_rate or rate) for r in unbilled_rows), 2)
+
+    # Draft timesheets: hours logged (typically by the task timer) but not
+    # yet submitted in ERPNext — invisible to every figure above until
+    # submission, which otherwise reads as "I just tracked 41 minutes and
+    # the Money tab shows zeros". All-time, like unbilled. One row per
+    # draft Timesheet so the UI can deep-link straight to it.
+    draft_rows = []
+    try:
+        draft_rows = frappe.db.sql(
+            """
+            SELECT tsd.parent AS timesheet, ts.owner,
+                   SUM(tsd.hours) AS hours, MAX(tsd.to_time) AS last_logged
+            FROM `tabTimesheet Detail` tsd
+            JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 0
+            WHERE tsd.project = %(proj)s
+            GROUP BY tsd.parent, ts.owner
+            ORDER BY last_logged DESC
+            """,
+            {"proj": erp_project},
+            as_dict=True,
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: draft query failed ({project})")
+    draft_hours = round(sum(float(r.hours or 0) for r in draft_rows), 2)
+
+    # ── Materials: submitted Purchase Invoices in period ─────────────────────
+    material_rows = []
+    try:
+        material_rows = frappe.get_all(
+            "Purchase Invoice",
+            filters={
+                "project": erp_project, "docstatus": 1,
+                "posting_date": ["between", [from_date, to_date]],
+            },
+            fields=["name", "posting_date as date", "base_grand_total as grand_total", "status"],
+            order_by="posting_date desc",
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: materials query failed ({project})")
+    material_total = round(sum(float(r.grand_total or 0) for r in material_rows), 2)
+
+    # ── Expenses: submitted Expense Claims in period ─────────────────────────
+    # Must stay in sync with get_margin_report, which also counts expenses
+    # into cost — the same "two screens, two different costs" class of bug
+    # already closed once for labour; see costing.py.
+    expense_rows = []
+    try:
+        expense_rows = frappe.get_all(
+            "Expense Claim",
+            filters={
+                "project": erp_project, "docstatus": 1,
+                "posting_date": ["between", [from_date, to_date]],
+            },
+            fields=["name", "posting_date as date", "total_sanctioned_amount as amount", "status"],
+            order_by="posting_date desc",
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: expenses query failed ({project})")
+    expense_total = round(sum(float(r.amount or 0) for r in expense_rows), 2)
+
+    # Unbilled expenses: all-time (not period-scoped), same "what could I
+    # invoice right now" posture as labour's unbilled block above — and now a
+    # real invoiced-tracker rather than a visibility-only sum, since
+    # custom_sales_invoice (docs/APP-OVERVIEW.md §4.1) gives Expense Claim
+    # Detail the sales_invoice-equivalent Timesheet Detail already has. Same
+    # eff_amount math (cost vs. cost+markup, 'Not Billable' policy excluded)
+    # as generate_expense_invoice, so the number here is exactly what that
+    # button will actually invoice.
+    unbilled_expense_rows = []
+    unbilled_expense_value = 0.0
+    try:
+        unbilled_expense_rows = frappe.db.sql(
+            """
+            SELECT ecd.sanctioned_amount,
+                   IFNULL(ect.custom_reinvoice_policy, 'At Cost') AS policy,
+                   ect.custom_markup_percent AS markup_percent
+            FROM `tabExpense Claim Detail` ecd
+            JOIN `tabExpense Claim` ec ON ec.name = ecd.parent AND ec.docstatus = 1
+            LEFT JOIN `tabExpense Claim Type` ect ON ect.name = ecd.expense_type
+            WHERE ec.project = %(proj)s
+              AND ecd.custom_is_billable = 1
+              AND IFNULL(ect.custom_reinvoice_policy, 'At Cost') != 'Not Billable'
+              AND (ecd.custom_sales_invoice IS NULL OR ecd.custom_sales_invoice = ''
+                   OR NOT EXISTS (
+                       SELECT 1 FROM `tabSales Invoice` si2
+                       WHERE si2.name = ecd.custom_sales_invoice AND si2.docstatus < 2
+                   ))
+            """,
+            {"proj": erp_project},
+            as_dict=True,
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: unbilled expenses query failed ({project})")
+    unbilled_expense_count = len(unbilled_expense_rows)
+    unbilled_expense_value = round(sum(
+        flt(r.sanctioned_amount) * (1 + flt(r.markup_percent) / 100)
+        if r.policy == "At Cost + Markup" else flt(r.sanctioned_amount)
+        for r in unbilled_expense_rows
+    ), 2)
+
+    # ── Sales Orders against this project ─────────────────────────────────────
+    so_rows = []
+    try:
+        so_rows = frappe.get_all(
+            "Sales Order",
+            filters={
+                "project": erp_project, "docstatus": 1,
+                "transaction_date": ["between", [from_date, to_date]],
+            },
+            fields=["name", "base_grand_total as grand_total", "per_billed", "status"],
+            order_by="transaction_date desc",
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: sales orders query failed ({project})")
+
+    # ── Per-task cost breakdown ───────────────────────────────────────────────
+    # actual: period-scoped, same window as every other figure on this tab.
+    # committed: all-time — a snapshot of "what's outstanding right now" on
+    # open Purchase Orders, same convention as unbilled/draft above (neither
+    # is period-scoped either). Labelled distinctly in the UI for that reason.
+    def _blank_task_row(name, task_key=None, title=None):
+        return {
+            "task": name, "task_key": task_key, "title": title,
+            "actual": {"labour": 0.0, "materials": 0.0, "expenses": 0.0, "total": 0.0},
+            "committed": {"total": 0.0, "rows": []},
+        }
+
+    # Rows with no task attribution fold into one "__untasked__" bucket
+    # instead of being dropped — so this section's totals reconcile with the
+    # project-level figures / margin report instead of silently disagreeing
+    # by exactly the unattributed rows (the 8D lesson, different surface).
+    UNTASKED = "__untasked__"
+
+    # actual.labour: per-row costing_amount-or-rate fallback (same semantics
+    # as labour_cost above), grouped by the Timesheet Detail join key.
+    task_labour_rows = []
+    try:
+        task_labour_rows = frappe.db.sql(
+            """
+            SELECT IFNULL(NULLIF(tsd.custom_bp_task, ''), %(untasked)s) AS task,
+                   SUM(CASE WHEN tsd.costing_amount IS NULL OR tsd.costing_amount = 0
+                            THEN tsd.hours * %(rate)s ELSE tsd.costing_amount END) AS cost
+            FROM `tabTimesheet Detail` tsd
+            JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
+            WHERE tsd.project = %(proj)s
+              AND tsd.from_time >= %(from_dt)s AND tsd.from_time <= %(to_dt)s
+            GROUP BY 1
+            """,
+            {"proj": erp_project, "rate": rate, "untasked": UNTASKED,
+             "from_dt": f"{from_date} 00:00:00", "to_dt": f"{to_date} 23:59:59"},
+            as_dict=True,
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: task labour query failed ({project})")
+
+    # actual.materials: the bp_task dimension on Purchase Invoice Item reads
+    # near-empty until a PI is billed against a bp_task-stamped PO; that is
+    # expected, not a broken query. This is procurement spend, not physical
+    # stock consumption — Stock Entry/Stock Ledger Entry carry the same
+    # bp_task dimension but nothing reads it (zero live usage) and no SPA
+    # path creates a Stock Entry. Deliberately left unbuilt — see board.py's
+    # get_margin_report for the full reasoning.
+    task_material_rows = []
+    try:
+        task_material_rows = frappe.db.sql(
+            """
+            SELECT IFNULL(NULLIF(pii.bp_task, ''), %(untasked)s) AS task,
+                   SUM(pii.base_net_amount) AS materials
+            FROM `tabPurchase Invoice Item` pii
+            JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent AND pi.docstatus = 1
+            WHERE COALESCE(NULLIF(pii.project, ''), pi.project) = %(proj)s
+              AND pi.posting_date >= %(from_date)s AND pi.posting_date <= %(to_date)s
+            GROUP BY 1
+            """,
+            {"proj": erp_project, "from_date": from_date, "to_date": to_date,
+             "untasked": UNTASKED},
+            as_dict=True,
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: task materials query failed ({project})")
+
+    # actual.expenses: same bp_task dimension, on Expense Claim/Expense Claim
+    # Detail (both carry it — child checked first, header as fallback, same
+    # COALESCE convention as materials above).
+    task_expense_rows = []
+    try:
+        task_expense_rows = frappe.db.sql(
+            """
+            SELECT IFNULL(NULLIF(ecd.bp_task, ''), %(untasked)s) AS task,
+                   SUM(ecd.sanctioned_amount) AS expenses
+            FROM `tabExpense Claim Detail` ecd
+            JOIN `tabExpense Claim` ec ON ec.name = ecd.parent AND ec.docstatus = 1
+            WHERE COALESCE(NULLIF(ecd.project, ''), ec.project) = %(proj)s
+              AND ec.posting_date >= %(from_date)s AND ec.posting_date <= %(to_date)s
+            GROUP BY 1
+            """,
+            {"proj": erp_project, "from_date": from_date, "to_date": to_date,
+             "untasked": UNTASKED},
+            as_dict=True,
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: task expenses query failed ({project})")
+
+    # committed: erpnext's own non_billed_report.py formula — base_amount
+    # minus billed_amt (brought to company currency via conversion_rate)
+    # minus returned amount — summed over submitted, not-Closed/-Cancelled PO
+    # Items carrying the bp_task dimension. One row per (task, PO) so the UI
+    # can deep-link each contributing PO. All-time (see note above); no
+    # is_stock_item filter and no clamping of negative (over-billed) lines —
+    # deliberate deviations from the built-in report, per the locked plan.
+    task_committed_rows = []
+    try:
+        task_committed_rows = frappe.db.sql(
+            """
+            SELECT IFNULL(NULLIF(poi.bp_task, ''), %(untasked)s) AS task,
+                   poi.parent AS purchase_order, po.status,
+                   SUM(poi.base_amount
+                       - (poi.billed_amt * IFNULL(po.conversion_rate, 1))
+                       - (poi.base_rate * IFNULL(poi.returned_qty, 0))) AS amount
+            FROM `tabPurchase Order Item` poi
+            JOIN `tabPurchase Order` po ON po.name = poi.parent AND po.docstatus = 1
+            WHERE COALESCE(NULLIF(poi.project, ''), po.project) = %(proj)s
+              AND po.status NOT IN ('Closed', 'Cancelled')
+            GROUP BY 1, poi.parent
+            """,
+            {"proj": erp_project, "untasked": UNTASKED},
+            as_dict=True,
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"get_project_money: task committed query failed ({project})")
+
+    by_task_map = {}
+    for r in task_labour_rows:
+        by_task_map.setdefault(r.task, _blank_task_row(r.task))["actual"]["labour"] = round(float(r.cost or 0), 2)
+    for r in task_material_rows:
+        by_task_map.setdefault(r.task, _blank_task_row(r.task))["actual"]["materials"] = round(float(r.materials or 0), 2)
+    for r in task_expense_rows:
+        by_task_map.setdefault(r.task, _blank_task_row(r.task))["actual"]["expenses"] = round(float(r.expenses or 0), 2)
+    for r in task_committed_rows:
+        row = by_task_map.setdefault(r.task, _blank_task_row(r.task))
+        amount = round(float(r.amount or 0), 2)
+        row["committed"]["total"] = round(row["committed"]["total"] + amount, 2)
+        row["committed"]["rows"].append({"purchase_order": r.purchase_order, "status": r.status, "amount": amount})
+
+    # Enrich surviving task rows with key/title (rows born from ERP-side
+    # values may reference tasks of other BP projects or deleted tasks —
+    # those just render by name). Only rows with money on them are returned;
+    # a 500-task project must not ship 500 zero rows.
+    if by_task_map:
+        for t in frappe.get_all(
+            "BP Task", filters={"name": ["in", [k for k in by_task_map if k != UNTASKED]]},
+            fields=["name", "task_key", "title"],
+        ):
+            by_task_map[t.name]["task_key"] = t.task_key
+            by_task_map[t.name]["title"] = t.title
+    if UNTASKED in by_task_map:
+        by_task_map[UNTASKED]["title"] = "Not attributed to a task"
+
+    for row in by_task_map.values():
+        row["actual"]["total"] = round(
+            row["actual"]["labour"] + row["actual"]["materials"] + row["actual"]["expenses"], 2
+        )
+
+    by_task_rows = sorted(
+        (r for r in by_task_map.values()
+         if r["actual"]["total"] or r["committed"]["total"] or r["committed"]["rows"]),
+        # untasked bucket sorts last
+        key=lambda r: (r["task"] == UNTASKED, r["task_key"] or "", r["task"]),
+    )
+    by_task = {
+        "rows": by_task_rows,
+        "totals": {
+            "actual_labour": round(sum(r["actual"]["labour"] for r in by_task_rows), 2),
+            "actual_materials": round(sum(r["actual"]["materials"] for r in by_task_rows), 2),
+            "actual_expenses": round(sum(r["actual"]["expenses"] for r in by_task_rows), 2),
+            "committed": round(sum(r["committed"]["total"] for r in by_task_rows), 2),
+        },
+    }
+
+    # ── Budget (same by-type logic as the workspace profitability panel) ─────
+    # expense_total must be included — omitting expenses from cost here
+    # while get_margin_report counts them is the same "two screens, two
+    # different costs" class of bug already closed once for labour.
+    cost = labour_cost + material_total + expense_total
+    ptype = doc.project_type or "tm"
+    budget = 0.0
+    if ptype == "fixed":
+        budget = float(doc.budget_amount or 0)
+    elif ptype == "retainer":
+        budget = float(doc.retainer_hours or 0) * rate
+    burn_pct = round(cost / budget * 100, 1) if budget else None
+    remaining = round(budget - cost, 2) if budget else None
+
+    return {
+        "linked": True,
+        "project": project,
+        "erpnext_project": erp_project,
+        "period": period,
+        "from_date": from_date.isoformat(),
+        "to_date": to_date.isoformat(),
+        "currency": currency,
+        "project_type": ptype,
+        "hourly_rate": rate,
+        "revenue": {"total": revenue_total, "rows": revenue_rows},
+        "labour": {
+            "hours": labour_hours,
+            "cost": labour_cost,
+            "unbilled_hours": unbilled_hours,
+            "unbilled_value": unbilled_value,
+            "draft_hours": draft_hours,
+            "draft_rows": draft_rows,
+        },
+        "materials": {"total": material_total, "rows": material_rows},
+        "expenses": {
+            "total": expense_total, "rows": expense_rows,
+            "unbilled_count": unbilled_expense_count,
+            "unbilled_value": unbilled_expense_value,
+        },
+        "sales_orders": so_rows,
+        "by_task": by_task,
+        "budget": {"amount": budget, "burn_pct": burn_pct, "remaining": remaining},
+        "margin": round(revenue_total - cost, 2),
+    }
+
+
+# ─── Work arrives from sales ─────────────────────────────────────────────────
+
+def _dedupe_project_name(base_name: str, so_name: str) -> str:
+    """BP Project is autonamed field:project_name, so the name must be
+    globally unique. A Sales Order's title defaults to just the customer
+    name (Frappe's stock behaviour), so using it as-is collides with any
+    other project for that customer — surfacing as a raw DuplicateEntryError
+    ("BP Project {customer_name} already exists"). Disambiguate with the SO
+    name, then fall back to a counter for the pathological case where even
+    that's taken."""
+    name = (base_name or "").strip() or "Untitled Project"
+    if not frappe.db.exists("BP Project", {"project_name": name}):
+        return name
+
+    name = f"{name} — {so_name}"
+    if not frappe.db.exists("BP Project", {"project_name": name}):
+        return name
+
+    n = 2
+    candidate = f"{name} ({n})"
+    while frappe.db.exists("BP Project", {"project_name": candidate}):
+        n += 1
+        candidate = f"{name} ({n})"
+    return candidate
+
+
+def _derive_project_key(source_name: str) -> str:
+    """Same convention as the create-project UI (useCreateProject.js): first
+    5 chars of a single word, or initials of multiple words (up to 6 chars).
+    Server-side collision handling since there's no human here to fix it."""
+    words = [w for w in re.split(r"\s+", (source_name or "").strip()) if w]
+    if len(words) <= 1:
+        base = re.sub(r"[^A-Z0-9]", "", (words[0] if words else "PROJECT")[:5].upper())
+    else:
+        base = re.sub(r"[^A-Z0-9]", "", "".join(w[0] for w in words).upper())[:6]
+    if len(base) < 2:
+        base = (base + "PROJECT")[:5]
+
+    key = base
+    n = 2
+    while frappe.db.exists("BP Project", {"key": key}):
+        key = f"{base}{n}"
+        n += 1
+    return key
+
+
+def _guess_project_name(so) -> str:
+    """Sales Order's title field defaults to the literal string "{customer_name}"
+    (sales_order.json), a token that's only ever resolved client-side when
+    the form is filled in the desk UI. Any SO touched via API/import/bench
+    console can carry that raw, unrendered token straight through — fall
+    back to the real field instead of trusting title verbatim."""
+    raw_title = (so.title or "").strip()
+    title_is_unrendered_template = "{" in raw_title and "}" in raw_title
+    base = so.customer_name or so.customer if (not raw_title or title_is_unrendered_template) else raw_title
+    return _dedupe_project_name(base, so.name)
+
+
+@frappe.whitelist()
+def suggest_project_name_for_sales_order(sales_order):
+    """Best-guess, already-deduped project name — powers the "Create Batch
+    Project" prompt's default value so a human confirms/edits the name
+    before it's committed (BP Project is autonamed field:project_name, so
+    it must be globally unique)."""
+    so = frappe.get_doc("Sales Order", sales_order)
+    so.check_permission("read")
+    return _guess_project_name(so)
+
+
+@frappe.whitelist()
+def create_project_from_sales_order(sales_order, template=None, tasks_from_items=1, project_name=None):
+    """Odoo's service_tracking, our way: one click on a submitted Sales Order
+    creates a BP Project (+ its linked ERPNext Project), pre-populated from
+    the SO's line items (or a project template), and stamps the SO both ways.
+    Idempotent — a second call on an already-stamped SO refuses with the
+    existing project named."""
+    _require_system_user()
+    require_feature("integrations")
+
+    so = frappe.get_doc("Sales Order", sales_order)
+    so.check_permission("write")  # about to stamp it; write implies read
+
+    if so.docstatus != 1:
+        frappe.throw("The Sales Order must be submitted first.")
+    if so.custom_bp_project:
+        frappe.throw(f"Already linked to Batch Project '{so.custom_bp_project}'.")
+
+    from batch_projects.api.board import create_project, create_task
+    from batch_projects.setup.project_templates import expand_template
+
+    # A human-supplied name (from the "Create Batch Project" prompt) is
+    # trusted as-is, modulo the same uniqueness dedupe every name goes
+    # through — it can still collide with a project created since the
+    # prompt was shown.
+    project_name = (
+        _dedupe_project_name(project_name.strip(), so.name)
+        if project_name and project_name.strip()
+        else _guess_project_name(so)
+    )
+
+    workflow_states = issue_types = enabled_views = template_used = None
+    seed_from_items = bool(int(tasks_from_items or 0)) and not template
+
+    if template:
+        tpl = expand_template(template)
+        workflow_states = json.dumps(tpl["workflow_states"])
+        issue_types = json.dumps(tpl["issue_types"])
+        enabled_views = json.dumps(tpl["views"])
+        template_used = tpl["id"]
+
+    created = create_project(
+        project_name=project_name,
+        key=_derive_project_key(project_name),
+        project_type="tm",
+        client=so.customer,
+        company=so.company,
+        currency=so.currency,
+        workflow_states=workflow_states,
+        issue_types=issue_types,
+        enabled_views=enabled_views,
+        template_used=template_used,
+    )
+    bp_project = created["name"]
+
+    # Reuses the 8A one-click path — creates + links a real ERPNext Project.
+    link_result = create_and_link_erpnext_project(bp_project)
+
+    # Stamp both sides.
+    frappe.db.set_value("BP Project", bp_project, "source_sales_order", so.name, update_modified=False)
+    so.db_set("custom_bp_project", bp_project, update_modified=False)
+
+    tasks_created = 0
+    if seed_from_items:
+        for item in so.items:
+            title = item.item_name or item.item_code
+            desc = f"{item.qty} × {item.uom}"
+            if item.description and item.description.strip() != (item.item_name or "").strip():
+                desc += f" — {item.description}"
+            # Work sold on a Sales Order is billable by definition — timers
+            # started on these tasks must produce billable Timesheet rows or
+            # the hours never reach generate_invoice.
+            create_task(project=bp_project, title=title, description=desc, billable=1)
+            tasks_created += 1
+
+    frappe.db.commit()
+
+    return {
+        "ok": True,
+        "project": bp_project,
+        "project_name": created["project_name"],
+        "key": created["key"],
+        "erpnext_project": link_result["erpnext_project"],
+        "tasks_created": tasks_created,
+    }
+
+
+# ─── Close the loop: real invoicing ──────────────────────────────────────────
+
+@frappe.whitelist()
+def generate_invoice(project, period=None):
+    """Draft Sales Invoice from every currently-unbilled billable Timesheet
+    Detail row against this project's linked ERPNext Project — one item
+    line per BP task. `period` is accepted for call-signature symmetry with
+    the Money tab's period selector but doesn't scope what's invoiced: like
+    get_project_money's "unbilled" figure (intentionally all-time — "what
+    could I invoice right now"), this generates exactly that figure, not a
+    date-windowed subset of it.
+
+    Draft only — submission (and the ERPNext-side billed-hours writeback
+    that follows from it) stays a deliberate human act in ERPNext. Mirrors
+    erpnext/projects/doctype/timesheet/timesheet.py's make_sales_invoice
+    rather than reinventing the Timesheet <-> Sales Invoice linkage."""
+    _check_permission(project, "BP Admin")
+    from batch_projects import access
+    access.require_capability(project, "view_money")
+    require_feature("billing_writeback")
+
+    doc = frappe.get_doc("BP Project", project)
+    if not doc.erpnext_project:
+        frappe.throw(f"Link '{doc.project_name}' to an ERPNext Project before invoicing it.")
+    if not doc.client:
+        frappe.throw(f"Set a Client on '{doc.project_name}' before invoicing it.")
+
+    rows = frappe.db.sql(
+        """
+        SELECT tsd.name, tsd.parent AS timesheet, tsd.custom_bp_task AS bp_task,
+               tsd.hours, tsd.billing_hours, tsd.billing_rate, tsd.billing_amount,
+               tsd.activity_type, tsd.description, tsd.from_time, tsd.to_time,
+               tsd.project_name
+        FROM `tabTimesheet Detail` tsd
+        JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
+        WHERE tsd.project = %(proj)s
+          AND tsd.is_billable = 1
+          AND (tsd.sales_invoice IS NULL OR tsd.sales_invoice = '')
+        ORDER BY tsd.from_time ASC
+        """,
+        {"proj": doc.erpnext_project},
+        as_dict=True,
+    )
+    if not rows:
+        frappe.throw("Nothing to invoice — no unbilled billable hours on this project.")
+
+    # ERPNext stamps tsd.sales_invoice only when the SI is SUBMITTED, so the
+    # unbilled query above still returns these rows while a generated draft
+    # sits unsubmitted in ERPNext — a second click here would mint a duplicate
+    # draft double-billing the same hours. Refuse and point at the draft
+    # instead (same idempotency pattern as the SO button's custom_bp_project).
+    covering_draft = frappe.db.sql(
+        """
+        SELECT DISTINCT sit.parent
+        FROM `tabSales Invoice Timesheet` sit
+        JOIN `tabSales Invoice` si ON si.name = sit.parent AND si.docstatus = 0
+        WHERE sit.timesheet_detail IN %(details)s
+        """,
+        {"details": tuple(r.name for r in rows)},
+    )
+    if covering_draft:
+        frappe.throw(
+            f"Draft Sales Invoice {covering_draft[0][0]} already covers these hours — "
+            "submit or delete it in ERPNext first."
+        )
+
+    # Same billing_rate-or-project-rate fallback get_project_money's unbilled
+    # figure already uses — a row with billing_rate=0 (e.g. a Timesheet Detail
+    # entered directly in ERPNext, outside the task timer, before a rate was
+    # set) must price the same way here as it did in the number the human
+    # saw on the button they just clicked, or it gets silently invoiced for
+    # $0 and permanently marked billed for real hours worked.
+    project_rate = flt(doc.hourly_rate or 0)
+    for r in rows:
+        eff_rate = flt(r.billing_rate) or project_rate
+        r.eff_amount = round(flt(r.billing_hours or r.hours) * eff_rate, 2)
+
+    by_task = {}
+    for r in rows:
+        by_task.setdefault(r.bp_task or "", []).append(r)
+
+    task_meta = {
+        t.name: t for t in frappe.get_all(
+            "BP Task", filters={"name": ["in", [k for k in by_task if k]]},
+            fields=["name", "task_key", "title"],
+        )
+    }
+
+    company = doc.company or frappe.defaults.get_global_default("company")
+    income_account = frappe.db.get_value("Company", company, "default_income_account")
+    if not income_account:
+        frappe.throw(f"Set a Default Income Account on Company '{company}' before invoicing.")
+
+    si = frappe.new_doc("Sales Invoice")
+    si.customer = doc.client
+    si.company = company
+    si.project = doc.erpnext_project
+    # Timesheet amounts are already in company currency (billing_rate/
+    # costing_rate were set in company currency at timer-stop time) — forcing
+    # the project's own currency here throws when there's no exchange rate
+    # configured for it. Let set_missing_values default to company currency.
+
+    for bp_task, task_rows in by_task.items():
+        hours = round(sum(flt(r.billing_hours or r.hours) for r in task_rows), 2)
+        amount = round(sum(r.eff_amount for r in task_rows), 2)
+        rate = round(amount / hours, 4) if hours else 0
+        meta = task_meta.get(bp_task)
+        description = f"{meta.task_key} — {meta.title}" if meta else "Other billable time"
+        si.append("items", {
+            "item_name": description,
+            "description": description,
+            # BP Task accounting dimension (9A) — item-level value wins over
+            # the header in get_base_gl_dict, so this task lands on the GL
+            # row. Untasked "Other billable time" rows stay unstamped.
+            "bp_task": bp_task or None,
+            "qty": hours,
+            "uom": "Hour",
+            "rate": rate,
+            # No item_code (no service-item catalog assumption) means
+            # set_missing_values has nothing to fetch this from — set it
+            # explicitly or the row fails GL posting on submit.
+            "income_account": income_account,
+        })
+
+    for r in rows:
+        si.append("timesheets", {
+            "time_sheet": r.timesheet,
+            "timesheet_detail": r.name,
+            "billing_hours": r.billing_hours or r.hours,
+            "billing_amount": r.eff_amount,
+            "activity_type": r.activity_type,
+            "description": r.description,
+            "from_time": r.from_time,
+            "to_time": r.to_time,
+            "project_name": r.project_name,
+        })
+
+    si.run_method("set_missing_values")
+    si.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {
+        "ok": True,
+        "sales_invoice": si.name,
+        "grand_total": si.grand_total,
+        "hours_invoiced": round(sum(flt(r.billing_hours or r.hours) for r in rows), 2),
+    }
+
+
+@frappe.whitelist()
+def generate_milestone_invoice(milestone):
+    """Draft Sales Invoice for a single completed, billing-enabled milestone —
+    the milestone-based counterpart to generate_invoice's time-and-material
+    flow above. One line item, no timesheets child rows.
+
+    Draft only — submission stays a deliberate human act in ERPNext, same as
+    generate_invoice."""
+    doc = frappe.get_doc("BP Milestone", milestone)
+    _check_permission(doc.project, "BP Admin")
+    from batch_projects import access
+    access.require_capability(doc.project, "view_money")
+    require_feature("billing_writeback")
+
+    if doc.status != "Completed":
+        frappe.throw("Complete this milestone before invoicing it.")
+    if not doc.billing_type or doc.billing_type == "None":
+        frappe.throw("Set a billing type on this milestone before invoicing it.")
+    if doc.invoice_status == "Invoiced":
+        frappe.throw(f"This milestone was already invoiced as {doc.sales_invoice}.")
+
+    project = frappe.get_doc("BP Project", doc.project)
+    if not project.erpnext_project:
+        frappe.throw(f"Link '{project.project_name}' to an ERPNext Project before invoicing it.")
+    if not project.client:
+        frappe.throw(f"Set a Client on '{project.project_name}' before invoicing it.")
+
+    if doc.billing_type == "Fixed Amount":
+        amount = flt(doc.invoice_amount)
+    else:
+        # Percent of Budget — guard against invoicing past 100% of this
+        # project's budget across all its milestones. Checked against
+        # already-INVOICED siblings at the moment of invoicing, not against
+        # every configured-but-not-yet-invoiced milestone — a project can
+        # have more milestones configured with a plausible percent than will
+        # ever actually run; the harm only happens at the irreversible act of
+        # actually invoicing past 100%, so that's where the guard belongs.
+        already = flt(frappe.db.sql(
+            """
+            SELECT SUM(invoice_percent) FROM `tabBP Milestone`
+            WHERE project = %(project)s AND billing_type = 'Percent of Budget'
+              AND invoice_status = 'Invoiced' AND name != %(name)s
+            """,
+            {"project": doc.project, "name": doc.name},
+        )[0][0] or 0)
+        total_pct = already + flt(doc.invoice_percent)
+        if total_pct > 100:
+            frappe.throw(
+                f"Invoicing this milestone at {flt(doc.invoice_percent)}% would bring this "
+                f"project's total invoiced-by-percent to {total_pct}%, over its 100% budget "
+                f"({already}% already invoiced across other milestones)."
+            )
+        amount = flt(project.budget_amount) * flt(doc.invoice_percent) / 100
+
+    company = project.company or frappe.defaults.get_global_default("company")
+    income_account = frappe.db.get_value("Company", company, "default_income_account")
+    if not income_account:
+        frappe.throw(f"Set a Default Income Account on Company '{company}' before invoicing.")
+
+    si = frappe.new_doc("Sales Invoice")
+    si.customer = project.client
+    si.company = company
+    si.project = project.erpnext_project
+    # Same reasoning as generate_invoice above: let set_missing_values default
+    # to company currency rather than forcing the project's own currency,
+    # which throws when there's no exchange rate configured for it.
+    si.append("items", {
+        "item_name": doc.title,
+        "description": doc.title,
+        "qty": 1,
+        "rate": amount,
+        "income_account": income_account,
+    })
+    si.run_method("set_missing_values")
+    si.insert(ignore_permissions=True)
+
+    doc.db_set("invoice_status", "Invoiced", update_modified=False)
+    doc.db_set("sales_invoice", si.name, update_modified=False)
+    frappe.db.commit()
+
+    return {"ok": True, "sales_invoice": si.name, "grand_total": si.grand_total}
+
+
+@frappe.whitelist()
+def generate_expense_invoice(project):
+    """Draft Sales Invoice from every currently-unbilled, billable Expense
+    Claim Detail row against this project — the expense-side counterpart to
+    generate_invoice's timesheet flow above. One line per Expense Claim Type.
+
+    Re-invoicing policy lives on Expense Claim Type (custom_reinvoice_policy /
+    custom_markup_percent) — the same expense_policy pattern ERPNext's own
+    Odoo counterpart uses on the product (verified against odoo-src's
+    sale_project/sale_timesheet reinvoice tests), adapted from a flat
+    "sales price" to a cost/cost+markup% choice, since a markup on
+    reimbursable expenses (not a fixed resale price) is the pattern
+    professional-services billing tools actually use. See
+    docs/APP-OVERVIEW.md §4.1 for the full reasoning.
+
+    The per-row custom_is_billable checkbox stays the human trigger — same
+    "a person always decides what gets billed" posture as generate_invoice
+    and generate_milestone_invoice above. A type's 'Not Billable' policy is a
+    hard ceiling on top of that checkbox, not a replacement for it: it
+    excludes the type's rows from this query even if one was individually
+    (mis-)flagged billable.
+
+    Draft only — submission stays a deliberate human act in ERPNext."""
+    _check_permission(project, "BP Admin")
+    from batch_projects import access
+    access.require_capability(project, "view_money")
+    require_feature("billing_writeback")
+
+    doc = frappe.get_doc("BP Project", project)
+    if not doc.erpnext_project:
+        frappe.throw(f"Link '{doc.project_name}' to an ERPNext Project before invoicing it.")
+    if not doc.client:
+        frappe.throw(f"Set a Client on '{doc.project_name}' before invoicing it.")
+
+    # A row counts as unbilled if it's never been stamped, OR if the invoice
+    # it was stamped with no longer exists / was cancelled since — otherwise
+    # a deleted or cancelled draft would permanently lock a real expense out
+    # of ever being re-invoiced.
+    rows = frappe.db.sql(
+        """
+        SELECT ecd.name, ecd.parent AS expense_claim, ecd.expense_type,
+               ecd.sanctioned_amount, ecd.description, ec.posting_date,
+               IFNULL(ect.custom_reinvoice_policy, 'At Cost') AS policy,
+               ect.custom_markup_percent AS markup_percent
+        FROM `tabExpense Claim Detail` ecd
+        JOIN `tabExpense Claim` ec ON ec.name = ecd.parent AND ec.docstatus = 1
+        LEFT JOIN `tabExpense Claim Type` ect ON ect.name = ecd.expense_type
+        WHERE ec.project = %(proj)s
+          AND ecd.custom_is_billable = 1
+          AND IFNULL(ect.custom_reinvoice_policy, 'At Cost') != 'Not Billable'
+          AND (ecd.custom_sales_invoice IS NULL OR ecd.custom_sales_invoice = ''
+               OR NOT EXISTS (
+                   SELECT 1 FROM `tabSales Invoice` si2
+                   WHERE si2.name = ecd.custom_sales_invoice AND si2.docstatus < 2
+               ))
+        ORDER BY ec.posting_date ASC
+        """,
+        {"proj": doc.erpnext_project},
+        as_dict=True,
+    )
+    if not rows:
+        frappe.throw("Nothing to invoice — no unbilled billable expenses on this project.")
+
+    for r in rows:
+        r.eff_amount = round(
+            flt(r.sanctioned_amount) * (1 + flt(r.markup_percent) / 100)
+            if r.policy == "At Cost + Markup" else flt(r.sanctioned_amount),
+            2,
+        )
+
+    by_type = {}
+    for r in rows:
+        by_type.setdefault(r.expense_type or "Other", []).append(r)
+
+    company = doc.company or frappe.defaults.get_global_default("company")
+    income_account = frappe.db.get_value("Company", company, "default_income_account")
+    if not income_account:
+        frappe.throw(f"Set a Default Income Account on Company '{company}' before invoicing.")
+
+    si = frappe.new_doc("Sales Invoice")
+    si.customer = doc.client
+    si.company = company
+    si.project = doc.erpnext_project
+
+    for expense_type, type_rows in by_type.items():
+        amount = round(sum(r.eff_amount for r in type_rows), 2)
+        marked_up = any(r.policy == "At Cost + Markup" for r in type_rows)
+        description = f"{expense_type} (reimbursed expenses{', incl. markup' if marked_up else ''})"
+        si.append("items", {
+            "item_name": description,
+            "description": description,
+            "qty": 1,
+            "rate": amount,
+            "income_account": income_account,
+        })
+
+    si.run_method("set_missing_values")
+    si.insert(ignore_permissions=True)
+
+    for r in rows:
+        frappe.db.set_value("Expense Claim Detail", r.name, "custom_sales_invoice", si.name, update_modified=False)
+    frappe.db.commit()
+
+    return {
+        "ok": True,
+        "sales_invoice": si.name,
+        "grand_total": si.grand_total,
+        "expenses_invoiced": len(rows),
+    }
+
+
+# ─── Task-driven procurement ──────────────────────────────────────────────────
+
+@frappe.whitelist()
+def search_non_stock_items(txt=""):
+    """Item picker for "Create Purchase Order" — restricted to
+    non-stock/service items for v1: core erpnext's stock validation demands
+    a warehouse on stock-item PO rows, and the v1 drawer form has no
+    warehouse field (a deliberate scope decision)."""
+    _require_system_user()
+    # has_variants=1 = template items, not transactable on a PO row.
+    filters = {"is_stock_item": 0, "disabled": 0, "has_variants": 0}
+    return frappe.get_all(
+        "Item", filters=filters,
+        or_filters=(
+            [["item_code", "like", f"%{txt}%"], ["item_name", "like", f"%{txt}%"]]
+            if txt else []
+        ),
+        fields=["item_code", "item_name", "stock_uom"],
+        order_by="modified desc", limit=20,
+    )
+
+
+@frappe.whitelist()
+def create_purchase_order_from_task(task, supplier, items):
+    """Mirror image of create_project_from_sales_order — one click on a task
+    creates a DRAFT Purchase Order (accountants review + submit in ERPNext,
+    same precedent as generate_invoice), every item row pre-stamped with the
+    bp_task accounting dimension + project, so it shows up in the
+    per-task cost breakdown's committed column the moment it's submitted.
+
+    items: [{item_code, qty, rate}, ...]. item_code is NOT optional — core
+    erpnext requires it (`reqd: 1`) on every Purchase Order Item; there is no
+    free-text-only row (verified, docs/PLAN-phase9-task-costing.md)."""
+    _require_system_user()
+    require_feature("integrations")
+
+    if isinstance(items, str):
+        items = json.loads(items)
+    if not items:
+        frappe.throw("Add at least one item.")
+
+    task_doc = frappe.get_doc("BP Task", task)
+
+    from batch_projects import access
+    access.require(task_doc.project, "Manager")
+    access.require_capability(task_doc.project, "view_money")
+
+    doc = frappe.get_doc("BP Project", task_doc.project)
+    if not doc.erpnext_project:
+        frappe.throw(f"Link '{doc.project_name}' to an ERPNext Project before creating a Purchase Order from it.")
+
+    company = doc.company or frappe.defaults.get_global_default("company")
+    schedule_date = add_days(nowdate(), 7)
+
+    po = frappe.new_doc("Purchase Order")
+    # BP users hold zero ERPNext doctype permissions by design (per 8B) — SPA
+    # users' Frappe accounts have no Buying/Accounts role, so buying_
+    # controller.set_missing_values's own internal get_party_details(supplier,
+    # ...) call (a live frappe.has_permission("Supplier", ...) check,
+    # independent of insert()'s ignore_permissions=True below) throws
+    # PermissionError for anyone but Administrator. Same posture as the
+    # tenancy checks elsewhere: our access.require(Manager) above IS the
+    # authorization; core doctype perms are irrelevant to a BP user.
+    po.flags.ignore_permissions = True
+    po.supplier = supplier
+    po.company = company
+    po.project = doc.erpnext_project
+    po.schedule_date = schedule_date
+
+    for item in items:
+        qty = flt(item.get("qty"))
+        rate = flt(item.get("rate"))
+        if not item.get("item_code") or qty <= 0:
+            frappe.throw("Every item needs an Item and a quantity greater than 0.")
+        # The picker only offers non-stock items, but the endpoint must
+        # enforce it too (locked v1 decision): a stock-item row has no
+        # warehouse here and would mint a draft the accountant can never
+        # submit — fail honestly at creation instead.
+        is_stock = frappe.db.get_value("Item", item["item_code"], "is_stock_item")
+        if is_stock is None:
+            frappe.throw(f"Item '{item['item_code']}' does not exist.")
+        if is_stock:
+            frappe.throw(
+                f"'{item['item_code']}' is a stock item — task purchase orders "
+                "support non-stock/service items only (no warehouse in this form). "
+                "Create stock POs in ERPNext."
+            )
+        po.append("items", {
+            "item_code": item["item_code"],
+            "qty": qty,
+            "rate": rate,
+            "schedule_date": schedule_date,
+            # Stamped explicitly at creation — never relying on the
+            # header-fallback COALESCE the read side (9B) added for
+            # desk-created POs that only set the header project.
+            "bp_task": task_doc.name,
+            "project": doc.erpnext_project,
+        })
+
+    po.run_method("set_missing_values")
+    po.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"ok": True, "purchase_order": po.name, "grand_total": po.grand_total}
+
+
+# ─── The Money drawer ─────────────────────────────────────────────────────────
+
+_DENIED = "Document not found on this project."
+
+_ITEM_FIELDS = ["item_name", "description", "qty", "uom", "rate", "amount"]
+
+_DOC_SPECS = {
+    "Sales Invoice": {
+        "header": ["name", "status", "posting_date", "due_date", "customer",
+                   "currency", "grand_total", "outstanding_amount"],
+        "child_doctype": "Sales Invoice Item",
+        "child_key": "items",
+        "child_fields": _ITEM_FIELDS,
+    },
+    "Purchase Invoice": {
+        "header": ["name", "status", "posting_date", "supplier", "currency", "grand_total"],
+        "child_doctype": "Purchase Invoice Item",
+        "child_key": "items",
+        "child_fields": _ITEM_FIELDS,
+    },
+    "Sales Order": {
+        "header": ["name", "status", "transaction_date", "delivery_date", "customer",
+                   "currency", "grand_total", "per_billed", "per_delivered"],
+        "child_doctype": "Sales Order Item",
+        "child_key": "items",
+        "child_fields": _ITEM_FIELDS,
+    },
+    "Purchase Order": {
+        "header": ["name", "status", "transaction_date", "supplier",
+                   "currency", "grand_total", "per_billed", "per_received"],
+        "child_doctype": "Purchase Order Item",
+        "child_key": "items",
+        # billed_amt (doc currency, same as rate/amount) on top of the
+        # standard item fields so the drawer can show the per-line committed
+        # remainder — deliberately not base_amount, which is
+        # company currency and would mix currencies with amount/rate in the
+        # same row. returned_qty feeds the same per-line remainder math.
+        "child_fields": _ITEM_FIELDS + ["billed_amt", "returned_qty"],
+    },
+    "Timesheet": {
+        "header": ["name", "docstatus", "status", "employee", "employee_name",
+                   "start_date", "end_date", "total_hours"],
+        "child_doctype": "Timesheet Detail",
+        "child_key": "time_logs",
+        "child_fields": ["activity_type", "from_time", "to_time", "hours",
+                          "is_billable", "billing_amount", "custom_bp_task"],
+    },
+    "Expense Claim": {
+        "header": ["name", "status", "posting_date", "employee_name", "total_sanctioned_amount"],
+        "child_doctype": "Expense Claim Detail",
+        "child_key": "expenses",
+        "child_fields": ["expense_type", "expense_date", "amount",
+                          "sanctioned_amount", "custom_is_billable", "bp_task"],
+    },
+}
+
+
+def _erp_project_for(project: str) -> str:
+    """BP Project -> its linked ERPNext Project, or the generic denial if
+    either the BP Project or the link doesn't resolve — same "don't tell an
+    attacker which part failed" posture as the tenancy check itself."""
+    erp_project = frappe.db.get_value("BP Project", project, "erpnext_project")
+    if not erp_project:
+        frappe.throw(_DENIED)
+    return erp_project
+
+
+def _tenant_ok(doctype: str, name: str, erp_project: str) -> bool:
+    """THE security boundary: does this ERPNext doc actually belong to this
+    project? Checked with raw field reads (frappe.db.get_value/exists) so a
+    nonexistent doc and a foreign doc both just fail this check the same
+    way — no frappe.get_doc() that could throw its own, distinguishing,
+    DoesNotExistError first."""
+    if doctype == "Timesheet":
+        parent_project = frappe.db.get_value("Timesheet", name, "parent_project")
+        if parent_project:
+            return parent_project == erp_project
+        # No header project set — fall back to any time_logs row landing on
+        # this project (mirrors how the timer itself stamps rows: project
+        # is set per-row, parent_project is never set by our own code).
+        return bool(frappe.db.exists("Timesheet Detail", {"parent": name, "project": erp_project}))
+    return frappe.db.get_value(doctype, name, "project") == erp_project
+
+
+@frappe.whitelist()
+def get_erp_doc_summary(project, doctype, name):
+    """Curated, read-only summary of one ERPNext document for the Money
+    drawer — never `frappe.get_doc(...).check_permission()` (SPA users hold
+    zero ERPNext doc perms by design); the tenancy check below IS
+    the authorization. Exactly 4 doctypes, exactly the fields listed —
+    that's the scope contract, not an oversight."""
+    _check_permission(project, "BP Viewer")
+    from batch_projects import access
+    access.require_capability(project, "view_money")
+    require_feature("profitability")
+    require_workspace_feature("money_tab")
+
+    spec = _DOC_SPECS.get(doctype)
+    if not spec:
+        frappe.throw(_DENIED)
+
+    erp_project = _erp_project_for(project)
+    if not _tenant_ok(doctype, name, erp_project):
+        frappe.throw(_DENIED)
+
+    header = frappe.db.get_value(doctype, name, spec["header"], as_dict=True)
+    if not header:
+        frappe.throw(_DENIED)
+
+    # Timesheets can legitimately span projects (manual weekly entry in
+    # ERPNext desk; our own timer used to share one draft per day) and the
+    # tenancy check passes on ANY matching row — so the row read must be
+    # scoped to this project too, or one project's drawer exposes another
+    # project's hours and billing amounts. Non-transitivity applies inside
+    # child tables, not just across documents.
+    child_filters = {"parent": name}
+    if doctype == "Timesheet":
+        child_filters["project"] = erp_project
+
+    children = frappe.get_all(
+        spec["child_doctype"], filters=child_filters,
+        fields=spec["child_fields"], order_by="idx asc",
+    )
+
+    if doctype == "Timesheet":
+        task_names = list({c["custom_bp_task"] for c in children if c.get("custom_bp_task")})
+        task_meta = {}
+        if task_names:
+            task_meta = {
+                t["name"]: t for t in frappe.get_all(
+                    "BP Task", filters={"name": ["in", task_names]},
+                    fields=["name", "task_key", "title"],
+                )
+            }
+        for c in children:
+            meta = task_meta.get(c.get("custom_bp_task"))
+            c["task_key"] = meta["task_key"] if meta else None
+            c["task_title"] = meta["title"] if meta else None
+
+    out = {"doctype": doctype, **header, spec["child_key"]: children}
+
+    if doctype == "Sales Invoice":
+        # The hours behind the invoice — an SI generated by generate_invoice
+        # carries its backing Timesheet references, and hiding them made the
+        # revenue drawer a dead end (user-reported). Name-only pointers per
+        # the non-transitivity rule: opening one re-enters this same gate.
+        ts_rows = frappe.get_all(
+            "Sales Invoice Timesheet", filters={"parent": name},
+            fields=["time_sheet", "billing_hours", "billing_amount"],
+            order_by="idx asc",
+        )
+        grouped = {}
+        for r in ts_rows:
+            if not r.time_sheet:
+                continue
+            g = grouped.setdefault(r.time_sheet, {"timesheet": r.time_sheet, "hours": 0.0, "amount": 0.0})
+            g["hours"] = round(g["hours"] + float(r.billing_hours or 0), 2)
+            g["amount"] = round(g["amount"] + float(r.billing_amount or 0), 2)
+        out["timesheets"] = list(grouped.values())
+
+    return out
+
+
+@frappe.whitelist()
+def submit_timesheet(project, timesheet):
+    """The ONLY mutation the Money drawer exposes. GL-posting documents
+    (SI/PI/SO) are never submitted from here — that stays a deliberate act
+    in ERPNext, same precedent as generate_invoice's draft-only return."""
+    _check_permission(project, "BP Admin")
+    require_feature("time_tracking")
+    require_workspace_feature("timesheets")
+
+    # Respect Timesheet Approval mode. When set to "Manager
+    # Approval", only workspace approvers may submit.
+    ws = frappe.get_single("BP Workspace Settings")
+    if ws.approval_mode == "Manager Approval":
+        approver_users = {a.user for a in (ws.approvers or [])}
+        if frappe.session.user not in approver_users:
+            frappe.throw(
+                "This workspace requires Manager Approval for timesheet submission. "
+                "Ask a workspace approver to submit this timesheet.",
+                title="Approval Required",
+            )
+
+    erp_project = _erp_project_for(project)
+    if not _tenant_ok("Timesheet", timesheet, erp_project):
+        frappe.throw(_DENIED)
+
+    ts = frappe.get_doc("Timesheet", timesheet)
+    if ts.docstatus != 0:
+        frappe.throw("Only a draft Timesheet can be submitted.")
+
+    # Submit is doc-level: it would also submit rows belonging to OTHER
+    # projects (manual weekly timesheets legitimately mix projects), which
+    # this project's Admin can't even see in the drawer — the read above is
+    # project-scoped. A mixed timesheet is ERPNext's call, not ours.
+    foreign_rows = [
+        d for d in ts.time_logs if (d.project or "") != erp_project
+    ]
+    if foreign_rows:
+        frappe.throw(
+            "This timesheet also contains time for other projects — "
+            "review and submit it in ERPNext instead."
+        )
+
+    ts.flags.ignore_permissions = True
+    ts.submit()
+    frappe.db.commit()
+
+    return get_erp_doc_summary(project, "Timesheet", timesheet)
+
+
+# ─── FIELD METADATA ────────────────────────────────────────────────────────
+
+def _doctype_field_rows(doctype):
+    """Shared row-shaping for doctype field metadata — used by both the
+    write-scoped get_erp_doctype_fields below and board.py's read-scoped
+    get_erp_doctype_fields_readonly (condition builders). Same shape either
+    way: only the caller's doctype whitelist differs (write vs. read)."""
+    meta = frappe.get_meta(doctype)
+    skip_types = {
+        "Section Break", "Column Break", "Tab Break", "Table", "Table MultiSelect",
+        "HTML", "Button", "Fold", "Heading", "Image", "Attach", "Attach Image",
+        "Signature", "Password", "Read Only", "Geolocation", "Code", "Barcode",
+    }
+    out = []
+    for f in meta.fields:
+        if f.fieldtype in skip_types or f.hidden or f.read_only:
+            continue
+        row = {
+            "fieldname": f.fieldname,
+            "label": f.label or f.fieldname,
+            "fieldtype": f.fieldtype,
+            "options": None,
+        }
+        if f.fieldtype == "Select":
+            row["options"] = [o for o in (f.options or "").split("\n") if o]
+        elif f.fieldtype == "Link":
+            row["options"] = f.options  # target doctype name
+        out.append(row)
+    return sorted(out, key=lambda r: r["label"])
+
+
+# NOT the same list as _ERP_SEARCH_DOCTYPES in board.py (that one is a
+# read-only reference/typeahead allowlist, deliberately wider). This is
+# field metadata for CONFIGURING "Update ERPNext Document" — it must never
+# offer more doctypes than that action can actually write to, so it's
+# scoped to the same write-safety boundary the action itself enforces.
+@frappe.whitelist()
+def get_erp_doctype_fields(doctype):
+    """Writable docfields for `doctype`, for the automation builder's
+    "Fields to set" Combobox — kills the free-text fieldname
+    guess. Scoped to the doctypes "Update ERPNext Document" may actually
+    target (bp_automation_rule.py's _ERPNEXT_DOCTYPE_WHITELIST) — offering
+    metadata for a doctype the action can't write to would be misleading,
+    not just inconsistent.
+    """
+    _require_system_user()
+    from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import (
+        _ERPNEXT_DOCTYPE_WHITELIST,
+    )
+    if doctype not in _ERPNEXT_DOCTYPE_WHITELIST:
+        frappe.throw(f"DocType '{doctype}' is not allowed here.")
+    return _doctype_field_rows(doctype)

@@ -1,0 +1,121 @@
+{
+  "name": "BP Notification Preference",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "By fieldname",
+  "autoname": "field:user",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-06-04 00:00:00",
+  "modified": "2026-06-04 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "user",
+      "fieldtype": "Link",
+      "label": "User",
+      "options": "User",
+      "reqd": 1,
+      "unique": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "email_section",
+      "fieldtype": "Section Break",
+      "label": "Email Notifications"
+    },
+    {
+      "fieldname": "email_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Email Notifications",
+      "default": "1"
+    },
+    {
+      "fieldname": "email_assignment",
+      "fieldtype": "Check",
+      "label": "Email: Assigned to me",
+      "default": "1"
+    },
+    {
+      "fieldname": "email_comment",
+      "fieldtype": "Check",
+      "label": "Email: Comments",
+      "default": "1"
+    },
+    {
+      "fieldname": "email_mention",
+      "fieldtype": "Check",
+      "label": "Email: Mentions",
+      "default": "1"
+    },
+    {
+      "fieldname": "column_break_email",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "email_status_change",
+      "fieldtype": "Check",
+      "label": "Email: Status changes",
+      "default": "1"
+    },
+    {
+      "fieldname": "email_due_reminder",
+      "fieldtype": "Check",
+      "label": "Email: Due-date reminders",
+      "default": "1"
+    },
+    {
+      "fieldname": "email_digest",
+      "fieldtype": "Check",
+      "label": "Email: Daily digest",
+      "default": "1"
+    },
+    {
+      "fieldname": "email_weekly_summary",
+      "fieldtype": "Check",
+      "label": "Email: Weekly project summary",
+      "default": "1"
+    },
+    {
+      "fieldname": "inapp_section",
+      "fieldtype": "Section Break",
+      "label": "In-App Notifications"
+    },
+    {
+      "fieldname": "inapp_enabled",
+      "fieldtype": "Check",
+      "label": "Enable In-App Notifications",
+      "default": "1"
+    },
+    {
+      "fieldname": "desktop_section",
+      "fieldtype": "Section Break",
+      "label": "Desktop Push"
+    },
+    {
+      "fieldname": "desktop_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Desktop Push (ERPDesktop)",
+      "description": "Native OS notifications delivered to the ERPDesktop app — instant even when this tab is closed.",
+      "default": "1"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

@@ -1,0 +1,129 @@
+{
+  "name": "BP Activity",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "autoincrement",
+  "autoname": "autoincrement",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-03-09 00:00:00",
+  "modified": "2026-04-08 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "section_break",
+      "fieldtype": "Section Break"
+    },
+    {
+      "fieldname": "task",
+      "fieldtype": "Link",
+      "label": "Task",
+      "reqd": 1,
+      "in_list_view": 0,
+      "in_standard_filter": 1,
+      "options": "BP Task"
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 1,
+      "options": "BP Project"
+    },
+    {
+      "fieldname": "task_key",
+      "fieldtype": "Data",
+      "label": "Task Key",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0
+    },
+    {
+      "fieldname": "action_type",
+      "fieldtype": "Select",
+      "label": "Action Type",
+      "reqd": 0,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "options": "Status Change\nAssignment\nComment\nAttachment\nField Edit\nCreated"
+    },
+    {
+      "fieldname": "column_break",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "user",
+      "fieldtype": "Link",
+      "label": "User",
+      "reqd": 0,
+      "in_list_view": 1,
+      "in_standard_filter": 0,
+      "options": "User"
+    },
+    {
+      "fieldname": "guest_name",
+      "fieldtype": "Data",
+      "label": "Guest Name",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0
+    },
+    {
+      "fieldname": "field_name",
+      "fieldtype": "Data",
+      "label": "Field",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0
+    },
+    {
+      "fieldname": "old_value",
+      "fieldtype": "Data",
+      "label": "Old Value",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0
+    },
+    {
+      "fieldname": "new_value",
+      "fieldtype": "Data",
+      "label": "New Value",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0
+    },
+    {
+      "fieldname": "section_comment",
+      "fieldtype": "Section Break",
+      "label": "Comment"
+    },
+    {
+      "fieldname": "comment_text",
+      "fieldtype": "Text Editor",
+      "label": "Comment",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

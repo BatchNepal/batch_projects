@@ -1,0 +1,101 @@
+{
+  "name": "BP Automation Run",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "autoname": "hash",
+  "naming_rule": "Random",
+  "creation": "2026-06-14 00:00:00",
+  "modified": "2026-06-14 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "rule",
+      "fieldtype": "Link",
+      "label": "Rule",
+      "options": "BP Automation Rule",
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "rule_name",
+      "fieldtype": "Data",
+      "label": "Rule Name"
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "options": "BP Project",
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "task",
+      "fieldtype": "Link",
+      "label": "Task",
+      "options": "BP Task"
+    },
+    {
+      "fieldname": "task_key",
+      "fieldtype": "Data",
+      "label": "Task Key"
+    },
+    {
+      "fieldname": "trigger_event",
+      "fieldtype": "Data",
+      "label": "Trigger Event"
+    },
+    {
+      "fieldname": "action_type",
+      "fieldtype": "Data",
+      "label": "Action"
+    },
+    {
+      "fieldname": "action_index",
+      "fieldtype": "Int",
+      "label": "Action Index",
+      "description": "0-based position within the rule's ordered actions list (multi-action rules log one row per action)."
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Success\nSkipped\nFailed",
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "message",
+      "fieldtype": "Small Text",
+      "label": "Message"
+    },
+    {
+      "fieldname": "run_at",
+      "fieldtype": "Datetime",
+      "label": "Run At"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Projects User",
+      "read": 1
+    },
+    {
+      "role": "Projects Manager",
+      "read": 1,
+      "delete": 1
+    },
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

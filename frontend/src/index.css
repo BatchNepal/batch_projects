@@ -1,0 +1,353 @@
+@import url("https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Roboto:ital,wght@0,100..900;1,100..900&family=Rubik:ital,wght@0,300..900;1,300..900&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    font-family: "Inter", sans-serif !important;
+  }
+  /* Class specificity (0,1,0) beats the universal `* !important` (0,0,0),
+     so mono survives the nuclear sans rule above. */
+  .font-mono, [class~="font-mono"], code, kbd, pre, samp {
+    font-family: var(--font-mono) !important;
+  }
+}
+
+/* ─── GLOBAL RESETS ──────────────────────────────────────────────────────────
+   tokens.css handles font-family, font-smoothing, box-sizing globally.
+   These overrides ensure form elements inherit correctly.
+────────────────────────────────────────────────────────────────────────────── */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+
+*:focus {
+  outline: none;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.4;
+  cursor: pointer;
+  filter: invert(40%);
+}
+
+/* ─── COMPONENT CLASSES ─────────────────────────────────────────────────────
+   Kept from original — may be used in existing components.
+────────────────────────────────────────────────────────────────────────────── */
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-gray-700 px-4 py-2 rounded-md text-sm font-medium border border-gray-300 hover:bg-gray-50 transition-colors;
+  }
+
+  .notion-select {
+    @apply w-full appearance-none bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-300 transition-colors cursor-pointer pr-8;
+  }
+
+  .notion-input {
+    @apply w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-transparent hover:border-gray-300 transition-colors placeholder-gray-400;
+  }
+
+  .kbd {
+    @apply font-mono bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded;
+  }
+}
+
+*:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ─── SHARED FIELD CLASSES ───────────────────────────────────────────────────
+   Used in IssueDetail and other form components.
+────────────────────────────────────────────────────────────────────────────── */
+.field-title {
+  @apply w-full bg-transparent border border-transparent rounded-md px-0 py-1 text-base font-semibold placeholder:text-neutral-300 leading-snug resize-none transition-colors focus:outline-none focus:border-neutral-200;
+  color: var(--foreground);
+}
+
+.field-body {
+  @apply w-full bg-transparent border border-transparent rounded-md px-0 py-1 text-sm placeholder:text-neutral-300 leading-relaxed resize-none transition-colors focus:outline-none focus:border-neutral-200;
+  color: var(--muted);
+}
+
+.field-meta {
+  @apply w-full bg-transparent border border-transparent rounded-md px-2 py-1.5 text-sm placeholder:text-neutral-300 hover:bg-neutral-100 focus:bg-white focus:outline-none transition-all;
+  color: var(--foreground);
+}
+
+.field-meta-select {
+  @apply field-meta appearance-none cursor-pointer pr-6;
+}
+
+/* ─── INTERFACE DENSITY ──────────────────────────────────────────────────────
+   Comfortable scales the ENTIRE app (sidebar, chrome, content, all text) via
+   `zoom` on <html> — the only mechanism that also keeps 100vh layouts correct.
+   Compact = the original dense baseline.
+
+   The catch: our popovers position with getBoundingClientRect + position:fixed,
+   and root zoom double-counts that (popup drifts, worse the further from the
+   top-left). Fix: every teleported overlay carries `.bp-overlay`, which
+   counter-zooms (1 / ui-zoom). That renders the overlay at 1× in a coordinate
+   space where its fixed top/left lands exactly on the trigger again. */
+:root { --ui-zoom: 1; }
+html[data-density="comfortable"] { --ui-zoom: 1.0833; }
+html { zoom: var(--ui-zoom); }
+.bp-overlay { zoom: calc(1 / var(--ui-zoom)); }
+
+/* CSS `zoom` magnifies rendering but `100vh` is NOT scaled by zoom, so a plain
+   100vh root renders ~8% taller than the window under comfortable density and
+   the document overflows → a second (window) scrollbar on top of the app's own
+   scroll area. Dividing by the zoom (the old fix here) re-derives the
+   viewport via `vh` a second time — Chrome's device-toolbar emulation
+   (laptop/responsive presets) doesn't always apply `zoom` to `100vh` the same
+   way it does in a normal window, so that division can under-shoot and leave
+   a gap at the bottom under emulation even though it's exact in a real
+   window. `height: 100%` sidesteps `vh` entirely: html/body/#app already
+   chain height:100% (tokens.css) anchored to the initial containing block,
+   which zoom scales consistently in both normal and emulated rendering —
+   .h-app just inherits that instead of re-measuring the viewport itself. */
+.h-app { height: 100%; }
+
+/* ─── SCROLLBAR ──────────────────────────────────────────────────────────────
+   Overrides tokens.css scrollbar with same values — kept here for specificity.
+────────────────────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-secondary);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* ─── TOAST (vue-sonner) ─────────────────────────────────────────────────────*/
+:root {
+  --toast-normal-bg: #ffffff;
+  --toast-normal-border: #e4e4e7;
+  --toast-normal-text: #18181b;
+  --toast-success-bg: #f0fdf4;
+  --toast-success-border: #bbf7d0;
+  --toast-success-text: #15803d;
+  --toast-error-bg: #fef2f2;
+  --toast-error-border: #fecaca;
+  --toast-error-text: #dc2626;
+  --toast-warning-bg: #fffbeb;
+  --toast-warning-border: #fde68a;
+  --toast-warning-text: #d97706;
+  --toast-info-bg: #eff6ff;
+  --toast-info-border: #bfdbfe;
+  --toast-info-text: #2563eb;
+}
+
+section[aria-label="Notifications alt+T"] {
+  position: fixed !important;
+  bottom: 24px !important;
+  right: 24px !important;
+  width: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  background: transparent !important;
+  z-index: 9999 !important;
+  pointer-events: none !important;
+}
+
+section[aria-label="Notifications alt+T"] * {
+  pointer-events: all !important;
+}
+
+[data-sonner-toaster] {
+  position: relative !important;
+  width: 320px !important;
+  height: auto !important;
+  background: transparent !important;
+  margin-bottom: 24px !important;
+  font-family: var(--font-sans) !important;
+}
+
+[data-sonner-toast] {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+  padding: 13px 14px !important;
+  border-radius: var(--radius-md) !important;
+  margin-bottom: 12px !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: var(--shadow-lg) !important;
+  min-width: 280px !important;
+  max-width: 320px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  color: var(--foreground) !important;
+  animation: toast-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+[data-sonner-toast][data-removed="true"] {
+  animation: toast-out 0.22s cubic-bezier(0.4, 0, 1, 1) forwards !important;
+}
+
+[data-sonner-toast] [data-icon] {
+  margin-top: 1px !important;
+  flex-shrink: 0 !important;
+  opacity: 0.85 !important;
+}
+
+[data-sonner-toast][data-type="success"] [data-icon] {
+  color: var(--success) !important;
+}
+
+[data-sonner-toast][data-type="error"] [data-icon] {
+  color: var(--danger) !important;
+}
+
+[data-sonner-toast][data-type="warning"] [data-icon] {
+  color: var(--warning) !important;
+}
+
+[data-sonner-toast][data-type="info"] [data-icon] {
+  color: var(--accent) !important;
+}
+
+[data-sonner-toast] [data-content] {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+[data-sonner-toast] [data-title] {
+  font-size: var(--text-sm) !important;
+  font-weight: var(--font-semibold) !important;
+  line-height: 1.4 !important;
+  color: var(--foreground) !important;
+  letter-spacing: var(--tracking-snug) !important;
+}
+
+[data-sonner-toast] [data-description] {
+  font-size: var(--text-xs) !important;
+  color: var(--muted) !important;
+  margin-top: 2px !important;
+  line-height: 1.4 !important;
+}
+
+[data-sonner-toast] [data-close-button] {
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  background: var(--surface-secondary) !important;
+  border: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
+  transition: opacity 0.15s ease !important;
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  padding: 0 !important;
+}
+
+[data-sonner-toast]:hover [data-close-button] {
+  opacity: 1 !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  background: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    max-height: 100px;
+    margin-bottom: 8px;
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(24px) scale(0.95);
+    max-height: 0;
+    margin-bottom: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .lg\:hidden {
+    display: none !important;
+  }
+}
+
+.font-extrabold {
+  font-weight: 800 !important;
+}
+
+/* ── Field language: OUTLINED (user-picked via Design Lab iterations).
+   White bg, crisp 2px border (--field-border), rounded-md. Hover darkens
+   the border toward text color (monday pattern). Focus = accent border
+   doubled with a 1px ring for a 2px read. ONE recipe for Input, Select
+   trigger, Textarea, and raw inputs. */
+.hui-field {
+  background-color: var(--field-background);
+  border-width: 1px;
+  border-style: solid;
+  border-color: #ebebebfe;
+  border-radius: var(--field-radius);
+  outline: none;
+  transition:
+    border-color 150ms var(--ease-out),
+    box-shadow 150ms var(--ease-out);
+}
+@media (hover: hover) {
+  .hui-field:hover:not(:focus-within):not(.is-active):not(.is-invalid) {
+    border-color: var(--field-border-hover);
+  }
+}
+.hui-field:focus-within,
+.hui-field.is-active,
+.hui-field:focus-visible {
+  border-color: var(--field-border-focus);
+  box-shadow: 0 0 0 1px var(--field-border-focus);
+}
+.hui-field.is-invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hui-field { transition: none; }
+}

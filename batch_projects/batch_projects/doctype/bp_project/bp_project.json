@@ -1,0 +1,442 @@
+{
+ "name": "BP Project",
+ "module": "Batch Projects",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "naming_rule": "",
+ "autoname": "field:project_name",
+ "istable": 0,
+ "editable_grid": 0,
+ "is_submittable": 0,
+ "creation": "2026-03-09 00:00:00",
+ "modified": "2026-05-21 00:00:00",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1,
+ "fields": [
+  {
+   "fieldname": "section_break",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "project_name",
+   "fieldtype": "Data",
+   "label": "Project Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "key",
+   "fieldtype": "Data",
+   "label": "Key",
+   "reqd": 1,
+   "unique": 1,
+   "description": "2-6 char prefix for issue IDs (e.g., BIM, FA, HTR)"
+  },
+  {
+   "fieldname": "project_color",
+   "fieldtype": "Color",
+   "label": "Project Color",
+   "default": "#0B6BCB"
+  },
+  {
+   "fieldname": "project_icon",
+   "fieldtype": "Data",
+   "label": "Project Icon",
+   "default": "Folder"
+  },
+  {
+   "fieldname": "theme",
+   "fieldtype": "Select",
+   "label": "Theme",
+   "options": "\nkoalaBlue\nkoalaGreen\nkoalaRed\nnotesOrange\nnotesPurple\ntreasureGray\ntreasureSand\nwhiteboard\nyetiBlue\nyetiGreen",
+   "description": "Illustrated project avatar shown in the sidebar and project cards."
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Project Status",
+   "options": "Active\nArchived\nOn Hold",
+   "default": "Active",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "health_override",
+   "fieldtype": "Select",
+   "label": "Health (override)",
+   "options": "\nOn track\nAt risk\nOff track",
+   "description": "Phase 22B — blank (default) = auto-derived from overdue %, done % vs elapsed time, and target-date slip. Set explicitly to override the computed value in Portfolio."
+  },
+  {
+   "fieldname": "visibility",
+   "fieldtype": "Select",
+   "label": "Visibility",
+   "options": "workspace\nprivate\nteam",
+   "default": "workspace"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "parent_project",
+   "fieldtype": "Link",
+   "label": "Parent Project (WBS)",
+   "options": "BP Project",
+   "description": "For project hierarchy / WBS breakdown. Child projects inherit visibility from parent."
+  },
+  {
+   "fieldname": "team",
+   "fieldtype": "Link",
+   "label": "Team",
+   "options": "BP Team"
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Data",
+   "label": "Category"
+  },
+  {
+   "fieldname": "template_used",
+   "fieldtype": "Data",
+   "label": "Template Used",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "section_details",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text Editor",
+   "label": "Description"
+  },
+  {
+   "fieldname": "column_break_details",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "lead",
+   "fieldtype": "Link",
+   "label": "Project Lead",
+   "options": "User"
+  },
+  {
+   "fieldname": "default_assignee",
+   "fieldtype": "Link",
+   "label": "Default Assignee",
+   "options": "User"
+  },
+  {
+   "fieldname": "issue_counter",
+   "fieldtype": "Int",
+   "label": "Issue Counter",
+   "default": "0",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "schema_version",
+   "fieldtype": "Int",
+   "label": "Schema Version",
+   "default": "1",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "section_engagement",
+   "fieldtype": "Section Break",
+   "label": "Engagement",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "project_type",
+   "fieldtype": "Select",
+   "label": "Project Type",
+   "options": "internal\ntm\nfixed\nretainer",
+   "default": "internal",
+   "in_list_view": 0
+  },
+  {
+   "fieldname": "client",
+   "fieldtype": "Link",
+   "label": "Client",
+   "options": "Customer",
+   "depends_on": "eval:doc.project_type != 'internal'"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Data",
+   "label": "Currency",
+   "default": "INR"
+  },
+  {
+   "fieldname": "column_break_engagement",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "budget_amount",
+   "fieldtype": "Float",
+   "label": "Budget Amount",
+   "precision": "2",
+   "depends_on": "eval:doc.project_type == 'fixed'"
+  },
+  {
+   "fieldname": "hourly_rate",
+   "fieldtype": "Float",
+   "label": "Hourly Rate",
+   "precision": "2",
+   "depends_on": "eval:doc.project_type == 'tm' || doc.project_type == 'retainer'"
+  },
+  {
+   "fieldname": "retainer_hours",
+   "fieldtype": "Int",
+   "label": "Monthly Retainer Hours",
+   "depends_on": "eval:doc.project_type == 'retainer'"
+  },
+  {
+   "fieldname": "section_schedule",
+   "fieldtype": "Section Break",
+   "label": "Schedule",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Start Date"
+  },
+  {
+   "fieldname": "target_end_date",
+   "fieldtype": "Date",
+   "label": "Target End Date"
+  },
+  {
+   "fieldname": "section_cycle",
+   "fieldtype": "Section Break",
+   "label": "Terminology",
+   "collapsible": 1,
+   "description": "Customise how work-cycles and effort are labelled for this project\u2019s industry. Every chart and metric reads from these."
+  },
+  {
+   "default": "Sprint",
+   "fieldname": "cycle_label",
+   "fieldtype": "Data",
+   "label": "Work Cycle Label",
+   "description": "What do you call a time-boxed work cycle? Sprint, Production Run, Phase, Campaign, Iteration, etc."
+  },
+  {
+   "fieldname": "column_break_cycle",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Story Points",
+   "fieldname": "effort_label",
+   "fieldtype": "Data",
+   "label": "Effort Unit Label",
+   "description": "What unit do you estimate work in? Story Points, Hours, Units, Batch Size, Billable Days, etc."
+  },
+  {
+   "fieldname": "section_workflow",
+   "fieldtype": "Section Break",
+   "label": "Workflow & Issue Types"
+  },
+  {
+   "fieldname": "workflow_states",
+   "fieldtype": "Long Text",
+   "label": "Workflow States"
+  },
+  {
+   "fieldname": "column_break_workflow",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "issue_types",
+   "fieldtype": "Long Text",
+   "label": "Issue Types"
+  },
+  {
+   "fieldname": "triage_enabled",
+   "fieldtype": "Check",
+   "default": "0",
+   "label": "Enable Triage",
+   "description": "When enabled, new tasks with no explicit status land in the Triage inbox (needs_triage=1) rather than the default workflow column."
+  },
+  {
+   "fieldname": "section_labels",
+   "fieldtype": "Section Break",
+   "label": "Labels",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "labels",
+   "fieldtype": "Long Text",
+   "label": "Labels"
+  },
+  {
+   "fieldname": "section_custom_fields",
+   "fieldtype": "Section Break",
+   "label": "Custom Fields",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "custom_fields",
+   "fieldtype": "Long Text",
+   "label": "Custom Fields Schema",
+   "description": "Deprecated — superseded by the BP Custom Field workspace library (custom_field_links). Left in place, unused, as a migration safety net."
+  },
+  {
+   "fieldname": "custom_field_links",
+   "fieldtype": "Table",
+   "label": "Custom Fields",
+   "options": "BP Custom Field Project"
+  },
+  {
+   "fieldname": "custom_field_values",
+   "fieldtype": "Long Text",
+   "label": "Custom Field Values",
+   "description": "Project-level custom field values, mirrors BP Task.custom_field_values."
+  },
+  {
+   "fieldname": "enabled_views",
+   "fieldtype": "Long Text",
+   "label": "Enabled Views"
+  },
+  {
+   "fieldname": "pinned_views",
+   "fieldtype": "Long Text",
+   "label": "Pinned Views",
+   "description": "Ordered view keys shown inline in the header tab strip; the rest live behind the overflow drawer. Null = default split (summary/board/list/gantt pinned)."
+  },
+  {
+   "fieldname": "default_view",
+   "fieldtype": "Data",
+   "label": "Default View",
+   "default": "summary"
+  },
+  {
+   "fieldname": "section_team",
+   "fieldtype": "Section Break",
+   "label": "Team",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "members",
+   "fieldtype": "Table",
+   "label": "Members",
+   "options": "BP Project Member"
+  },
+  {
+   "fieldname": "section_erp_integration",
+   "fieldtype": "Section Break",
+   "label": "ERP Integration",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "erpnext_project",
+   "fieldtype": "Link",
+   "label": "ERPNext Project",
+   "options": "Project",
+   "description": "The real ERPNext Project this BP Project is wired to. The join key for every money surface (margin report, timesheets, profitability, invoice-ready) — see docs/AUDIT-PM-2026-07-11.md."
+  },
+  {
+   "fieldname": "column_break_erp_integration",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "source_sales_order",
+   "fieldtype": "Link",
+   "label": "Source Sales Order",
+   "options": "Sales Order",
+   "read_only": 1,
+   "description": "Set when this project was created from a Sales Order (Phase 8C)."
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Projects User",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  },
+  {
+   "role": "Projects Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ],
+ "links": [],
+ "actions": [],
+ "custom": 0,
+ "field_order": [
+  "section_break",
+  "project_name",
+  "key",
+  "project_color",
+  "project_icon",
+  "column_break_main",
+  "status",
+  "visibility",
+  "company",
+  "team",
+  "category",
+  "template_used",
+  "section_details",
+  "description",
+  "column_break_details",
+  "lead",
+  "default_assignee",
+  "issue_counter",
+  "schema_version",
+  "section_engagement",
+  "project_type",
+  "client",
+  "currency",
+  "column_break_engagement",
+  "budget_amount",
+  "hourly_rate",
+  "retainer_hours",
+  "section_schedule",
+  "start_date",
+  "target_end_date",
+  "section_workflow",
+  "workflow_states",
+  "column_break_workflow",
+  "issue_types",
+  "section_labels",
+  "labels",
+  "section_custom_fields",
+  "custom_fields",
+  "custom_field_links",
+  "custom_field_values",
+  "enabled_views",
+  "pinned_views",
+  "default_view",
+  "section_team",
+  "members",
+  "section_erp_integration",
+  "erpnext_project",
+  "column_break_erp_integration",
+  "source_sales_order"
+ ]
+}

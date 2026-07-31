@@ -1,0 +1,30 @@
+[pre_model_sync]
+batch_projects.patches.migrate_to_workflow_states
+batch_projects.patches.backfill_board_rank
+batch_projects.patches.normalize_project_member_roles
+batch_projects.patches.create_project_work_activity_type
+
+[post_model_sync]
+# migrate_custom_fields_to_library reads/writes the new BP Custom Field /
+# BP Custom Field Project tables, so it must run AFTER doctype schema sync,
+# not before. configparser (which parses this file) requires every entry to
+# sit under an explicit section once any section header is used — mixing
+# headerless lines with a later [section] throws MissingSectionHeaderError,
+# which Frappe silently mis-recovers from by treating the WHOLE file as a
+# flat list (the bracketed header line itself included as a bogus "patch"),
+# hence the "App [post_model_sync] is not installed" crash. Every patch must
+# have an explicit section — no headerless lines anywhere in this file.
+batch_projects.patches.migrate_custom_fields_to_library
+# Needs erpnext's Accounting Dimension machinery + synced BP Task schema.
+batch_projects.patches.create_bp_task_accounting_dimension
+# Phase 20: needs the new actions/scope JSON columns synced first.
+batch_projects.patches.migrate_automation_actions
+# Phase 22D: needs the new scope/visibility columns synced first.
+batch_projects.patches.migrate_report_scope_visibility
+# Phase 43: clear false-positive triage flags from old schema default.
+batch_projects.patches.backfill_triage_flags
+# BP-04 (2026-07-27): re-name existing BP Intake Forms off their guessable
+# form_title-derived names onto random hash names — the name IS the public
+# /intake/<name> URL. Must run after the doctype's autoname config is
+# already synced to "hash" (post_model_sync).
+batch_projects.patches.rename_intake_forms_to_random

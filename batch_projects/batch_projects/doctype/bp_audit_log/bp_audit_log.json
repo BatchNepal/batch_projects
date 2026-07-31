@@ -1,0 +1,74 @@
+{
+  "name": "BP Audit Log",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "Random",
+  "autoname": "hash",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-07-25 00:00:00",
+  "modified": "2026-07-25 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "track_changes": 0,
+  "in_create": 1,
+  "fields": [
+    {
+      "fieldname": "event",
+      "fieldtype": "Data",
+      "label": "Event",
+      "reqd": 1,
+      "in_standard_filter": 1,
+      "in_list_view": 1,
+      "description": "Dotted event name, e.g. billing.checkout, automation.rule_fired"
+    },
+    {
+      "fieldname": "actor",
+      "fieldtype": "Data",
+      "label": "Actor",
+      "reqd": 1,
+      "in_standard_filter": 1,
+      "in_list_view": 1,
+      "description": "User email, or a service identity like gateway:automation"
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "options": "BP Project",
+      "in_standard_filter": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "outcome",
+      "fieldtype": "Select",
+      "label": "Outcome",
+      "options": "success\nfailure",
+      "default": "success",
+      "in_standard_filter": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "detail",
+      "fieldtype": "Long Text",
+      "label": "Detail",
+      "description": "Small structured (JSON) payload — the specifics of what happened"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 0,
+      "create": 1,
+      "delete": 0
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

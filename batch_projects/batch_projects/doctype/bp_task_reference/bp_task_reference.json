@@ -1,0 +1,45 @@
+{
+  "name": "BP Task Reference",
+  "doctype": "DocType",
+  "module": "Batch Projects",
+  "istable": 1,
+  "editable_grid": 1,
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "ref_doctype",
+      "fieldtype": "Data",
+      "label": "DocType",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "ref_name",
+      "fieldtype": "Data",
+      "label": "Document",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "ref_label",
+      "fieldtype": "Data",
+      "label": "Display Label",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "ref_url",
+      "fieldtype": "Data",
+      "label": "URL"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1, "write": 1, "create": 1, "delete": 1
+    },
+    {
+      "role": "All",
+      "read": 1, "write": 1, "create": 1, "delete": 1
+    }
+  ]
+}

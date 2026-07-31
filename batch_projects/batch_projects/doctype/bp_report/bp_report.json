@@ -1,0 +1,183 @@
+{
+  "name": "BP Report",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "autoname": "format:RPT-{####}",
+  "naming_rule": "Expression",
+  "creation": "2026-06-13 00:00:00",
+  "modified": "2026-06-13 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "report_name",
+      "fieldtype": "Data",
+      "label": "Report Name",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "icon",
+      "fieldtype": "Data",
+      "label": "Icon",
+      "default": "BarChart3"
+    },
+    {
+      "fieldname": "color",
+      "fieldtype": "Data",
+      "label": "Accent Color"
+    },
+    {
+      "fieldname": "starred",
+      "fieldtype": "Check",
+      "label": "Starred",
+      "default": "0"
+    },
+    {
+      "fieldname": "pinned",
+      "fieldtype": "Check",
+      "label": "Pinned to Sidebar",
+      "default": "0"
+    },
+    {
+      "fieldname": "schedule_section",
+      "fieldtype": "Section Break",
+      "label": "Scheduled Delivery"
+    },
+    {
+      "fieldname": "schedule_enabled",
+      "fieldtype": "Check",
+      "label": "Email this report on a schedule",
+      "default": "0"
+    },
+    {
+      "fieldname": "schedule_frequency",
+      "fieldtype": "Select",
+      "label": "Frequency",
+      "options": "Daily\nWeekly\nMonthly",
+      "default": "Weekly",
+      "depends_on": "schedule_enabled"
+    },
+    {
+      "fieldname": "schedule_day",
+      "fieldtype": "Select",
+      "label": "Day",
+      "options": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday",
+      "default": "Monday",
+      "description": "Weekly: weekday. Monthly: sends on the 1st.",
+      "depends_on": "eval:doc.schedule_enabled && doc.schedule_frequency=='Weekly'"
+    },
+    {
+      "fieldname": "schedule_hour",
+      "fieldtype": "Int",
+      "label": "Hour (0-23, site time)",
+      "default": "8",
+      "depends_on": "schedule_enabled"
+    },
+    {
+      "fieldname": "column_break_schedule",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "schedule_recipients",
+      "fieldtype": "Small Text",
+      "label": "Recipients",
+      "description": "Comma or newline separated email addresses.",
+      "depends_on": "schedule_enabled"
+    },
+    {
+      "fieldname": "last_sent",
+      "fieldtype": "Datetime",
+      "label": "Last Sent",
+      "read_only": 1
+    },
+    {
+      "fieldname": "scope_section",
+      "fieldtype": "Section Break",
+      "label": "Scope"
+    },
+    {
+      "fieldname": "scope",
+      "fieldtype": "Select",
+      "label": "Scope",
+      "options": "project\nworkspace",
+      "default": "project",
+      "in_standard_filter": 1,
+      "description": "Phase 22D — explicit scope so the Dashboards UI can ask directly instead of inferring from a blank Project link. workspace-scope dashboards can aggregate across every project."
+    },
+    {
+      "fieldname": "visibility",
+      "fieldtype": "Select",
+      "label": "Visibility",
+      "options": "private\nworkspace",
+      "default": "private",
+      "description": "private = only you can see/edit it. workspace = every member can read; owner or a workspace admin can edit."
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "options": "BP Project",
+      "in_standard_filter": 1,
+      "description": "Leave blank for a cross-project (workspace) report."
+    },
+    {
+      "fieldname": "milestone",
+      "fieldtype": "Link",
+      "label": "Milestone",
+      "options": "BP Milestone"
+    },
+    {
+      "fieldname": "column_break_scope",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "period",
+      "fieldtype": "Select",
+      "label": "Period",
+      "options": "all_time\nlast_7_days\nlast_30_days\nlast_90_days\nthis_quarter\nthis_year",
+      "default": "last_30_days"
+    },
+    {
+      "fieldname": "layout_section",
+      "fieldtype": "Section Break",
+      "label": "Layout"
+    },
+    {
+      "fieldname": "layout",
+      "fieldtype": "Long Text",
+      "label": "Layout",
+      "description": "JSON array of widget definitions."
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Projects User",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Projects Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

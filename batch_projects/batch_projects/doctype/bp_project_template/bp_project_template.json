@@ -1,0 +1,120 @@
+{
+  "name": "BP Project Template",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "",
+  "autoname": "hash",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-07-14 00:00:00",
+  "modified": "2026-07-14 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "template_name",
+      "fieldtype": "Data",
+      "label": "Template name",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Small Text",
+      "label": "Description"
+    },
+    {
+      "fieldname": "category",
+      "fieldtype": "Data",
+      "label": "Category",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "icon",
+      "fieldtype": "Data",
+      "label": "Icon",
+      "default": "FilePlus"
+    },
+    {
+      "fieldname": "color",
+      "fieldtype": "Data",
+      "label": "Color",
+      "default": "#0B6BCB"
+    },
+    {
+      "fieldname": "source_project",
+      "fieldtype": "Link",
+      "label": "Source project (informational)",
+      "options": "BP Project",
+      "description": "Where this snapshot was taken from. Never used to re-derive shape at create time — the JSON blobs below are the source of truth."
+    },
+    {
+      "fieldname": "section_snapshot",
+      "fieldtype": "Section Break",
+      "label": "Snapshot (immutable — re-save from source to refresh)"
+    },
+    {
+      "fieldname": "workflow_states_json",
+      "fieldtype": "Long Text",
+      "label": "Workflow states"
+    },
+    {
+      "fieldname": "issue_types_json",
+      "fieldtype": "Long Text",
+      "label": "Issue types"
+    },
+    {
+      "fieldname": "labels_json",
+      "fieldtype": "Long Text",
+      "label": "Labels"
+    },
+    {
+      "fieldname": "enabled_views_json",
+      "fieldtype": "Long Text",
+      "label": "Enabled views"
+    },
+    {
+      "fieldname": "default_view",
+      "fieldtype": "Data",
+      "label": "Default view"
+    },
+    {
+      "fieldname": "billing_json",
+      "fieldtype": "JSON",
+      "label": "Billing (project_type/hourly_rate/retainer_hours only — never client/company/erpnext_project)"
+    },
+    {
+      "fieldname": "custom_fields_json",
+      "fieldtype": "JSON",
+      "label": "Custom fields",
+      "description": "{global_ids: [{id, required}], owner_fields: [{old_id, field_label, field_type, ...}]} — owner fields get NEW ids on create, remapped via old_id."
+    },
+    {
+      "fieldname": "automations_json",
+      "fieldtype": "JSON",
+      "label": "Automation rules"
+    },
+    {
+      "fieldname": "tasks_json",
+      "fieldtype": "Long Text",
+      "label": "Tasks"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

@@ -1,0 +1,74 @@
+{
+  "name": "BP Workflow Run",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "autoname": "hash",
+  "naming_rule": "Random",
+  "creation": "2026-07-18 00:00:00",
+  "modified": "2026-07-18 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "workflow",
+      "fieldtype": "Link",
+      "label": "Workflow",
+      "options": "BP Workflow",
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "run_id",
+      "fieldtype": "Data",
+      "label": "Run ID",
+      "in_standard_filter": 1,
+      "description": "Groups every node-row from one graph execution — the UI renders 'this run touched n1->n2->n3' by grouping on this."
+    },
+    {
+      "fieldname": "node_id",
+      "fieldtype": "Data",
+      "label": "Node ID"
+    },
+    {
+      "fieldname": "node_type",
+      "fieldtype": "Data",
+      "label": "Node Type"
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Success\nSkipped\nFailed",
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "message",
+      "fieldtype": "Small Text",
+      "label": "Message"
+    },
+    {
+      "fieldname": "run_at",
+      "fieldtype": "Datetime",
+      "label": "Run At"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Projects Manager",
+      "read": 1
+    },
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

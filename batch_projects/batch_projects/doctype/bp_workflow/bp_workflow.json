@@ -1,0 +1,125 @@
+{
+  "name": "BP Workflow",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "autoname": "hash",
+  "naming_rule": "Random",
+  "creation": "2026-07-18 00:00:00",
+  "modified": "2026-07-18 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "title",
+      "fieldtype": "Data",
+      "label": "Title",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "scope",
+      "fieldtype": "Select",
+      "label": "Scope",
+      "options": "workspace\nproject",
+      "default": "workspace",
+      "reqd": 1,
+      "in_standard_filter": 1,
+      "description": "workspace: fires for every project (or those listed in Project Filter), no single owning project. project: scoped to one BP Project."
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "options": "BP Project",
+      "depends_on": "eval:doc.scope=='project'",
+      "mandatory_depends_on": "eval:doc.scope=='project'"
+    },
+    {
+      "fieldname": "project_filter",
+      "fieldtype": "JSON",
+      "label": "Project Filter",
+      "default": "[]",
+      "depends_on": "eval:doc.scope=='workspace'",
+      "description": "Workspace-scope only. Empty = every project. A JSON list of BP Project names to narrow it."
+    },
+    {
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "label": "Active",
+      "default": "1",
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "last_run_at",
+      "fieldtype": "Datetime",
+      "label": "Last Run At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "last_run_status",
+      "fieldtype": "Select",
+      "label": "Last Run Status",
+      "options": "\nSuccess\nPartial\nFailed",
+      "read_only": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "bridge_job_id",
+      "fieldtype": "Data",
+      "label": "Bridge Job ID",
+      "read_only": 1,
+      "hidden": 1,
+      "no_copy": 1,
+      "description": "Internal: the agent's job id for this workflow's trigger.schedule node (WORKPLAN-PHASE25 B5). Mirrors BP Automation Rule's own field."
+    },
+    {
+      "fieldname": "section_break_graph",
+      "fieldtype": "Section Break",
+      "label": "Graph"
+    },
+    {
+      "fieldname": "nodes",
+      "fieldtype": "JSON",
+      "label": "Nodes",
+      "default": "[]",
+      "description": "Flat node array — Vue Flow's own native shape. See WORKPLAN-PHASE24-AUTOMATION-CANVAS/01-DATA-MODEL.md for the full field contract."
+    },
+    {
+      "fieldname": "edges",
+      "fieldtype": "JSON",
+      "label": "Edges",
+      "default": "[]"
+    },
+    {
+      "fieldname": "canvas_meta",
+      "fieldtype": "JSON",
+      "label": "Canvas Meta",
+      "default": "{}",
+      "description": "Viewport position/zoom ONLY — never business logic. Safe to reset with zero functional impact."
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Projects Manager",
+      "read": 1
+    },
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

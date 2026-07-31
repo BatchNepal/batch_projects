@@ -1,0 +1,458 @@
+{
+  "name": "BP Task",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "",
+  "autoname": "field:task_key",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-03-09 00:00:00",
+  "modified": "2026-03-20 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "board_order",
+  "sort_order": "ASC",
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "section_identity",
+      "fieldtype": "Section Break"
+    },
+    {
+      "fieldname": "title",
+      "fieldtype": "Data",
+      "label": "Title",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "task_key",
+      "fieldtype": "Data",
+      "label": "Task Key",
+      "reqd": 0,
+      "in_list_view": 1,
+      "unique": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_identity",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "reqd": 1,
+      "in_list_view": 0,
+      "in_standard_filter": 1,
+      "options": "BP Project"
+    },
+    {
+      "fieldname": "epic",
+      "fieldtype": "Link",
+      "label": "Epic",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 1,
+      "options": "BP Epic"
+    },
+    {
+      "fieldname": "section_status_assignment",
+      "fieldtype": "Section Break",
+      "label": "Status & Assignment"
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Data",
+      "label": "Status",
+      "reqd": 0,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "default": "To Do",
+      "description": "Validated dynamically against project workflow_states"
+    },
+    {
+      "fieldname": "priority",
+      "fieldtype": "Select",
+      "label": "Priority",
+      "reqd": 0,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "options": "Highest\nHigh\nMedium\nLow\nLowest",
+      "default": "Medium"
+    },
+    {
+      "fieldname": "column_break_status",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "task_type",
+      "fieldtype": "Data",
+      "label": "Task Type",
+      "reqd": 0,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "default": "Task",
+      "description": "Validated dynamically against project issue_types"
+    },
+    {
+      "fieldname": "reporter",
+      "fieldtype": "Link",
+      "label": "Reporter",
+      "reqd": 0,
+      "in_list_view": 0,
+      "options": "Employee"
+    },
+    {
+      "fieldname": "assignees",
+      "fieldtype": "Table",
+      "label": "Assignees",
+      "options": "BP Task Assignee",
+      "reqd": 0,
+      "in_list_view": 0
+    },
+    {
+      "fieldname": "section_details",
+      "fieldtype": "Section Break",
+      "label": "Details"
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Text Editor",
+      "label": "Description",
+      "reqd": 0,
+      "in_list_view": 0
+    },
+    {
+      "fieldname": "labels",
+      "fieldtype": "Long Text",
+      "label": "Labels",
+      "description": "List of label IDs from project labels schema"
+    },
+    {
+      "fieldname": "section_planning",
+      "fieldtype": "Section Break",
+      "label": "Planning"
+    },
+    {
+      "fieldname": "story_points",
+      "fieldtype": "Int",
+      "label": "Story Points",
+      "reqd": 0,
+      "in_list_view": 0,
+      "default": "0"
+    },
+    {
+      "fieldname": "actual_points",
+      "fieldtype": "Int",
+      "label": "Actual Points",
+      "reqd": 0,
+      "in_list_view": 0,
+      "default": "0",
+      "description": "Points it actually took, vs Story Points' estimate — filled in during/after the sprint for calibration."
+    },
+    {
+      "fieldname": "is_unplanned",
+      "fieldtype": "Check",
+      "label": "Unplanned",
+      "default": "0",
+      "description": "Added to the sprint after it started, rather than during planning."
+    },
+    {
+      "fieldname": "due_date",
+      "fieldtype": "Date",
+      "label": "Due Date",
+      "reqd": 0,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "column_break_planning",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "start_date",
+      "fieldtype": "Date",
+      "label": "Start Date",
+      "reqd": 0,
+      "in_list_view": 0
+    },
+    {
+      "fieldname": "parent_task",
+      "fieldtype": "Link",
+      "label": "Parent Task",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0,
+      "options": "BP Task",
+      "description": "For sub-tasks"
+    },
+    {
+      "fieldname": "sprint",
+      "fieldtype": "Link",
+      "label": "Sprint",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 1,
+      "options": "BP Sprint"
+    },
+    {
+      "fieldname": "milestone",
+      "fieldtype": "Link",
+      "label": "Milestone",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 1,
+      "options": "BP Milestone"
+    },
+    {
+      "fieldname": "team",
+      "fieldtype": "Link",
+      "label": "Team",
+      "in_list_view": 0,
+      "in_standard_filter": 1,
+      "options": "BP Team"
+    },
+    {
+      "fieldname": "is_recurring",
+      "fieldtype": "Check",
+      "label": "Repeats",
+      "default": "0"
+    },
+    {
+      "fieldname": "recurrence_frequency",
+      "fieldtype": "Select",
+      "label": "Repeat Frequency",
+      "options": "Daily\nWeekly\nBiweekly\nMonthly",
+      "depends_on": "eval:doc.is_recurring"
+    },
+    {
+      "fieldname": "recurrence_end_date",
+      "fieldtype": "Date",
+      "label": "Repeat Until",
+      "depends_on": "eval:doc.is_recurring",
+      "description": "Optional. Leave blank to repeat indefinitely."
+    },
+    {
+      "fieldname": "recurrence_source",
+      "fieldtype": "Link",
+      "label": "Recurring From",
+      "options": "BP Task",
+      "read_only": 1,
+      "hidden": 1,
+      "no_copy": 1,
+      "description": "Set only on tasks spawned by a recurring template — points back to that template."
+    },
+    {
+      "fieldname": "submitted_via_intake",
+      "fieldtype": "Link",
+      "label": "Submitted Via Intake Form",
+      "options": "BP Intake Form",
+      "read_only": 1,
+      "hidden": 1,
+      "no_copy": 1,
+      "description": "Set only on tasks created from a public intake form submission — points back to that form."
+    },
+    {
+      "fieldname": "bridge_job_id",
+      "fieldtype": "Data",
+      "label": "Bridge Job ID",
+      "read_only": 1,
+      "hidden": 1,
+      "no_copy": 1,
+      "description": "Internal: the agent's job id for this task's recurrence timer."
+    },
+    {
+      "fieldname": "section_time_billing",
+      "fieldtype": "Section Break",
+      "label": "Time & Billing",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "estimated_hours",
+      "fieldtype": "Float",
+      "label": "Estimated Hours",
+      "reqd": 0,
+      "in_list_view": 0
+    },
+    {
+      "fieldname": "actual_hours",
+      "fieldtype": "Float",
+      "label": "Actual Hours",
+      "reqd": 0,
+      "in_list_view": 0,
+      "read_only": 1,
+      "description": "Auto-calculated from time logs"
+    },
+    {
+      "fieldname": "column_break_billing",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "billable",
+      "fieldtype": "Check",
+      "label": "Billable",
+      "default": "0"
+    },
+    {
+      "fieldname": "needs_triage",
+      "fieldtype": "Check",
+      "label": "Needs Triage",
+      "default": "0",
+      "description": "Flag for triage review. Previously defaulted to on for every task — existing rows can be bulk-cleared."
+    },
+    {
+      "fieldname": "section_lifecycle",
+      "fieldtype": "Section Break",
+      "label": "Lifecycle",
+      "collapsible": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "started_on",
+      "fieldtype": "Datetime",
+      "label": "Started On",
+      "read_only": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "completed_on",
+      "fieldtype": "Datetime",
+      "label": "Completed On",
+      "read_only": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "resolution",
+      "fieldtype": "Select",
+      "label": "Resolution",
+      "options": "\nDone\nWon't Do\nDuplicate\nCannot Reproduce\nObsolete",
+      "description": "Why the task was closed. Set automatically when moved to a completed status; cleared when reopened."
+    },
+    {
+      "fieldname": "section_custom_field_values",
+      "fieldtype": "Section Break",
+      "label": "Custom Field Values",
+      "collapsible": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "custom_field_values",
+      "fieldtype": "Long Text",
+      "label": "Custom Field Values",
+      "description": "Flat key-value map: {cf_id: value}. Managed by the SPA. Stored as JSON string.",
+      "hidden": 1
+    },
+    {
+      "fieldname": "section_erpnext_links",
+      "fieldtype": "Section Break",
+      "label": "ERPNext Links",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "sales_order",
+      "fieldtype": "Link",
+      "label": "Sales Order",
+      "reqd": 0,
+      "in_list_view": 0,
+      "options": "Sales Order"
+    },
+    {
+      "fieldname": "timesheet_detail",
+      "fieldtype": "Link",
+      "label": "Timesheet Detail",
+      "reqd": 0,
+      "in_list_view": 0,
+      "options": "Timesheet Detail"
+    },
+    {
+      "fieldname": "section_sequence",
+      "fieldtype": "Section Break",
+      "label": "Sequence",
+      "collapsible": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "board_order",
+      "fieldtype": "Int",
+      "label": "Board Order",
+      "default": "0",
+      "hidden": 1
+    },
+    {
+      "fieldname": "board_rank",
+      "fieldtype": "Data",
+      "label": "Board Rank",
+      "hidden": 1,
+      "read_only": 1,
+      "description": "Fractional manual-ordering key (see rank.py)."
+    },
+    {
+      "fieldname": "links",
+      "fieldtype": "Table",
+      "label": "Linked Tasks",
+      "options": "BP Task Link"
+    },
+    {
+      "fieldname": "references",
+      "fieldtype": "Table",
+      "label": "ERPNext References",
+      "options": "BP Task Reference"
+    },
+    {
+      "fieldname": "section_approval",
+      "fieldtype": "Section Break",
+      "label": "Approval"
+    },
+    {
+      "fieldname": "approval_status",
+      "fieldtype": "Select",
+      "label": "Approval Status",
+      "options": "\nApproval Not Required\nPending\nApproved\nRejected",
+      "default": "Approval Not Required"
+    },
+    {
+      "fieldname": "approver",
+      "fieldtype": "Link",
+      "label": "Approver",
+      "options": "User"
+    },
+    {
+      "fieldname": "approved_by",
+      "fieldtype": "Link",
+      "label": "Approved/Rejected By",
+      "options": "User"
+    },
+    {
+      "fieldname": "approved_on",
+      "fieldtype": "Datetime",
+      "label": "Approved On"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Projects User",
+      "read": 1,
+      "write": 1,
+      "create": 1
+    },
+    {
+      "role": "Projects Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

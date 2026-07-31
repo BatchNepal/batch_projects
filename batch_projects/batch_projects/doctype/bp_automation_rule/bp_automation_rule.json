@@ -1,0 +1,198 @@
+{
+  "name": "BP Automation Rule",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "",
+  "autoname": "format:RULE-{####}",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-03-09 00:00:00",
+  "modified": "2026-03-09 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "section_break",
+      "fieldtype": "Section Break"
+    },
+    {
+      "fieldname": "rule_name",
+      "fieldtype": "Data",
+      "label": "Rule Name",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 0
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Small Text",
+      "label": "Description",
+      "reqd": 0,
+      "description": "Phase 22A.5 — shown in the manage-list meta line; optional, free text (genuinely open domain, not a guess-field)."
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 1,
+      "options": "BP Project",
+      "description": "Required when Scope = Project. Blank for workspace-scope rules."
+    },
+    {
+      "fieldname": "scope",
+      "fieldtype": "Select",
+      "label": "Scope",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "options": "project\nworkspace",
+      "default": "project",
+      "description": "Workspace-scope rules run across every project (or a filtered subset) and may only be created/edited by a workspace admin."
+    },
+    {
+      "fieldname": "project_filter",
+      "fieldtype": "JSON",
+      "label": "Project Filter",
+      "reqd": 0,
+      "default": "[]",
+      "depends_on": "eval:doc.scope === 'workspace'",
+      "description": "Workspace-scope only. List of project names this rule applies to; empty = every project."
+    },
+    {
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "label": "Is Active",
+      "reqd": 0,
+      "in_list_view": 1,
+      "in_standard_filter": 0,
+      "default": "1"
+    },
+    {
+      "fieldname": "section_trigger",
+      "fieldtype": "Section Break",
+      "label": "Trigger"
+    },
+    {
+      "fieldname": "trigger_doctype",
+      "fieldtype": "Link",
+      "label": "Trigger DocType",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0,
+      "options": "DocType",
+      "description": "Optional. Reserved for future non-task triggers; leave blank for task rules."
+    },
+    {
+      "fieldname": "trigger_event",
+      "fieldtype": "Select",
+      "label": "Trigger Event",
+      "reqd": 1,
+      "in_list_view": 0,
+      "in_standard_filter": 0,
+      "options": "task.created\ntask.updated\ntask.status_changed\ntask.assigned\ntask.unassigned\ntask.due_soon\ntask.overdue\ntask.field_changed\ntask.moved_sprint\ncomment.added\nschedule.recurring\nschedule.relative\nerp.invoice_submitted\nerp.payment_received\nerp.so_confirmed\nerp.doc_event\nexternal.webhook"
+    },
+    {
+      "fieldname": "trigger_config",
+      "fieldtype": "JSON",
+      "label": "Trigger Config",
+      "reqd": 0,
+      "default": "{}",
+      "depends_on": "eval:['task.field_changed','schedule.relative'].includes(doc.trigger_event)",
+      "description": "task.field_changed: {field, from?, to?}. schedule.relative: {field, offset_days, direction: before|after}."
+    },
+    {
+      "fieldname": "interval_seconds",
+      "fieldtype": "Int",
+      "label": "Interval (seconds)",
+      "depends_on": "eval:(doc.trigger_event || '').startsWith('schedule.') && doc.trigger_event !== 'schedule.relative'",
+      "description": "For recurring rules: how often to fire. Runs on the automation agent."
+    },
+    {
+      "fieldname": "first_run",
+      "fieldtype": "Datetime",
+      "label": "First Run",
+      "depends_on": "eval:(doc.trigger_event || '').startsWith('schedule.')",
+      "description": "Optional. When the first fire should happen; defaults to one interval from now."
+    },
+    {
+      "fieldname": "bridge_job_id",
+      "fieldtype": "Data",
+      "label": "Bridge Job ID",
+      "read_only": 1,
+      "hidden": 1,
+      "no_copy": 1,
+      "description": "Internal: the agent's job id for this scheduled rule."
+    },
+    {
+      "fieldname": "column_break",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "conditions",
+      "fieldtype": "JSON",
+      "label": "Conditions",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0,
+      "default": "{}",
+      "description": "For erp.doc_event, scope to a specific doctype+lifecycle-event with e.g. [{\"field\": \"doctype\", \"op\": \"eq\", \"value\": \"Purchase Order\"}, {\"field\": \"erp_event\", \"op\": \"eq\", \"value\": \"on_submit\"}] — a rule with no such clause matches EVERY doctype's EVERY lifecycle event. For external.webhook, scope to a specific third-party event name with [{\"field\": \"event\", \"op\": \"eq\", \"value\": \"payment.succeeded\"}]; unmatched top-level keys from the webhook body are also resolvable as condition fields directly."
+    },
+    {
+      "fieldname": "section_action",
+      "fieldtype": "Section Break",
+      "label": "Action"
+    },
+    {
+      "fieldname": "actions",
+      "fieldtype": "JSON",
+      "label": "Actions",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0,
+      "default": "[]",
+      "description": "Ordered list [{type, config}, ...], run in sequence with per-action isolation. Supersedes Action Type/Action Config below (kept for one release for rollback)."
+    },
+    {
+      "fieldname": "action_type",
+      "fieldtype": "Select",
+      "label": "Action Type (legacy)",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0,
+      "hidden": 1,
+      "read_only": 1,
+      "options": "Change Status\nAssign Issue\nSet Priority\nSet Due Date\nAdd Label\nAdd Comment\nNotify\nCreate Issue\nUpdate ERPNext Document",
+      "description": "Superseded by Actions (v2, multi-action). Kept hidden/read-only for one release for rollback safety."
+    },
+    {
+      "fieldname": "action_config",
+      "fieldtype": "JSON",
+      "label": "Action Config (legacy)",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0,
+      "hidden": 1,
+      "read_only": 1,
+      "default": "{}"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

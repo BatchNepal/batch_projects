@@ -1,0 +1,92 @@
+{
+ "name": "BP Standup Entry",
+ "module": "Batch Projects",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "naming_rule": "",
+ "autoname": "hash",
+ "istable": 0,
+ "editable_grid": 0,
+ "is_submittable": 0,
+ "creation": "2026-07-26 00:00:00",
+ "modified": "2026-07-26 00:00:00",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1,
+ "fields": [
+  {
+   "fieldname": "sprint",
+   "fieldtype": "Link",
+   "label": "Sprint",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "options": "BP Sprint"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "options": "User"
+  },
+  {
+   "fieldname": "entry_date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "yesterday",
+   "fieldtype": "Small Text",
+   "label": "Yesterday"
+  },
+  {
+   "fieldname": "today",
+   "fieldtype": "Small Text",
+   "label": "Today"
+  },
+  {
+   "fieldname": "blockers",
+   "fieldtype": "Small Text",
+   "label": "Blockers"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Projects Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ],
+ "links": [],
+ "actions": [],
+ "custom": 0,
+ "field_order": [
+  "sprint",
+  "user",
+  "entry_date",
+  "column_break_1",
+  "yesterday",
+  "today",
+  "blockers"
+ ]
+}

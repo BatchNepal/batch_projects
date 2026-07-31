@@ -1,0 +1,70 @@
+{
+  "name": "BP Task Link",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "istable": 1,
+  "editable_grid": 1,
+  "fields": [
+    {
+      "fieldname": "link_type",
+      "fieldtype": "Select",
+      "label": "Link Type",
+      "options": "blocks\nis blocked by\nclones\nis cloned by\nduplicates\nrelates to",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "linked_task",
+      "fieldtype": "Link",
+      "label": "Linked Task",
+      "options": "BP Task",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "dep_type",
+      "fieldtype": "Select",
+      "label": "Dependency Type",
+      "options": "FS\nSS\nFF",
+      "default": "FS",
+      "description": "Scheduling relation for blocking links: Finish-to-Start, Start-to-Start, Finish-to-Finish. Ignored for non-blocking link types."
+    },
+    {
+      "fieldname": "lag_days",
+      "fieldtype": "Int",
+      "label": "Lag (days)",
+      "default": "0",
+      "description": "Enforced gap between the linked ends. Negative = lead (overlap)."
+    },
+    {
+      "fieldname": "linked_task_key",
+      "fieldtype": "Data",
+      "label": "Task Key",
+      "fetch_from": "linked_task.task_key",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "linked_task_title",
+      "fieldtype": "Data",
+      "label": "Title",
+      "fetch_from": "linked_task.title",
+      "read_only": 1
+    },
+    {
+      "fieldname": "linked_task_status",
+      "fieldtype": "Data",
+      "label": "Status",
+      "fetch_from": "linked_task.status",
+      "read_only": 1
+    },
+    {
+      "fieldname": "linked_task_project",
+      "fieldtype": "Data",
+      "label": "Linked Task Project",
+      "fetch_from": "linked_task.project",
+      "read_only": 1
+    }
+  ],
+  "permissions": [{"role": "System Manager","read": 1,"write": 1,"create": 1,"delete": 1}]
+}

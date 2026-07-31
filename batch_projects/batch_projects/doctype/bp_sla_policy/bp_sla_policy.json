@@ -1,0 +1,84 @@
+{
+ "name": "BP SLA Policy",
+ "module": "Batch Projects",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "naming_rule": "Set by user",
+ "autoname": "field:policy_name",
+ "istable": 0,
+ "editable_grid": 0,
+ "is_submittable": 0,
+ "track_changes": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "fields": [
+  {
+   "fieldname": "policy_name",
+   "fieldtype": "Data",
+   "label": "Policy Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "BP Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "priority_tier",
+   "fieldtype": "Select",
+   "label": "Priority Tier",
+   "options": "Highest\nHigh\nMedium\nLow\nLowest",
+   "reqd": 1
+  },
+  {
+   "fieldname": "response_hours",
+   "fieldtype": "Float",
+   "label": "Response Target (hours)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "resolution_hours",
+   "fieldtype": "Float",
+   "label": "Resolution Target (hours)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "escalate_to",
+   "fieldtype": "Link",
+   "label": "Escalate To",
+   "options": "User"
+  },
+  {
+   "fieldname": "escalate_after_hours",
+   "fieldtype": "Float",
+   "label": "Escalate After (hours overdue)"
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "default": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1, "write": 1, "create": 1, "delete": 1
+  },
+  {
+   "role": "BP Admin",
+   "read": 1, "write": 1, "create": 1, "delete": 1
+  },
+  {
+   "role": "BP Manager",
+   "read": 1, "write": 1, "create": 1
+  }
+ ]
+}

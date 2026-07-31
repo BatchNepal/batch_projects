@@ -1,0 +1,62 @@
+{
+  "name": "BP Notification Template",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "By fieldname",
+  "autoname": "field:event_key",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-07-14 00:00:00",
+  "modified": "2026-07-14 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "event_key",
+      "fieldtype": "Select",
+      "label": "Event",
+      "options": "Assignment\nUnassigned\nComment\nMention\nStatus Change\nUpdate\nDue Soon\nOverdue\nSprint\nRule",
+      "reqd": 1,
+      "unique": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "label": "Enabled",
+      "default": "1",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "subject",
+      "fieldtype": "Data",
+      "label": "Subject",
+      "description": "Jinja — variables per event are listed in the editor."
+    },
+    {
+      "fieldname": "body",
+      "fieldtype": "Code",
+      "options": "HTML",
+      "label": "Body (HTML)",
+      "description": "Jinja-rendered HTML, dropped into the standard email shell (header/footer stay the code default)."
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

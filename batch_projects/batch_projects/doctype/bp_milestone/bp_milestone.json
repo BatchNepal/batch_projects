@@ -1,0 +1,132 @@
+{
+  "name": "BP Milestone",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "",
+  "autoname": "format:MS-{####}",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-05-26 00:00:00",
+  "modified": "2026-05-26 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "due_date",
+  "sort_order": "ASC",
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "title",
+      "fieldtype": "Data",
+      "label": "Title",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 0
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "options": "BP Project"
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "due_date",
+      "fieldtype": "Date",
+      "label": "Due Date",
+      "reqd": 0,
+      "in_list_view": 1,
+      "in_standard_filter": 0
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "reqd": 0,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "options": "Open\nCompleted\nCancelled",
+      "default": "Open"
+    },
+    {
+      "fieldname": "section_details",
+      "fieldtype": "Section Break",
+      "label": "Details"
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Small Text",
+      "label": "Description",
+      "reqd": 0
+    },
+    {
+      "fieldname": "section_billing",
+      "fieldtype": "Section Break",
+      "label": "Billing"
+    },
+    {
+      "fieldname": "billing_type",
+      "fieldtype": "Select",
+      "label": "Billing Type",
+      "options": "None\nFixed Amount\nPercent of Budget",
+      "default": "None",
+      "in_list_view": 0
+    },
+    {
+      "fieldname": "invoice_amount",
+      "fieldtype": "Currency",
+      "label": "Invoice Amount",
+      "depends_on": "eval:doc.billing_type == 'Fixed Amount'"
+    },
+    {
+      "fieldname": "invoice_percent",
+      "fieldtype": "Percent",
+      "label": "Invoice Percent of Budget",
+      "depends_on": "eval:doc.billing_type == 'Percent of Budget'"
+    },
+    {
+      "fieldname": "column_break_billing",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "invoice_status",
+      "fieldtype": "Select",
+      "label": "Invoice Status",
+      "options": "Not Invoiced\nInvoiced",
+      "default": "Not Invoiced",
+      "read_only": 1
+    },
+    {
+      "fieldname": "sales_invoice",
+      "fieldtype": "Link",
+      "label": "Sales Invoice",
+      "options": "Sales Invoice",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Projects User",
+      "read": 1,
+      "write": 1,
+      "create": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

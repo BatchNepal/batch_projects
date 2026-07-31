@@ -1,0 +1,129 @@
+{
+  "name": "BP View",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "",
+  "autoname": "format:VIEW-{####}",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-03-09 00:00:00",
+  "modified": "2026-03-09 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "section_break",
+      "fieldtype": "Section Break"
+    },
+    {
+      "fieldname": "view_name",
+      "fieldtype": "Data",
+      "label": "View Name",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 0
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "reqd": 1,
+      "in_list_view": 0,
+      "in_standard_filter": 1,
+      "options": "BP Project"
+    },
+    {
+      "fieldname": "column_break",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "view_type",
+      "fieldtype": "Select",
+      "label": "View Type",
+      "reqd": 0,
+      "in_list_view": 1,
+      "in_standard_filter": 0,
+      "options": "Board\nList\nTimeline",
+      "default": "Board"
+    },
+    {
+      "fieldname": "group_by",
+      "fieldtype": "Select",
+      "label": "Group By",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0,
+      "options": "Status\nAssignee\nEpic\nPriority\nDue Date",
+      "default": "Status"
+    },
+    {
+      "fieldname": "section_configuration",
+      "fieldtype": "Section Break",
+      "label": "Configuration"
+    },
+    {
+      "fieldname": "filters",
+      "fieldtype": "JSON",
+      "label": "Filters",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0,
+      "default": "{}"
+    },
+    {
+      "fieldname": "sort_by",
+      "fieldtype": "Data",
+      "label": "Sort By",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0,
+      "default": "board_order"
+    },
+    {
+      "fieldname": "column_break",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "is_default",
+      "fieldtype": "Check",
+      "label": "Is Default",
+      "reqd": 0,
+      "in_list_view": 0,
+      "in_standard_filter": 0
+    },
+    {
+      "fieldname": "subscribed",
+      "fieldtype": "Check",
+      "label": "Email Subscription",
+      "reqd": 0,
+      "in_standard_filter": 1,
+      "default": "0"
+    },
+    {
+      "fieldname": "subscription_frequency",
+      "fieldtype": "Select",
+      "label": "Subscription Frequency",
+      "reqd": 0,
+      "options": "Daily\nWeekly",
+      "default": "Weekly",
+      "in_standard_filter": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

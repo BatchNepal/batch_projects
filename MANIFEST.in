@@ -1,0 +1,11 @@
+include MANIFEST.in
+include requirements.txt
+include *.md
+include *.py
+include *.txt
+recursive-include batch_projects *.py
+recursive-include batch_projects *.json
+recursive-include batch_projects *.html
+recursive-include batch_projects *.css
+recursive-include batch_projects *.js
+recursive-include batch_projects *.vue

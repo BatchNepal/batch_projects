@@ -1,0 +1,184 @@
+{
+ "actions": [],
+ "autoname": "field:team_name",
+ "creation": "2026-01-01 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "team_name",
+  "team_key",
+  "team_color",
+  "team_icon",
+  "column_break_1",
+  "status",
+  "company",
+  "department",
+  "section_desc",
+  "description",
+  "column_break_2",
+  "lead",
+  "parent_team",
+  "team_type",
+  "section_links",
+  "team_links",
+  "section_members",
+  "members",
+  "section_settings",
+  "default_workflow_template",
+  "capacity_hours_per_sprint"
+ ],
+ "fields": [
+  {
+   "fieldname": "team_name",
+   "fieldtype": "Data",
+   "label": "Team Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "team_key",
+   "fieldtype": "Data",
+   "label": "Team Key",
+   "description": "Short identifier used in URLs (e.g. ENG, OPS)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "team_color",
+   "fieldtype": "Color",
+   "label": "Color",
+   "default": "#0052CC"
+  },
+  {
+   "fieldname": "team_icon",
+   "fieldtype": "Data",
+   "label": "Icon (emoji)"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Active\nArchived",
+   "default": "Active",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "label": "Department",
+   "options": "Department",
+   "description": "Maps to ERPNext Department for org sync"
+  },
+  {
+   "fieldname": "section_desc",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "lead",
+   "fieldtype": "Link",
+   "label": "Team Lead",
+   "options": "User"
+  },
+  {
+   "fieldname": "parent_team",
+   "fieldtype": "Link",
+   "label": "Parent Team",
+   "options": "BP Team",
+   "description": "Optional \u2014 nest this team under another team"
+  },
+  {
+   "fieldname": "team_type",
+   "fieldtype": "Select",
+   "label": "Team Type",
+   "options": "Team\nDepartment\nSquad\nGuild\nChapter",
+   "default": "Team"
+  },
+  {
+   "fieldname": "section_links",
+   "fieldtype": "Section Break",
+   "label": "Team Links"
+  },
+  {
+   "fieldname": "team_links",
+   "fieldtype": "Table",
+   "label": "Team Links",
+   "options": "BP Team Link"
+  },
+  {
+   "fieldname": "section_members",
+   "fieldtype": "Section Break",
+   "label": "Members"
+  },
+  {
+   "fieldname": "members",
+   "fieldtype": "Table",
+   "label": "Members",
+   "options": "BP Team Member"
+  },
+  {
+   "fieldname": "section_settings",
+   "fieldtype": "Section Break",
+   "label": "Defaults"
+  },
+  {
+   "fieldname": "default_workflow_template",
+   "fieldtype": "Select",
+   "label": "Default Workflow Template",
+   "options": "\nsoftware\nservices\nconstruction\ngeneral",
+   "default": "general"
+  },
+  {
+   "fieldname": "capacity_hours_per_sprint",
+   "fieldtype": "Float",
+   "label": "Default Sprint Capacity (hours)",
+   "default": 80
+  }
+ ],
+ "links": [],
+ "modified": "2026-01-01 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Batch Projects",
+ "name": "BP Team",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "All"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "team_name",
+ "track_changes": 1
+}

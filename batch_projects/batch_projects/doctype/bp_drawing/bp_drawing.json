@@ -1,0 +1,59 @@
+{
+  "name": "BP Drawing",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "",
+  "autoname": "hash",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-07-13 00:00:00",
+  "modified": "2026-07-13 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "options": "BP Project",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "title",
+      "fieldtype": "Data",
+      "label": "Title",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "scene_json",
+      "fieldtype": "Long Text",
+      "label": "Scene JSON",
+      "description": "Serialized Excalidraw scene (elements + appState + files)."
+    },
+    {
+      "fieldname": "thumbnail",
+      "fieldtype": "Long Text",
+      "label": "Thumbnail",
+      "description": "Reserved: data-URL preview image. Not populated in v1."
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

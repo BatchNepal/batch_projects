@@ -1,0 +1,82 @@
+{
+ "name": "BP Intake Form",
+ "module": "Batch Projects",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "naming_rule": "Random",
+ "autoname": "hash",
+ "istable": 0,
+ "editable_grid": 0,
+ "is_submittable": 0,
+ "track_changes": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "fields": [
+  {
+   "fieldname": "form_title",
+   "fieldtype": "Data",
+   "label": "Form Title",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "BP Project",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "default": 1
+  },
+  {
+   "fieldname": "section_fields",
+   "fieldtype": "Section Break",
+   "label": "Form Fields"
+  },
+  {
+   "fieldname": "fields_json",
+   "fieldtype": "Long Text",
+   "label": "Fields (JSON)",
+   "description": "Array of field definitions: [{\"type\":\"text\",\"label\":\"Name\",\"required\":true}, {\"type\":\"select\",\"label\":\"Category\",\"options\":\"Option A\\nOption B\"}]"
+  },
+  {
+   "fieldname": "section_actions",
+   "fieldtype": "Section Break",
+   "label": "Actions"
+  },
+  {
+   "fieldname": "task_type",
+   "fieldtype": "Data",
+   "label": "Default Task Type",
+   "description": "Task type for created issues (e.g. 'Task', 'Bug')"
+  },
+  {
+   "fieldname": "default_status",
+   "fieldtype": "Data",
+   "label": "Default Status"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1, "write": 1, "create": 1, "delete": 1
+  },
+  {
+   "role": "BP Admin",
+   "read": 1, "write": 1, "create": 1, "delete": 1
+  },
+  {
+   "role": "BP Manager",
+   "read": 1, "write": 1, "create": 1
+  }
+ ]
+}

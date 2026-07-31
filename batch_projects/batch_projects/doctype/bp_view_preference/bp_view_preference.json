@@ -1,0 +1,62 @@
+{
+  "name": "BP View Preference",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "Random",
+  "autoname": "hash",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-06-15 00:00:00",
+  "modified": "2026-06-15 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "user",
+      "fieldtype": "Link",
+      "label": "User",
+      "options": "User",
+      "reqd": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "options": "BP Project",
+      "reqd": 0,
+      "in_standard_filter": 1,
+      "description": "Phase 22D — blank for a workspace-level (not project-scoped) preference, e.g. view=\"home_dashboard\". Every pre-existing caller already passes a real project, so loosening this from required doesn't change their behavior."
+    },
+    {
+      "fieldname": "view",
+      "fieldtype": "Data",
+      "label": "View",
+      "default": "list",
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "prefs",
+      "fieldtype": "JSON",
+      "label": "Preferences",
+      "default": "{}"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

@@ -1,0 +1,19 @@
+{
+  "name": "BP Goal Epic Link",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "istable": 1,
+  "editable_grid": 1,
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "epic",
+      "fieldtype": "Link",
+      "label": "Epic",
+      "options": "BP Epic",
+      "reqd": 1,
+      "in_list_view": 1
+    }
+  ]
+}

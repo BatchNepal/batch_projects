@@ -1,0 +1,116 @@
+{
+  "name": "BP Workspace Settings",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "",
+  "issingle": 1,
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-07-13 00:00:00",
+  "modified": "2026-07-13 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "section_timesheet",
+      "fieldtype": "Section Break",
+      "label": "Timesheet approval"
+    },
+    {
+      "fieldname": "approval_mode",
+      "fieldtype": "Select",
+      "label": "Approval Mode",
+      "options": "Auto-Approve\nSelf-Submit\nManager Approval",
+      "default": "Self-Submit",
+      "reqd": 1
+    },
+    {
+      "fieldname": "approvers",
+      "fieldtype": "Table",
+      "label": "Approvers",
+      "options": "BP Timesheet Approver",
+      "depends_on": "eval:doc.approval_mode == 'Manager Approval'"
+    },
+    {
+      "fieldname": "column_break_notify",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "notify_approvers_on_submission",
+      "fieldtype": "Check",
+      "label": "Notify approvers on submission",
+      "default": "1"
+    },
+    {
+      "fieldname": "notify_submitter_on_decision",
+      "fieldtype": "Check",
+      "label": "Notify submitter on decision",
+      "default": "1"
+    },
+    {
+      "fieldname": "section_branding",
+      "fieldtype": "Section Break",
+      "label": "Branding"
+    },
+    {
+      "fieldname": "brand_name",
+      "fieldtype": "Data",
+      "label": "Brand name",
+      "description": "Replaces \"BatchProjects\" in the sidebar and browser tab. Team plan and above."
+    },
+    {
+      "fieldname": "logo_url",
+      "fieldtype": "Data",
+      "label": "Logo URL",
+      "description": "Replaces the \"BP\" mark in the sidebar. Square image recommended."
+    },
+    {
+      "fieldname": "column_break_branding",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "favicon_url",
+      "fieldtype": "Data",
+      "label": "Favicon URL",
+      "description": "Replaces the browser tab icon."
+    },
+    {
+      "fieldname": "section_features",
+      "fieldtype": "Section Break",
+      "label": "Features"
+    },
+    {
+      "fieldname": "features_json",
+      "fieldtype": "JSON",
+      "label": "Features",
+      "default": "{\"notes\": 1, \"draw\": 1, \"gantt\": 1, \"money_tab\": 1, \"timesheets\": 1, \"reports\": 1}"
+    },
+    {
+      "fieldname": "section_roles",
+      "fieldtype": "Section Break",
+      "label": "Role overrides"
+    },
+    {
+      "fieldname": "role_overrides_json",
+      "fieldtype": "JSON",
+      "label": "Role Overrides",
+      "description": "Reserved for Phase 13's editable permission matrix.",
+      "default": "{}"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

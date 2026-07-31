@@ -1,0 +1,649 @@
+/*
+ * batch_projects — Design Tokens
+ * Premium OKLCH palette. Desktop-app density.
+ */
+
+/* ==========================================================================
+   TYPOGRAPHY
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+  --text-xs:   0.6875rem;   /* 11px */
+  --text-sm:   0.75rem;     /* 12px */
+  --text-base: 0.8125rem;   /* 13px */
+  --text-md:   0.875rem;    /* 14px */
+  --text-lg:   0.9375rem;   /* 15px */
+  --text-xl:   1rem;        /* 16px */
+  --text-2xl:  1.125rem;    /* 18px */
+  --text-3xl:  1.25rem;     /* 20px */
+
+  --font-normal:   400;
+  --font-medium:   500;
+  --font-semibold: 600;
+  --font-bold:     700;
+
+  --leading-tight:  1.2;
+  --leading-snug:   1.35;
+  --leading-normal: 1.5;
+
+  --tracking-tight:  -0.022em;
+  --tracking-snug:   -0.011em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.02em;
+  --tracking-wider:  0.05em;
+ 
+}
+
+/* ==========================================================================
+   SPACING (4px base grid)
+   ========================================================================== */
+
+:root {
+  --spacing: 0.25rem;
+  --space-0:  0;
+  --space-px: 1px;
+  --space-0h: 0.125rem;
+  --space-1:  0.25rem;
+  --space-1h: 0.375rem;
+  --space-2:  0.5rem;
+  --space-2h: 0.625rem;
+  --space-3:  0.75rem;
+  --space-3h: 0.875rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+}
+
+/* ==========================================================================
+   RADIUS — desktop: tighter than web, no pill shapes on controls
+   Phase 22F: Brex's 6/10/16 decision already matches radius-md/xl/3xl
+   below verbatim (confirmed against their border-radius usage in
+   /home/frappe/tmp/brex) — no change needed, noted so this isn't
+   re-litigated by a future pass.
+   ========================================================================== */
+
+:root {
+  --radius: 0.375rem;        /* 6px base */
+  --radius-xs:  2px;
+  --radius-sm:  4px;
+  --radius-md:  6px;         /* buttons, inputs, chips */
+  --radius-lg:  8px;         /* cards, dropdowns, panels */
+  --radius-xl:  10px;        /* modals, drawers */
+  --radius-2xl: 12px;
+  --radius-3xl: 16px;
+  --radius-full: 9999px;
+}
+
+/* ==========================================================================
+   BORDERS & CURSORS
+   ========================================================================== */
+
+:root {
+  --border-width: 1px;
+  --field-border-width: 1px;
+  --disabled-opacity: 0.45;
+  --ring-offset-width: 2px;
+  --cursor-interactive: pointer;
+  --cursor-disabled: not-allowed;
+}
+
+/* ==========================================================================
+   LIGHT THEME — OKLCH palette
+   Accent: oklch(0.62 0.195 254) — vivid indigo-blue (as specified)
+   ========================================================================== */
+
+:root,
+.light,
+[data-theme="light"],
+[data-theme="default"] {
+  color-scheme: light;
+
+  /* Primitives */
+  --white:   oklch(1 0 0);
+  --black:   oklch(0 0 0);
+  --snow:    oklch(0.991 0 0);
+  --eclipse: oklch(0.21 0.006 286);
+
+  /* Backgrounds — Phase 22F Brex pass: canvas retuned to their real
+     background-secondary (#f9f9fb, warm-grey canvas; their own "primary"
+     #fff is our --surface, the card layer — mapped by FUNCTION, not by
+     Brex's internal ordinal naming, which doesn't line up with ours).
+     Extracted from /home/frappe/tmp/brex's real captured CSS custom
+     properties (--color-background-*), not eyeballed off screenshots. */
+  --background:           #f9f9fb;
+  --background-secondary: oklch(0.955 0.003 264);
+  --background-tertiary:  oklch(0.925 0.005 264);
+  --background-inverse:   var(--foreground);
+
+  /* Foreground — Brex --color-content-primary:#15191e (near-black ink,
+     not grey-700). */
+  --foreground: #15191e;
+
+  /* Surfaces (cards, panels) — --surface was already effectively #fff via
+     var(--white); --surface-secondary retuned to Brex's
+     --color-background-tertiary:#f9f9fb (their own tableRow-hover value —
+     the "one step past the card" surface, matches our usage). */
+  --surface:                      var(--white);
+  --surface-foreground:           var(--foreground);
+  --surface-secondary:            #f4f4f5;
+  --surface-secondary-foreground: var(--foreground);
+  --surface-tertiary:             oklch(0.955 0.003 264);
+  --surface-tertiary-foreground:  var(--foreground);
+  --surface-hover:                oklch(0.942 0.004 264);
+
+  /* Overlays (modals, tooltips, dropdowns) */
+  --overlay:            var(--white);
+  --overlay-foreground: var(--foreground);
+
+  /* Muted text — Brex --color-content-secondary:#60646c. */
+  --muted: #60646c;
+  /* Third ink tier — Brex --color-content-tertiary:#6f737b — feeds
+     --field-placeholder below (was a separate oklch guess). */
+  --muted-tertiary: #6f737b;
+
+  /* Default (neutral interactive) */
+  --default:            oklch(0.93 0.004 264);
+  --default-foreground: var(--eclipse);
+  --default-hover:      oklch(0.885 0.006 264);
+
+  /* ── ACCENT (Primary) — oklch(0.62 0.195 254) ── */
+  --accent:                oklch(0.62 0.195 254);
+  --accent-foreground:     oklch(1 0 0);
+  --accent-hover:          oklch(0.555 0.205 254);
+  --accent-soft:           oklch(0.62 0.195 254 / 0.11);
+  --accent-soft-foreground:oklch(0.44 0.18 254);
+  --accent-soft-hover:     oklch(0.62 0.195 254 / 0.17);
+
+  /* ── SUCCESS — vibrant spring green ── */
+  --success:                oklch(0.73 0.193 151);
+  --success-foreground:     oklch(0.20 0.055 155);
+  --success-hover:          oklch(0.665 0.193 151);
+  --success-soft:           oklch(0.73 0.193 151 / 0.12);
+  --success-soft-foreground:oklch(0.38 0.145 151);
+  --success-soft-hover:     oklch(0.73 0.193 151 / 0.19);
+
+  /* ── WARNING — warm amber ── */
+  --warning:                oklch(0.78 0.158 72);
+  --warning-foreground:     oklch(0.27 0.062 72);
+  --warning-hover:          oklch(0.715 0.158 72);
+  --warning-soft:           oklch(0.78 0.158 72 / 0.13);
+  --warning-soft-foreground:oklch(0.48 0.12 72);
+  --warning-soft-hover:     oklch(0.78 0.158 72 / 0.20);
+
+  /* ── DANGER — vivid red ── */
+  --danger:                oklch(0.65 0.233 26);
+  --danger-foreground:     oklch(1 0 0);
+  --danger-hover:          oklch(0.585 0.233 26);
+  --danger-soft:           oklch(0.65 0.233 26 / 0.11);
+  --danger-soft-foreground:oklch(0.46 0.195 26);
+  --danger-soft-hover:     oklch(0.65 0.233 26 / 0.18);
+
+  /* ── INFO — violet, for review/informational states ── */
+  --info:                oklch(0.62 0.20 293);
+  --info-foreground:     oklch(1 0 0);
+  --info-hover:          oklch(0.565 0.20 293);
+  --info-soft:           oklch(0.62 0.20 293 / 0.12);
+  --info-soft-foreground:oklch(0.42 0.16 293);
+  --info-soft-hover:     oklch(0.62 0.20 293 / 0.19);
+
+  /* Form fields — OUTLINED language (user-picked, monday-style):
+     white bg, crisp 1px border, hover darkens border toward text,
+     focus = accent border (doubled via 1px ring for a 2px read).
+     Phase 22F: --field-border retuned to Brex's tinted-translucent
+     --color-border family (see BORDERS section below) — the earlier flat
+     #C3C6D4 was chosen specifically to avoid a too-faint prior bug; that
+     concern doesn't apply to a CALIBRATED tint (real alpha value from
+     Brex's own CSS, not the old broken one), so it converts too. */
+  --field-background:    var(--white);
+  --field-foreground:    var(--foreground);
+  --field-placeholder:   var(--muted-tertiary);
+  --field-border:        #abacb1;
+  --field-hover:         var(--white);
+  --field-focus:         var(--white);
+  --field-border-hover:  rgba(97, 106, 136, 0.4);
+  --field-border-focus:  var(--accent);
+  --field-radius:        var(--radius-md); /* 6px — rounded-md */
+
+  /* Segment (tab control background) */
+  --segment:            var(--white);
+  --segment-foreground: var(--eclipse);
+
+  /* Borders & separators — Phase 22F Brex pass, THE single highest-impact
+     token change per the mandate: tinted translucent navy, not opaque grey
+     (opaque grey borders are what reads as "Bootstrap"). Exact rgba values
+     copied from Brex's own --color-border/--color-border-hover/
+     --color-border-pressed custom properties (verified present in
+     /home/frappe/tmp/brex's captured CSS — not derived/guessed).
+     Canon unchanged: --border = container/card hairline, --separator =
+     inner row/section dividers (proportionally lighter, same tint family). */
+  --border:              rgba(66, 87, 138, 0.15);
+  --border-secondary:    rgba(97, 106, 136, 0.3);
+  --border-tertiary:     rgba(52, 59, 91, 0.35);
+  --separator:           rgba(66, 87, 138, 0.08);
+  --separator-secondary: rgba(66, 87, 138, 0.12);
+  --separator-tertiary:  rgba(97, 106, 136, 0.18);
+
+  /* Focus, link */
+  --focus: var(--accent);
+  --link:  var(--accent);
+
+  /* Motion + layout tokens (used across components) */
+  --transition-fast:  100ms var(--ease-out);
+  --transition-base:  150ms var(--ease-out);
+  --row-h:            40px;
+
+
+  /* Backdrop */
+  --backdrop: oklch(0 0 0 / 0.42);
+
+  /* Scrollbar */
+  --scrollbar-thumb: oklch(0.78 0.006 264);
+  --scrollbar-track: transparent;
+  --scrollbar-gutter: auto;
+  --scrollbar-width: thin;
+  --scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+
+  /* Shadows — layered/faint per HeroUI v2 shape; Phase 22F retunes the
+     tint from flat black to Brex's navy-grey (rgb(16,24,40) — their own
+     shadow color family, not pure #000), which reads as more "designed."
+     Layering/alpha structure unchanged — this is a color-value swap, not a
+     rebuild. The trailing hairline layer still draws a crisp boundary
+     around cards so surfaces read as bounded even white-on-white. */
+  --surface-shadow-sm: /* small — dense lists, rows, small cards */
+    0px 1px 2px 0px rgba(16, 24, 40, 0.05),
+    0px 0px 0px 1px rgba(16, 24, 40, 0.04);
+  --surface-shadow: /* medium — cards/panels: crisp contact + soft ambient + hairline */
+    0px 1px 2px 0px rgba(16, 24, 40, 0.04),
+    0px 4px 12px 0px rgba(16, 24, 40, 0.07),
+    0px 0px 0px 1px rgba(16, 24, 40, 0.045);
+  --overlay-shadow: /* large — popovers, modals, drawers */
+    0px 2px 8px 0px rgba(16, 24, 40, 0.06),
+    0px 12px 32px 0px rgba(16, 24, 40, 0.14),
+    0px 0px 0px 1px rgba(16, 24, 40, 0.05);
+  --field-shadow: none; /* v2 fields are flat fills — no shadow */
+  /* Lift shadow for hoverable/selectable cards (shadow-medium grown) */
+  --surface-shadow-hover:
+    0px 2px 4px 0px rgba(16, 24, 40, 0.05),
+    0px 8px 24px 0px rgba(16, 24, 40, 0.10),
+    0px 0px 0px 1px rgba(16, 24, 40, 0.05);
+
+  /* Skeleton animation */
+  --skeleton-animation: shimmer;
+}
+
+/* ==========================================================================
+   DARK THEME
+   ========================================================================== */
+
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Primitives (same) */
+  --white:   oklch(1 0 0);
+  --black:   oklch(0 0 0);
+  --snow:    oklch(0.982 0 0);
+  --eclipse: oklch(0.21 0.006 286);
+
+  /* Backgrounds — deep cool-neutral. Phase 22F: --background retuned to
+     Brex's real dark --color-background-primary:#101317; --surface to
+     their --color-background-secondary:#15191e (one step up — same
+     background/surface relationship as light mode, values swapped for
+     dark). Extracted, not eyeballed — see the light-theme comment above
+     for the source. */
+  --background:           #101317;
+  --background-secondary: oklch(0.16 0.007 264);
+  --background-tertiary:  oklch(0.19 0.007 264);
+  --background-inverse:   var(--snow);
+
+  /* Foreground — Brex dark --color-content-primary:#fcfcfd. */
+  --foreground: #fcfcfd;
+
+  /* Surfaces */
+  --surface:                      #15191e;
+  --surface-foreground:           var(--foreground);
+  --surface-secondary:            oklch(0.22 0.008 264);
+  --surface-secondary-foreground: var(--foreground);
+  --surface-tertiary:             oklch(0.245 0.008 264);
+  --surface-tertiary-foreground:  var(--foreground);
+  --surface-hover:                oklch(0.255 0.009 264);
+
+  /* Overlays */
+  --overlay:            oklch(0.205 0.009 264);
+  --overlay-foreground: var(--foreground);
+
+  /* Muted — Brex dark --color-content-secondary:#d0d2dd. */
+  --muted: #d0d2dd;
+  /* Third ink tier — Brex dark --color-content-tertiary:#8b8d98. */
+  --muted-tertiary: #8b8d98;
+
+  /* Default */
+  --default:            oklch(0.255 0.009 264);
+  --default-foreground: var(--snow);
+  --default-hover:      oklch(0.295 0.010 264);
+
+  /* ── ACCENT ── slightly brighter in dark mode */
+  --accent:                oklch(0.655 0.195 254);
+  --accent-foreground:     oklch(1 0 0);
+  --accent-hover:          oklch(0.725 0.185 254);
+  --accent-soft:           oklch(0.655 0.195 254 / 0.14);
+  --accent-soft-foreground:oklch(0.78 0.155 254);
+  --accent-soft-hover:     oklch(0.655 0.195 254 / 0.21);
+
+  /* ── SUCCESS ── */
+  --success:                oklch(0.755 0.193 151);
+  --success-foreground:     oklch(0.18 0.05 155);
+  --success-hover:          oklch(0.82 0.185 151);
+  --success-soft:           oklch(0.755 0.193 151 / 0.14);
+  --success-soft-foreground:oklch(0.72 0.18 151);
+  --success-soft-hover:     oklch(0.755 0.193 151 / 0.21);
+
+  /* ── WARNING ── */
+  --warning:                oklch(0.82 0.158 72);
+  --warning-foreground:     oklch(0.22 0.055 72);
+  --warning-hover:          oklch(0.875 0.145 72);
+  --warning-soft:           oklch(0.82 0.158 72 / 0.13);
+  --warning-soft-foreground:oklch(0.78 0.145 72);
+  --warning-soft-hover:     oklch(0.82 0.158 72 / 0.20);
+
+  /* ── DANGER ── */
+  --danger:                oklch(0.665 0.233 26);
+  --danger-foreground:     oklch(1 0 0);
+  --danger-hover:          oklch(0.735 0.215 26);
+  --danger-soft:           oklch(0.665 0.233 26 / 0.14);
+  --danger-soft-foreground:oklch(0.72 0.19 26);
+  --danger-soft-hover:     oklch(0.665 0.233 26 / 0.21);
+
+  /* ── INFO — violet ── */
+  --info:                oklch(0.68 0.20 293);
+  --info-foreground:     oklch(0.15 0.05 293);
+  --info-hover:          oklch(0.74 0.19 293);
+  --info-soft:           oklch(0.68 0.20 293 / 0.14);
+  --info-soft-foreground:oklch(0.75 0.17 293);
+  --info-soft-hover:     oklch(0.68 0.20 293 / 0.21);
+
+  /* Form fields — outlined, dark. Phase 22F: white-alpha border tint,
+     Brex's own dark-mode --color-border family (rgba(255,255,255,X)) —
+     symmetric with light mode's navy tint, same alpha steps. */
+  --field-background:    oklch(0.19 0.008 264);
+  --field-foreground:    var(--foreground);
+  --field-placeholder:   var(--muted-tertiary);
+  --field-border:        rgba(255, 255, 255, 0.18);
+  --field-hover:         oklch(0.19 0.008 264);
+  --field-focus:         oklch(0.19 0.008 264);
+  --field-border-hover:  rgba(255, 255, 255, 0.4);
+  --field-border-focus:  var(--accent);
+  --field-radius:        0.75rem; /* 12px — exact HeroUI v3 (radius * 1.5) */
+
+  /* Segment */
+  --segment:            oklch(0.305 0.010 264);
+  --segment-foreground: var(--foreground);
+
+  /* Borders & separators — Phase 22F: white-alpha tint, Brex's own dark
+     --color-border/--color-border-hover/--color-border-pressed values
+     (verified present in their captured CSS). */
+  --border:              rgba(255, 255, 255, 0.15);
+  --border-secondary:    rgba(255, 255, 255, 0.3);
+  --border-tertiary:     rgba(255, 255, 255, 0.35);
+  --separator:           rgba(255, 255, 255, 0.08);
+  --separator-secondary: rgba(255, 255, 255, 0.12);
+  --separator-tertiary:  rgba(255, 255, 255, 0.18);
+
+  /* Focus, link */
+  --focus: var(--accent);
+  --link:  var(--accent);
+
+
+  /* Backdrop */
+  --backdrop: oklch(0 0 0 / 0.62);
+
+  /* Scrollbar */
+  --scrollbar-thumb: oklch(0.35 0.009 264);
+  --scrollbar-track: transparent;
+
+  /* Shadows (subtle ring-based in dark) */
+  --surface-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  --overlay-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.30),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  --field-shadow:
+    0 0 0 0 transparent;
+}
+
+/* ==========================================================================
+   SHADOW SCALE
+   ========================================================================== */
+
+:root {
+  --shadow-xs: 0 1px 2px oklch(0 0 0 / 0.07);
+  --shadow-sm: 0 1px 4px oklch(0 0 0 / 0.08), 0 1px 2px oklch(0 0 0 / 0.06);
+  --shadow-md: 0 4px 8px oklch(0 0 0 / 0.08), 0 2px 4px oklch(0 0 0 / 0.06);
+  --shadow-lg: 0 8px 24px oklch(0 0 0 / 0.10), 0 2px 8px oklch(0 0 0 / 0.06);
+  --shadow-xl: 0 16px 40px oklch(0 0 0 / 0.12), 0 4px 12px oklch(0 0 0 / 0.08);
+  --shadow-focus:        0 0 0 3px var(--accent-soft);
+  --shadow-focus-danger: 0 0 0 3px var(--danger-soft);
+  --shadow-popover:      0 12px 32px oklch(0 0 0 / 0.10), 0 0 0 1px oklch(0 0 0 / 0.06);
+}
+
+/* ==========================================================================
+   EASING
+   ========================================================================== */
+
+:root {
+  --ease-out:        cubic-bezier(0.0, 0, 0.2, 1);
+  --ease-in:         cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out:     cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-smooth:     cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring:     cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-quart:  cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-out-expo:   cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-out-fluid:  cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ==========================================================================
+   DURATIONS
+   ========================================================================== */
+
+:root {
+  --duration-instant: 50ms;
+  --duration-fast:    90ms;
+  --duration-base:    140ms;
+  --duration-slow:    220ms;
+  --duration-modal:   180ms;
+  --duration-toast:   260ms;
+}
+
+/* ==========================================================================
+   ANIMATIONS
+   ========================================================================== */
+
+:root {
+  --animate-spin-fast:   spin 0.75s linear infinite;
+  --animate-skeleton:    skeleton 2s linear infinite;
+  --animate-caret-blink: caret-blink 1.2s ease-out infinite;
+  --skeleton-animation:  shimmer;
+}
+
+@keyframes skeleton {
+  100% { transform: translateX(200%); }
+}
+
+@keyframes caret-blink {
+  0%, 70%, 100% { opacity: 1; }
+  20%, 50%      { opacity: 0; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Z-INDEX
+   ========================================================================== */
+
+:root {
+  --z-sticky:   200;
+  --z-overlay:  300;
+  --z-modal:    400;
+  /* Dropdown/popover sit ABOVE modal — a Select/Combobox opened from inside
+     a Drawer/Modal/AlertDialog must float above it, not behind it. Below
+     toast/tooltip, which are global overlays that should never be occluded
+     by an open dropdown. */
+  --z-dropdown: 410;
+  --z-popover:  420;
+  --z-toast:    500;
+  --z-tooltip:  600;
+}
+
+/* ==========================================================================
+   LAYOUT
+   ========================================================================== */
+
+:root {
+  --sidebar-width:           220px;
+  --sidebar-collapsed-width: 44px;
+  --header-height:           44px;
+  --panel-width:             440px;
+  --panel-width-lg:          540px;
+  --column-width:            260px;
+  --column-gap:              10px;
+}
+
+/* ==========================================================================
+   COMPONENT TOKENS — desktop density
+   ========================================================================== */
+
+:root {
+  /* Buttons — tighter than web-default */
+  --btn-height-sm:    28px;
+  --btn-height-md:    32px;
+  --btn-height-lg:    36px;
+  --btn-padding-sm:   0 10px;
+  --btn-padding-md:   0 14px;
+  --btn-padding-lg:   0 18px;
+  --btn-font-size:    var(--text-sm);
+  --btn-font-weight:  var(--font-medium);
+  --btn-radius:       var(--radius-md);
+  --btn-gap:          6px;
+
+  /* Inputs */
+  --input-height-sm:  28px;
+  --input-height-md:  32px;
+  --input-height-lg:  36px;
+  --input-padding:    0 10px;
+  --input-font-size:  var(--text-base);
+  --input-radius:     var(--radius-md);
+
+  /* Cards */
+  --card-radius:      var(--radius-lg);
+  --card-bg:          var(--surface);
+  --card-shadow:      var(--surface-shadow);
+  --card-padding:     16px;
+  --card-padding-lg:  20px;
+
+  /* Chips/badges */
+  --chip-height:      20px;
+  --chip-padding:     0 7px;
+  --chip-radius:      var(--radius-sm);
+  --chip-font-size:   var(--text-xs);
+  --chip-font-weight: var(--font-medium);
+
+  /* Sidebar — explicit brand colors (user spec 2026-07-13), not derived from
+     the oklch scale like the rest of the app. */
+  --sidebar-bg:           #162036;
+  --sidebar-text:         #ffffff;
+  --sidebar-text-active:  #ffffff;
+  --sidebar-item-height:  28px;
+  --sidebar-item-radius:  var(--radius-sm);
+  --sidebar-item-padding: 0 10px;
+  --sidebar-hover-bg:     oklch(1 0 0 / 0.06);
+  --sidebar-active-bg:    #2a3a57;
+}
+
+/* ==========================================================================
+   BASE RESETS
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: var(--leading-normal);
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* The app is a fixed-viewport shell — the only scroll is inside <main> (and
+     each view's own scroll area). The document itself must never scroll. NOTE:
+     do NOT use min-height:100vh here; with the density `zoom` on <html>, 100vh
+     renders ~8% taller than the window and produces a second (body) scrollbar. */
+  height: 100%;
+  overflow: hidden;
+}
+
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Phase 22F — tabular numerals. Tailwind ships a `tabular-nums` utility,
+   but it's JIT-scanned and this class needs to be guaranteed available on
+   every numeric table cell / KPI value / currency figure across pages this
+   phase touches without depending on scan coverage. Apply directly. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

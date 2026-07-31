@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ["version-*"]
+  push:
+    branches: ["version-*"]
+
+jobs:
+  python-compile:
+    name: Python compiles cleanly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile-check every module (syntax/import errors only)
+        run: python -m compileall -q batch_projects
+
+  frontend-dist-drift:
+    name: Frontend dist matches source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        working-directory: frontend
+        run: NODE_ENV=development yarn install --production=false --frozen-lockfile
+      - name: Build
+        working-directory: frontend
+        run: yarn build
+      - name: Fail if committed dist is stale
+        run: |
+          if ! git diff --exit-code -- batch_projects/public/frontend; then
+            echo "::error::public/frontend/ doesn't match a fresh 'yarn build' of frontend/src." \
+                 "Run 'yarn build' inside frontend/ and commit the result in this PR."
+            exit 1
+          fi

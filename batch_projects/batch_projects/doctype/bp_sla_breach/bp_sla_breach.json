@@ -1,0 +1,70 @@
+{
+ "name": "BP SLA Breach",
+ "module": "Batch Projects",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "naming_rule": "By Naming Series",
+ "autoname": "SLA-Breach-.YYYY.-.####",
+ "istable": 0,
+ "editable_grid": 0,
+ "is_submittable": 0,
+ "track_changes": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "fields": [
+  {
+   "fieldname": "task",
+   "fieldtype": "Link",
+   "label": "Task",
+   "options": "BP Task",
+   "reqd": 1
+  },
+  {
+   "fieldname": "policy",
+   "fieldtype": "Link",
+   "label": "SLA Policy",
+   "options": "BP SLA Policy",
+   "reqd": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "BP Project"
+  },
+  {
+   "fieldname": "column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "breach_type",
+   "fieldtype": "Select",
+   "label": "Breach Type",
+   "options": "Response\nResolution",
+   "reqd": 1
+  },
+  {
+   "fieldname": "triggered_on",
+   "fieldtype": "Datetime",
+   "label": "Triggered On",
+   "reqd": 1
+  },
+  {
+   "fieldname": "escalated_to",
+   "fieldtype": "Link",
+   "label": "Escalated To",
+   "options": "User"
+  },
+  {
+   "fieldname": "resolved_on",
+   "fieldtype": "Datetime",
+   "label": "Resolved On"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1, "write": 1, "create": 1, "delete": 1
+  }
+ ]
+}

@@ -1,0 +1,132 @@
+{
+  "name": "BP Custom Field",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "naming_rule": "",
+  "autoname": "hash",
+  "istable": 0,
+  "editable_grid": 0,
+  "is_submittable": 0,
+  "creation": "2026-07-13 00:00:00",
+  "modified": "2026-07-13 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1,
+  "fields": [
+    {
+      "fieldname": "field_label",
+      "fieldtype": "Data",
+      "label": "Field Name",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Small Text",
+      "label": "Description"
+    },
+    {
+      "fieldname": "field_type",
+      "fieldtype": "Select",
+      "label": "Type",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "options": "text\ntextarea\nnumber\ndate\ncheckbox\nselect\nmultiselect\ncurrency\npercent\nrating\nemail\nphone\nurl\nuser\nlink"
+    },
+    {
+      "fieldname": "options_json",
+      "fieldtype": "JSON",
+      "label": "Options",
+      "default": "[]",
+      "description": "For select/multiselect: [{id, label, color}, ...]. For link: {link_doctype: 'Customer'}."
+    },
+    {
+      "fieldname": "column_break_scope",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "applies_to",
+      "fieldtype": "Select",
+      "label": "Applies To",
+      "options": "Tasks\nProjects\nBoth",
+      "default": "Tasks",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "owner_project",
+      "fieldtype": "Link",
+      "label": "Owner Project",
+      "options": "BP Project",
+      "in_list_view": 1,
+      "description": "Set only for project-owned (private) fields — unset means this is a shared workspace-library field. Immutable after creation; never editable via update_field."
+    },
+    {
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "label": "Field Status",
+      "default": "1",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "show_in_list",
+      "fieldtype": "Check",
+      "label": "Show in List View",
+      "default": "0"
+    },
+    {
+      "fieldname": "section_permissions",
+      "fieldtype": "Section Break",
+      "label": "Permissions"
+    },
+    {
+      "fieldname": "view_role",
+      "fieldtype": "Select",
+      "label": "Can View (minimum project role)",
+      "options": "Admin\nManager\nMember\nViewer",
+      "default": "Viewer",
+      "reqd": 1
+    },
+    {
+      "fieldname": "column_break_permissions",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "edit_role",
+      "fieldtype": "Select",
+      "label": "Can Edit (minimum project role)",
+      "options": "Admin\nManager\nMember\nViewer",
+      "default": "Member",
+      "reqd": 1
+    },
+    {
+      "fieldname": "section_marker",
+      "fieldtype": "Section Break",
+      "label": "Conditional Marker",
+      "description": "Only meaningful for number/currency/percent/rating fields."
+    },
+    {
+      "fieldname": "conditional_rules_json",
+      "fieldtype": "JSON",
+      "label": "Conditional Marker Rules",
+      "default": "[]",
+      "description": "Ordered list of {op: 'lte'|'between'|'gte', value, value2?, color}."
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

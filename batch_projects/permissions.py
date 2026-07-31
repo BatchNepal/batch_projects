@@ -1,0 +1,465 @@
+"""
+batch_projects/permissions.py
+─────────────────────────────
+Data-layer access control for BP doctypes — the safety net beneath board.py.
+
+board.py's whitelisted endpoints enforce project roles, but they mostly use
+frappe.get_all (which ignores user permissions). Anyone hitting the generic
+REST API (/api/resource/BP Task) or a report would otherwise bypass all of
+it. These hooks close that gap and, in doing so, finally make the project
+`visibility` field mean something:
+
+    workspace  — visible to every System User (the default; preserves today's
+                 open behavior so existing all-workspace installs don't change)
+    team       — visible to members of the project's BP Team (+ project members)
+    private    — visible only to explicit BP Project Members
+
+System Managers (and Administrator) see everything.
+
+Wired in hooks.py via `permission_query_conditions` (list/report/REST filtering)
+and `has_permission` (single-document gate).
+"""
+
+import frappe
+import json
+
+
+# ─── ReBAC push-down ─────────────────────────────────────────────────────
+#
+# The gateway resolves each caller's allowed projects/tasks against its
+# embedded OpenFGA store and hands them down as headers on the proxied
+# request — X-BP-Allowed-Projects / X-BP-Allowed-Tasks — so Frappe's own SQL
+# still does the actual filtering/pagination (see internal/proxy's Director
+# in bp-gateway for the write side and why task IDs are assignee-only, not
+# the full viewer closure).
+
+def _rebac_scope(user):
+    """(allowed_projects, allowed_tasks) from the gateway's push-down
+    headers, or None if they don't apply and the caller should fall back to
+    the SQL-hook model below. Trusted ONLY when:
+
+      1. frappe.local._bp_gateway_verified is True — set EXCLUSIVELY by
+         gateway_guard.apply_gateway_identity() after a real HMAC check on
+         X-BP-Gateway-Sig (see that module's docstring: it runs on every
+         request via auth_hooks). A direct-to-Frappe request with no valid
+         gateway signature can never set this flag, so it can never reach
+         here with a spoofed header trusted.
+      2. `user` is the actual authenticated caller for this request — the
+         headers describe the CURRENT session only, never an arbitrary
+         other user some caller might pass in.
+
+    X-BP-Rebac-Active absent ⇒ the gateway isn't running ReBAC for this
+    deployment at all (dev without it, or a request that predates identity
+    resolution) — returns None, meaning "use the model below," unchanged
+    from before push-down existed. But once X-BP-Rebac-Active IS present,
+    it is ALWAYS authoritative, even on a parse failure (returns ([], []),
+    not None) — falling back to the SQL model on a malformed header would
+    mean a broken gateway response could make access MORE permissive than
+    intended, the opposite of fail-closed.
+    """
+    if not getattr(frappe.local, "_bp_gateway_verified", False):
+        return None
+    if user != frappe.session.user:
+        return None
+    if frappe.get_request_header("X-BP-Rebac-Active") != "1":
+        return None
+    try:
+        projects = json.loads(frappe.get_request_header("X-BP-Allowed-Projects") or "[]")
+        tasks = json.loads(frappe.get_request_header("X-BP-Allowed-Tasks") or "[]")
+        if not isinstance(projects, list) or not isinstance(tasks, list):
+            raise ValueError("non-list header payload")
+    except (TypeError, ValueError):
+        frappe.log_error("rebac: malformed X-BP-Allowed-* header, denying", "bp_rebac_scope")
+        return [], []
+    return projects, tasks
+
+
+def _is_admin(user: str) -> bool:
+    return user == "Administrator" or "System Manager" in frappe.get_roles(user)
+
+
+def get_accessible_projects(user: str | None = None):
+    """Set of BP Project names `user` may see, or None meaning 'all' (admin).
+    Memoized per-request on frappe.local — called on every list query."""
+    user = user or frappe.session.user
+    if _is_admin(user):
+        return None
+
+    cache = getattr(frappe.local, "_bp_accessible_projects", None)
+    if cache is None:
+        cache = {}
+        frappe.local._bp_accessible_projects = cache
+    if user in cache:
+        return cache[user]
+
+    member = set(frappe.get_all(
+        "BP Project Member", filters={"user": user}, pluck="parent"))
+
+    # Guests are scoped strictly to their explicit memberships — no workspace
+    # or team fallback. Keeps invited externals out of every other project.
+    from batch_projects import access
+    if access.is_guest(user):
+        cache[user] = member
+        return member
+
+    # workspace (and legacy blank) visibility = open to all System Users
+    workspace = set(frappe.get_all(
+        "BP Project", filters={"visibility": ["in", ["workspace", "", None]]},
+        pluck="name"))
+
+    team_projects = set()
+    user_teams = frappe.get_all("BP Team Member", filters={"user": user}, pluck="parent")
+    if user_teams:
+        team_projects = set(frappe.get_all(
+            "BP Project",
+            filters={"visibility": "team", "team": ["in", list(user_teams)]},
+            pluck="name"))
+
+    result = member | workspace | team_projects
+    cache[user] = result
+    return result
+
+
+def can_access_project(project: str, user: str | None = None) -> bool:
+    accessible = get_accessible_projects(user)
+    return accessible is None or project in accessible
+
+
+# Sentinel distinct from `None` (which means "admin, no restriction needed")
+# so callers of accessible_project_filter can tell "unrestricted" apart from
+# "restricted to nothing" without re-deriving it themselves.
+class _NoAccess:
+    pass
+
+
+NO_ACCESSIBLE_PROJECTS = _NoAccess()
+
+
+def accessible_project_filter(base_filters: dict | None = None, user: str | None = None):
+    """Merge an accessible-projects restriction into `base_filters` for a
+    `frappe.get_all("BP Project", filters=...)` call.
+
+    frappe.get_all ignores permission_query_conditions entirely (see the
+    module docstring) — every cross-project board.py endpoint that lists
+    BP Project directly with get_all must call this or it silently shows
+    every project regardless of `visibility`/membership.
+
+    Returns:
+      - a filters dict (possibly with `base_filters` untouched, for admins)
+      - NO_ACCESSIBLE_PROJECTS if the caller can see zero projects — callers
+        must check for this sentinel and short-circuit (return an empty
+        result) rather than run a query, since an empty `name in []` filter
+        is not guaranteed to short-circuit safely everywhere it's threaded.
+    """
+    f = dict(base_filters or {})
+    accessible = get_accessible_projects(user)
+    if accessible is None:
+        return f  # admin — unrestricted
+    if not accessible:
+        return NO_ACCESSIBLE_PROJECTS
+    f["name"] = ["in", list(accessible)]
+    return f
+
+
+# ─── permission_query_conditions hooks ───────────────────────────────────────
+
+def _project_in_clause(column: str, user: str) -> str:
+    accessible = get_accessible_projects(user)
+    if accessible is None:
+        return ""           # admin — no restriction
+    if not accessible:
+        return "1=0"        # access to nothing
+    vals = ", ".join(frappe.db.escape(p) for p in accessible)
+    return f"{column} in ({vals})"
+
+
+def _project_in_clause_or_null(column: str, user: str) -> str:
+    """Same as _project_in_clause, but for a doctype whose `project` field
+    isn't mandatory — some real rows are workspace-scoped (no single
+    project), same as BP Report already carves out below. A blank/NULL
+    project stays visible to everyone; a set project still follows normal
+    project access."""
+    accessible = get_accessible_projects(user)
+    if accessible is None:
+        return ""           # admin — no restriction
+    base = f"({column} is null or {column} = '')"
+    if not accessible:
+        return base
+    vals = ", ".join(frappe.db.escape(p) for p in accessible)
+    return f"{base} or {column} in ({vals})"
+
+
+def bp_task_query_conditions(user=None):
+    """Project access, OR-ed with tasks this user is an explicit assignee
+    on — same task-scoped grant access.require_task enforces
+    at the API layer, so an assignee with no other project standing still
+    sees their own assigned task in list views/reports, never sibling
+    tasks or the project itself (this only ever ADDS specific task names,
+    never widens the project-level clause).
+
+    When the gateway's ReBAC push-down is active for this request (see
+    _rebac_scope), its resolved lists are used DIRECTLY instead of
+    recomputing from BP Project Member/BP Task Assignee here — the gateway
+    is the authority once it's in the loop, this just turns its answer
+    into SQL."""
+    user = user or frappe.session.user
+
+    scope = _rebac_scope(user)
+    if scope is not None:
+        allowed_projects, allowed_tasks = scope
+        parts = []
+        if allowed_projects:
+            vals = ", ".join(frappe.db.escape(p) for p in allowed_projects)
+            parts.append(f"`tabBP Task`.`project` in ({vals})")
+        if allowed_tasks:
+            vals = ", ".join(frappe.db.escape(t) for t in allowed_tasks)
+            parts.append(f"`tabBP Task`.`name` in ({vals})")
+        return " or ".join(parts) if parts else "1=0"
+
+    base = _project_in_clause("`tabBP Task`.`project`", user)
+    if base == "":
+        return ""  # admin — no restriction
+    assigned = f"""`tabBP Task`.`name` in (
+        select parent from `tabBP Task Assignee` where user = {frappe.db.escape(user)}
+    )"""
+    if base == "1=0":
+        return assigned
+    return f"({base}) or ({assigned})"
+
+
+def bp_sprint_query_conditions(user=None):
+    return _project_in_clause("`tabBP Sprint`.`project`", user or frappe.session.user)
+
+
+def bp_epic_query_conditions(user=None):
+    return _project_in_clause("`tabBP Epic`.`project`", user or frappe.session.user)
+
+
+def bp_report_query_conditions(user=None):
+    """Reports: workspace reports (no project) are visible to all; project
+    reports follow project access."""
+    return _project_in_clause_or_null("`tabBP Report`.`project`", user or frappe.session.user)
+
+
+def bp_project_query_conditions(user=None):
+    user = user or frappe.session.user
+
+    scope = _rebac_scope(user)
+    if scope is not None:
+        allowed_projects, _ = scope
+        if not allowed_projects:
+            return "1=0"
+        vals = ", ".join(frappe.db.escape(p) for p in allowed_projects)
+        return f"`tabBP Project`.`name` in ({vals})"
+
+    accessible = get_accessible_projects(user)
+    if accessible is None:
+        return ""
+    if not accessible:
+        return "1=0"
+    vals = ", ".join(frappe.db.escape(p) for p in accessible)
+    return f"`tabBP Project`.`name` in ({vals})"
+
+
+# BP Milestone, BP Risk and BP Automation Run are project-scoped like BP
+# Task/Sprint/Epic above, but are granted to broad stock roles (Projects
+# User/Manager) with no permission_query_conditions hook, so frappe.get_all
+# is the ONLY thing standing between them and the generic REST API — and
+# get_all ignores this hook entirely (see the module docstring), so any
+# Projects User could pull every project's milestones (including
+# invoice_amount/sales_invoice) via /api/resource directly.
+def bp_milestone_query_conditions(user=None):
+    return _project_in_clause("`tabBP Milestone`.`project`", user or frappe.session.user)
+
+
+def bp_risk_query_conditions(user=None):
+    return _project_in_clause("`tabBP Risk`.`project`", user or frappe.session.user)
+
+
+def bp_automation_run_query_conditions(user=None):
+    return _project_in_clause("`tabBP Automation Run`.`project`", user or frappe.session.user)
+
+
+# BP Notification is scoped to its `recipient`, not a project — a user's own
+# notifications, never another user's, regardless of project access.
+def bp_notification_query_conditions(user=None):
+    user = user or frappe.session.user
+    if _is_admin(user):
+        return ""
+    return f"`tabBP Notification`.`recipient` = {frappe.db.escape(user)}"
+
+
+def bp_notification_has_permission(doc, user=None, permission_type=None):
+    user = user or frappe.session.user
+    if _is_admin(user):
+        return True
+    if doc.get("__islocal"):
+        return True  # creation handled by the whitelisted API, not raw REST
+    return doc.get("recipient") == user
+
+
+# BP Webhook Token carries a plaintext routing token (the /v1/hooks/<token>
+# path segment bp-gateway's webhook HMAC auth
+# forwards through, alongside the separately-configured, deployment-wide
+# webhook_secret — see internal/premium/premium.go verifySignature; the
+# token isn't sufficient alone to forge a call). The doctype grants
+# `Projects Manager: read` with no query condition, which is broader than
+# the app's own model: the whitelisted API
+# (automation.list_webhook_tokens/create_webhook_token/revoke_webhook_token)
+# all gate on `access.is_workspace_admin()`, not the much more common
+# per-project Projects Manager role. This hook realigns the generic REST
+# API to the same bar the app already enforces everywhere else.
+def bp_webhook_token_has_permission(doc, user=None, permission_type=None):
+    from batch_projects import access
+    user = user or frappe.session.user
+    return access.is_instance_admin(user) or access.is_workspace_admin(user)
+
+
+def bp_webhook_token_query_conditions(user=None):
+    from batch_projects import access
+    user = user or frappe.session.user
+    if access.is_instance_admin(user) or access.is_workspace_admin(user):
+        return ""
+    return "1=0"
+
+
+# Several more project-scoped BP doctypes carry a `project` field but no
+# permission_query_conditions/has_permission hook — same bug class as
+# above (frappe.get_all inside board.py is the only thing gating them; the
+# generic REST API bypasses that entirely). Their current stock DocPerm
+# roles happen to be narrow (mostly
+# System Manager only) so this wasn't necessarily live-exploitable for every
+# ordinary invited account today, but that's incidental, not a deliberate
+# second line of defense — widening a DocPerm role later (an unremarkable-
+# looking change) would silently reopen it. Closed the same way every prior
+# instance of this bug was: wire the existing _project_in_clause /
+# _project_in_clause_or_null primitives, reusing bp_doc_has_permission below
+# (already generic — reads doc.get("project") regardless of doctype).
+#
+# Mandatory `project` (reqd=1 in the doctype JSON) — strict, no null carve-out:
+def bp_drawing_query_conditions(user=None):
+    return _project_in_clause("`tabBP Drawing`.`project`", user or frappe.session.user)
+
+
+def bp_intake_form_query_conditions(user=None):
+    return _project_in_clause("`tabBP Intake Form`.`project`", user or frappe.session.user)
+
+
+def bp_invitation_query_conditions(user=None):
+    return _project_in_clause("`tabBP Invitation`.`project`", user or frappe.session.user)
+
+
+def bp_note_query_conditions(user=None):
+    return _project_in_clause("`tabBP Note`.`project`", user or frappe.session.user)
+
+
+def bp_share_link_query_conditions(user=None):
+    return _project_in_clause("`tabBP Share Link`.`project`", user or frappe.session.user)
+
+
+def bp_sla_policy_query_conditions(user=None):
+    return _project_in_clause("`tabBP SLA Policy`.`project`", user or frappe.session.user)
+
+
+def bp_task_template_query_conditions(user=None):
+    return _project_in_clause("`tabBP Task Template`.`project`", user or frappe.session.user)
+
+
+def bp_view_query_conditions(user=None):
+    return _project_in_clause("`tabBP View`.`project`", user or frappe.session.user)
+
+
+# Optional `project` (some real rows are workspace-scoped) — null-safe:
+def bp_activity_query_conditions(user=None):
+    return _project_in_clause_or_null("`tabBP Activity`.`project`", user or frappe.session.user)
+
+
+def bp_audit_log_query_conditions(user=None):
+    return _project_in_clause_or_null("`tabBP Audit Log`.`project`", user or frappe.session.user)
+
+
+def bp_automation_rule_query_conditions(user=None):
+    return _project_in_clause_or_null("`tabBP Automation Rule`.`project`", user or frappe.session.user)
+
+
+def bp_notification_mute_query_conditions(user=None):
+    return _project_in_clause_or_null("`tabBP Notification Mute`.`project`", user or frappe.session.user)
+
+
+def bp_notification_rule_query_conditions(user=None):
+    return _project_in_clause_or_null("`tabBP Notification Rule`.`project`", user or frappe.session.user)
+
+
+def bp_sla_breach_query_conditions(user=None):
+    return _project_in_clause_or_null("`tabBP SLA Breach`.`project`", user or frappe.session.user)
+
+
+def bp_task_watcher_query_conditions(user=None):
+    return _project_in_clause_or_null("`tabBP Task Watcher`.`project`", user or frappe.session.user)
+
+
+def bp_view_preference_query_conditions(user=None):
+    return _project_in_clause_or_null("`tabBP View Preference`.`project`", user or frappe.session.user)
+
+
+def bp_workflow_query_conditions(user=None):
+    return _project_in_clause_or_null("`tabBP Workflow`.`project`", user or frappe.session.user)
+
+
+# ─── has_permission hook (single-document gate) ───────────────────────────────
+
+def bp_doc_has_permission(doc, user=None, permission_type=None):
+    """Per-document gate for the generic REST API / desk / reports — the
+    data-layer twin of board.py `_check_permission`. Both resolve the user's
+    effective project role through batch_projects.access, so a request is judged
+    the same whether it arrives via a whitelisted endpoint or raw REST.
+
+    permission_type aware: read needs Viewer, write/create need Member,
+    delete/submit need Manager (see access.min_role_for_ptype). This is what
+    lets "workspace" visibility mean read-only for non-members."""
+    from batch_projects import access
+
+    user = user or frappe.session.user
+    if access.is_instance_admin(user):
+        return True
+
+    project = doc.name if doc.doctype == "BP Project" else doc.get("project")
+    if not project:
+        return True  # not project-scoped — leave to default perms
+
+    # A brand-new doc being created: no row exists yet. Creating a project is
+    # open to any System User (they become its Admin); creating a project-scoped
+    # child requires Member+ on the parent project.
+    if doc.doctype == "BP Project" and doc.get("__islocal"):
+        return frappe.db.get_value("User", user, "user_type") == "System User"
+
+    min_role = access.min_role_for_ptype(permission_type)
+    return access.has_at_least(project, min_role, user)
+
+
+def bp_task_has_permission(doc, user=None, permission_type=None):
+    """BP Task's own has_permission — same as bp_doc_has_permission
+    above, plus the task-scoped assignee grant access.require_task enforces
+    at the API layer (board.get_task/update_task): an explicit assignee on
+    THIS task additionally clears any Member-or-below permission_type (read/
+    write/create), even with zero project standing. Manager+ ptypes
+    (delete/submit/cancel/share) still require real project access — being
+    assigned one task never grants those on it."""
+    from batch_projects import access
+
+    user = user or frappe.session.user
+    if access.is_instance_admin(user):
+        return True
+
+    project = doc.get("project")
+    if not project:
+        return True  # not project-scoped — leave to default perms
+
+    min_role = access.min_role_for_ptype(permission_type)
+    if access.has_at_least(project, min_role, user):
+        return True
+
+    if access.rank(min_role) <= access.rank("Member") and not doc.get("__islocal"):
+        return access.is_task_assignee(doc.name, user)
+
+    return False

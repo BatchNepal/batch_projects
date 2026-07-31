@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Batch Projects</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/batch_projects/images/bp-logo-new.svg" />
+    <link rel="stylesheet" href="/assets/batch_projects/frontend/assets/index.css?v={{ asset_version }}" />
+</head>
+
+<body class="antialiased">
+    <div id="app"></div>
+    <script>
+        console.log("BP: Initializing realtime connection...");
+
+        window.csrf_token = "{{ csrf_token }}";
+        window.frappe = window.frappe || {};
+        window.frappe.csrf_token = "{{ csrf_token }}";
+        window.frappe.session = { user: "{{ frappe.session.user }}", user_fullname: "{{ user_fullname }}" };
+        window["__BP_BRIDGE_URL__"] = "{{ bp_bridge_url }}";
+
+        // Self-hosted Excalidraw fonts (frontend/public/fonts/ -> this app's
+        // /assets/batch_projects/frontend/fonts/ once built) — without this
+        // it pulls from a CDN, which breaks on-prem installs.
+        window.EXCALIDRAW_ASSET_PATH = "/assets/batch_projects/frontend/";
+    </script>
+    <script type="module" src="/assets/batch_projects/frontend/assets/index.js?v={{ asset_version }}"></script>
+</body>
+
+</html>

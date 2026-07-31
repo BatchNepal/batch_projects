@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BatchProjects</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Roboto:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+</head>
+
+<body class="bg-gray-50 antialiased">
+  <div id="app"></div>
+  <script>
+    // Self-hosted Excalidraw fonts (frontend/public/fonts/, copied from
+    // @excalidraw/excalidraw's dist/prod/fonts) — without this it pulls from
+    // a CDN, which breaks on-prem installs. Vite dev serves public/ at root.
+    window.EXCALIDRAW_ASSET_PATH = "/";
+  </script>
+  <script type="module" src="/src/main.js">
+    console.log("BP: Initializing realtime connection...");
+
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', 'Roboto', sans-serif;
+    }
+  </style>
+</body>
+
+</html>

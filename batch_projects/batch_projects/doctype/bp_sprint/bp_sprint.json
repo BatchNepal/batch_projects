@@ -1,0 +1,135 @@
+{
+ "name": "BP Sprint",
+ "module": "Batch Projects",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "naming_rule": "",
+ "autoname": "format:SPRINT-{####}",
+ "istable": 0,
+ "editable_grid": 0,
+ "is_submittable": 0,
+ "creation": "2026-03-09 00:00:00",
+ "modified": "2026-03-09 00:00:00",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1,
+ "fields": [
+  {
+   "fieldname": "section_break",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "sprint_name",
+   "fieldtype": "Data",
+   "label": "Sprint Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 0
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "reqd": 0,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "options": "BP Project",
+   "description": "Leave blank for a team-level sprint"
+  },
+  {
+   "fieldname": "team",
+   "fieldtype": "Link",
+   "label": "Team",
+   "options": "BP Team",
+   "description": "Set for team-level sprints (spans multiple projects)"
+  },
+  {
+   "fieldname": "sprint_type",
+   "fieldtype": "Select",
+   "label": "Sprint Type",
+   "options": "Project\nTeam",
+   "default": "Project"
+  },
+  {
+   "fieldname": "column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "reqd": 0,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "options": "Planning\nActive\nCompleted",
+   "default": "Planning"
+  },
+  {
+   "fieldname": "section_duration",
+   "fieldtype": "Section Break",
+   "label": "Duration"
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Start Date",
+   "reqd": 0,
+   "in_list_view": 1,
+   "in_standard_filter": 0
+  },
+  {
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "label": "End Date",
+   "reqd": 0,
+   "in_list_view": 1,
+   "in_standard_filter": 0
+  },
+  {
+   "fieldname": "column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "goal",
+   "fieldtype": "Small Text",
+   "label": "Sprint Goal",
+   "reqd": 0,
+   "in_list_view": 0,
+   "in_standard_filter": 0
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Projects Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ],
+ "links": [],
+ "actions": [],
+ "custom": 0,
+ "field_order": [
+  "section_break",
+  "sprint_name",
+  "project",
+  "team",
+  "sprint_type",
+  "column_break",
+  "status",
+  "section_duration",
+  "start_date",
+  "end_date",
+  "column_break",
+  "goal"
+ ]
+}
