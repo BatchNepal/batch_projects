@@ -400,6 +400,8 @@ def get_entitlements():
     # Read license expiry info from gateway-injected headers
     expires_at = None
     days_remaining = None
+    is_trial = False
+    trial_days_remaining = None
     try:
         if frappe.request and frappe.request.headers:
             exp_str = frappe.request.headers.get("X-BP-Expires-At")
@@ -408,6 +410,15 @@ def get_entitlements():
             days_str = frappe.request.headers.get("X-BP-Days-Remaining")
             if days_str:
                 days_remaining = int(days_str)
+            # register()'s no-payment 60-day Business trial (bp-license) —
+            # deliberately independent of expires_at/days_remaining above,
+            # which stay at the same "never expires" value a trial license
+            # carries its whole life (see bp-gateway license.go's
+            # LicenseClaims comment). This is purely a banner signal.
+            is_trial = frappe.request.headers.get("X-BP-Trial") == "true"
+            trial_days_str = frappe.request.headers.get("X-BP-Trial-Days-Remaining")
+            if trial_days_str:
+                trial_days_remaining = int(trial_days_str)
     except Exception:
         pass
 
@@ -419,6 +430,8 @@ def get_entitlements():
         "feature_min_tier": dict(_FEATURE_MIN_TIER),
         # License expiry info (from gateway headers)
         "expires_at": expires_at,
+        "is_trial": is_trial,
+        "trial_days_remaining": trial_days_remaining,
         "days_remaining": days_remaining,
         # Admin on/off switches (BP Workspace Settings) — orthogonal to the
         # tier map above; a feature must clear BOTH to render/act.

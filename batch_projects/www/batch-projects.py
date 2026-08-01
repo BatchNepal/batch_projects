@@ -1,16 +1,9 @@
 import frappe
-import os
+
+from batch_projects.spa_assets import get_spa_entry
 
 no_cache = 1
 base_template_path = ""
-
-
-def _asset_version():
-    try:
-        path = frappe.get_app_path("batch_projects", "public", "frontend", "assets", "index.js")
-        return str(int(os.path.getmtime(path)))
-    except Exception:
-        return frappe.utils.random_string(8)
 
 
 def get_context(context):
@@ -19,5 +12,7 @@ def get_context(context):
     context.no_breadcrumbs = True
     context.no_header = True
     context.show_sidebar = False
-    context.asset_version = _asset_version()
+    entry = get_spa_entry()
+    context.entry_js = entry["js"]
+    context.entry_css = entry["css"]
     context.bp_bridge_url = frappe.conf.get("bp_bridge_url") or ""

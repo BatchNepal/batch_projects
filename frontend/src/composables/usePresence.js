@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { getPresence } from '@/utils/api'
+import { getPresence, UpgradeRequiredError } from '@/utils/api'
 
 /**
  * Who's online right now, Messenger-dot style — not a hard session list,
@@ -17,7 +17,15 @@ async function refresh() {
   try {
     const res = await getPresence()
     onlineUsers.value = new Set(res?.users || [])
-  } catch {
+  } catch (e) {
+    if (e instanceof UpgradeRequiredError) {
+      // Presence is a paid (Team+) gate on the gateway — a 402 here is
+      // permanent, not transient, so polling every 20s forever just spams
+      // the console for the tab's whole lifetime. Stop; a fresh mount
+      // (refCount 0→1, e.g. full page load) gets one more attempt.
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+      return
+    }
     // Transient failure — keep the last-known set rather than flashing
     // everyone offline.
   }

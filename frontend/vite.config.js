@@ -80,14 +80,36 @@ export default defineConfig(({ command }) => ({
     outDir: "../batch_projects/public/frontend",
     emptyOutDir: true,
     target: "es2015",
+    // Entry is now content-hashed like every other chunk (see manifest.json,
+    // read server-side by workspace.py) instead of a fixed "index.js" with a
+    // manually-appended ?v=<mtime>. That fixed-name + external-query scheme
+    // is what caused the double-bootstrap bug documented below: Rollup's own
+    // chunk-to-chunk imports always reference the entry by its bare output
+    // filename, which never matched the query-stringed URL the HTML used.
+    manifest: true,
     rollupOptions: {
       output: {
-        // Entry stays a fixed name because www/workspace.html references it
-        // directly (cache-busted with ?v=<mtime> there). Lazy-loaded route
-        // chunks + their CSS are content-hashed so they can never be served
-        // stale — index.js references the hashed names automatically.
-        entryFileNames: "assets/index.js",
         chunkFileNames: "assets/[name]-[hash].js",
+        // Without this, Rollup's default chunking put shared framework code
+        // (Vue's runtime etc.) inside the entry chunk itself, since it's the
+        // first consumer — every lazy route chunk then imported it back via
+        // a bare `from"./index.js"` (a relative specifier, no query string).
+        // The browser treats that as a DIFFERENT module than the one loaded
+        // by <script src="index.js?v=...">, and re-executes the entry's
+        // top-level side effects a second time — double app mount, double
+        // bootstrapBridge()/JWT mint, double realtime connection, double
+        // every boot-time API call, on the first navigation to any lazy
+        // route. Forcing vendor deps into their own hashed chunk keeps the
+        // entry itself small, but doesn't fully close the hole — Rollup
+        // still folds *some* app-level code shared between App.vue and lazy
+        // pages into the entry no matter how manualChunks is tuned (even a
+        // single leaf component can trigger it). The real fix is below:
+        // build.manifest + workspace.py reading the actual hashed entry
+        // filename, so every reference (HTML and Rollup's own internal
+        // chunk-to-chunk imports) resolves to the identical URL.
+        manualChunks(id) {
+          if (id.includes("node_modules")) return "vendor";
+        },
         assetFileNames: (info) =>
           info.name === "index.css"
             ? "assets/index.css"

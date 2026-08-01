@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Batch Projects</title>
     <link rel="icon" type="image/svg+xml" href="/assets/batch_projects/images/bp-logo-new.svg" />
-    <link rel="stylesheet" href="/assets/batch_projects/frontend/assets/index.css?v={{ asset_version }}" />
+    <link rel="stylesheet" href="/assets/batch_projects/frontend/{{ entry_css }}" />
 </head>
 
 <body class="antialiased">
@@ -25,7 +25,7 @@
         // it pulls from a CDN, which breaks on-prem installs.
         window.EXCALIDRAW_ASSET_PATH = "/assets/batch_projects/frontend/";
     </script>
-    <script type="module" src="/assets/batch_projects/frontend/assets/index.js?v={{ asset_version }}"></script>
+    <script type="module" src="/assets/batch_projects/frontend/{{ entry_js }}"></script>
 </body>
 
 </html>

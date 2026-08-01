@@ -335,10 +335,22 @@ function bridgeIsCrossOrigin() {
 /** Mint the short-lived cross-origin bootstrap bearer from Frappe (same-origin). */
 export const mintBridgeToken = () => callPath("batch_projects.api.session.mint_bridge_token");
 
+// The gateway JWT is short-lived by design (session_ttl_seconds: 300 in
+// prod config) and bootstrapBridge() used to only ever be called once, at
+// mount. Any tab left open past that TTL had every subsequent call 401,
+// which _looksLikeSessionExpired treats as "logged out" and bounces to
+// /login — which then immediately bounces back since the underlying Frappe
+// sid cookie was still fine, looking like a spontaneous page refresh every
+// ~5 idle minutes. The bootstrap response already carries jwt_expires_in
+// (handler.go) for exactly this; just act on it.
+let _refreshTimer = null;
+const REFRESH_SAFETY_MARGIN_SECS = 30;
+
 /** Bootstrap the bridge session. Returns {user, entitlements, gateway_jwt, …}.
  *  Throws if the bridge is unreachable — it is the mandatory passage for ALL
  *  API calls (self-hosted via same-origin proxy; Frappe Cloud via cross-origin).
- *  Caches the gateway JWT for subsequent bridge calls. */
+ *  Caches the gateway JWT for subsequent bridge calls and schedules a silent
+ *  re-mint before it expires, so a tab left open never sees a hard 401. */
 export async function bootstrapBridge() {
   try {
     let token;
@@ -359,6 +371,14 @@ export async function bootstrapBridge() {
     } else {
       throw new Error("Bridge bootstrap failed — no gateway JWT returned.");
     }
+
+    if (_refreshTimer) clearTimeout(_refreshTimer);
+    const ttlSecs = Number(payload?.jwt_expires_in) || 300;
+    const delayMs = Math.max(ttlSecs - REFRESH_SAFETY_MARGIN_SECS, REFRESH_SAFETY_MARGIN_SECS) * 1000;
+    _refreshTimer = setTimeout(() => {
+      bootstrapBridge().catch((e) => console.warn("[BP] silent JWT refresh failed:", e));
+    }, delayMs);
+
     return payload;
   } finally {
     // Unblock any callPath() call that's waiting on _bridgeReady, whether
@@ -371,6 +391,7 @@ export async function bootstrapBridge() {
 
 /** Tear down the bridge session (called on logout). */
 export async function bridgeLogout() {
+  if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
   try { await bridgeCall("session/logout", { method: "POST" }); } catch { /* best-effort */ }
   setGatewayJWT(null);
 }
@@ -870,7 +891,7 @@ export const removeTaskLink = (task, linked_task, link_type) =>
 
 // ─── ERP REFERENCES ──────────────────────────────────────────────────────────
 
-export const getAllowedDoctypes = () => call("get_allowed_doctypes");
+export const getAllowedDoctypes = (project) => call("get_allowed_doctypes", { project });
 
 export const searchErpDocuments = (doctype, query, project) =>
   call("search_erp_documents", { doctype, query, project });

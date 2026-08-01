@@ -178,10 +178,13 @@ class BPTask(Document):
         from batch_projects.api.custom_fields import validation_schema_for_project
         schema = validation_schema_for_project(self.project, "tasks")
 
-        # Step 1: orphan cleanup
+        # Step 1: orphan cleanup. Underscore-prefixed keys (e.g. "_checklist")
+        # are internal storage piggybacking on this same JSON blob, not
+        # schema-defined custom fields — they'd never appear in active_ids
+        # and would get silently stripped on every single save otherwise.
         active_ids = {f["id"] for f in schema if not f.get("archived")}
         values = _parse_json(self.custom_field_values, {})
-        cleaned = {k: v for k, v in values.items() if k in active_ids}
+        cleaned = {k: v for k, v in values.items() if k in active_ids or k.startswith("_")}
         if len(cleaned) != len(values):
             self.custom_field_values = json.dumps(cleaned)
             values = cleaned

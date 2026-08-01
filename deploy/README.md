@@ -9,11 +9,15 @@ on which features you need:
    Cloud. See the [root README](../README.md#quick-start). Starting from
    nothing? [`docker-compose.selfhost.yml`](docker-compose.selfhost.yml)
    provisions ERPNext and BatchProjects together.
-2. **The Gateway** (optional, paid) — real-time collaboration, workflow
+2. **The Gateway** (optional) — real-time collaboration, workflow
    automation, and the other capabilities described in
-   [`gateway-setup.md`](gateway-setup.md). Runs as its own compact Docker
-   Compose stack on infrastructure you control, independent of how
-   ERPNext itself is hosted.
+   [`gateway-setup.md`](gateway-setup.md). Every install activates
+   automatically on a free 60-day Business-plan trial (no card required),
+   reverting to the free tier afterward with nothing deleted or blocked
+   beyond normal free-tier gating — a paid plan is only needed to keep the
+   trial's features past day 60. Runs as its own compact Docker Compose
+   stack on infrastructure you control, independent of how ERPNext itself
+   is hosted.
 
 Organizations using the Community edition only need step 1 — the Gateway
 is entirely optional.

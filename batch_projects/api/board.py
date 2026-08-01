@@ -1435,13 +1435,29 @@ def _get_checklist(task):
     return cfv.get("_checklist", [])
 
 
-def _save_checklist(task, items):
-    doc = frappe.get_doc("BP Task", task)
-    cfv = _parse_json(doc.custom_field_values, {})
-    cfv["_checklist"] = items
-    doc.custom_field_values = json.dumps(cfv)
-    doc.save(ignore_permissions=True)
-    frappe.db.commit()
+def _save_checklist(task, mutate, retries=5):
+    """Reload-mutate-save with retry on TimestampMismatchError.
+
+    Checklist edits (add/toggle/update/remove) fire back-to-back from the UI
+    (e.g. add-item immediately followed by the new row's blur-save), each
+    loading its own doc snapshot. Re-running `mutate` against a freshly
+    reloaded doc on conflict avoids both the hard TimestampMismatchError and
+    silently dropping the loser's edit.
+    """
+    for attempt in range(retries):
+        doc = frappe.get_doc("BP Task", task)
+        cfv = _parse_json(doc.custom_field_values, {})
+        items = mutate(cfv.get("_checklist", []))
+        cfv["_checklist"] = items
+        doc.custom_field_values = json.dumps(cfv)
+        try:
+            doc.save(ignore_permissions=True)
+            frappe.db.commit()
+            return items
+        except frappe.TimestampMismatchError:
+            frappe.db.rollback()
+            if attempt == retries - 1:
+                raise
 
 
 @frappe.whitelist()
@@ -1457,13 +1473,17 @@ def add_checklist_item(task, text):
     """Add a checklist item to a task."""
     doc = frappe.get_doc("BP Task", task)
     _check_permission(doc.project, "BP Member")
-    items = _get_checklist(task)
-    items.append({
+    new_item = {
         "id": str(uuid.uuid4())[:8],
         "text": (text or "").strip()[:500],
         "done": False,
-    })
-    _save_checklist(task, items)
+    }
+
+    def mutate(items):
+        items.append(new_item)
+        return items
+
+    items = _save_checklist(task, mutate)
     return {"ok": True, "items": items}
 
 
@@ -1472,12 +1492,15 @@ def update_checklist_item(task, item_id, text):
     """Update checklist item text."""
     doc = frappe.get_doc("BP Task", task)
     _check_permission(doc.project, "BP Member")
-    items = _get_checklist(task)
-    for item in items:
-        if item["id"] == item_id:
-            item["text"] = (text or "").strip()[:500]
-            break
-    _save_checklist(task, items)
+
+    def mutate(items):
+        for item in items:
+            if item["id"] == item_id:
+                item["text"] = (text or "").strip()[:500]
+                break
+        return items
+
+    items = _save_checklist(task, mutate)
     return {"ok": True, "items": items}
 
 
@@ -1486,12 +1509,15 @@ def toggle_checklist_item(task, item_id):
     """Toggle checklist item done/undone."""
     doc = frappe.get_doc("BP Task", task)
     _check_permission(doc.project, "BP Member")
-    items = _get_checklist(task)
-    for item in items:
-        if item["id"] == item_id:
-            item["done"] = not item.get("done", False)
-            break
-    _save_checklist(task, items)
+
+    def mutate(items):
+        for item in items:
+            if item["id"] == item_id:
+                item["done"] = not item.get("done", False)
+                break
+        return items
+
+    items = _save_checklist(task, mutate)
     return {"ok": True, "items": items}
 
 
@@ -1500,9 +1526,11 @@ def remove_checklist_item(task, item_id):
     """Remove a checklist item."""
     doc = frappe.get_doc("BP Task", task)
     _check_permission(doc.project, "BP Member")
-    items = _get_checklist(task)
-    items = [i for i in items if i["id"] != item_id]
-    _save_checklist(task, items)
+
+    def mutate(items):
+        return [i for i in items if i["id"] != item_id]
+
+    items = _save_checklist(task, mutate)
     return {"ok": True, "items": items}
 
 
@@ -4013,15 +4041,27 @@ def delete_view(view):
 
 
 @frappe.whitelist()
-def get_allowed_doctypes():
+def get_allowed_doctypes(project=None):
+    """Doctypes offered in the task 'Add reference' picker.
+
+    search_erp_documents hard-requires an erpnext_project link for anything
+    in _PROJECT_FIELD_DOCTYPES (+ Timesheet) — offering those in the picker
+    for an unlinked project let users pick "Sales Order", type a query, and
+    get a silently-swallowed 417 with nothing in the UI to explain why.
+    Drop them from the list up front instead when `project` isn't linked.
+    """
     ALLOWED = [
         "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
         "Project", "Customer", "Supplier", "Lead", "Opportunity",
         "Expense Claim", "Timesheet", "Delivery Note", "Stock Entry",
         "Payment Entry", "Journal Entry", "Work Order", "Quotation",
     ]
+    erp_linked = bool(project and frappe.db.get_value("BP Project", project, "erpnext_project"))
+    requires_project = _PROJECT_FIELD_DOCTYPES | {"Timesheet"}
     existing = []
     for dt in ALLOWED:
+        if project and not erp_linked and dt in requires_project:
+            continue
         try:
             if frappe.db.exists("DocType", dt):
                 existing.append(dt)

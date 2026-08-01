@@ -110,6 +110,7 @@ bench --site your-site.local install-app batch_projects
 
 # Run migrations
 bench --site your-site.local migrate
+```
 
 That's the entire community version install — no Node, no build step, no external
 service. The `version-15` branch tracks ERPNext v15; see
@@ -124,8 +125,8 @@ For local frontend development, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## The optional but recommended add-on
 
-Realtime updates, automation rules, ERP integration, and other 
-premium features run through a small companion service (**bp-gateway**) that sits between frontend and backend of batch_projects app and handles heavy lifting required to handle premium features — it can run on same or dedicated server and provides you full control over your data and security. 
+Realtime updates, automation rules, ERP integration, and other
+premium features run through a small companion service (**bp-gateway**) that sits between frontend and backend of batch_projects app and handles heavy lifting required to handle premium features — it can run on same or dedicated server and provides you full control over your data and security.
 
 If you only need the community version, skip this gateway entirely — BatchProjects runs standalone on community plan.
 

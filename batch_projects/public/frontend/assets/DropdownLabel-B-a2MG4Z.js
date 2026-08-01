@@ -1,0 +1,1 @@
+import{d as t}from"./index-BiOKkiLQ.js";import{E as o,K as s,P as r}from"./vendor-_NUNIC0U.js";const n={},c={class:"px-2 pt-1.5 pb-1 text-xs font-semibold text-muted uppercase tracking-wider select-none"};function a(e,p){return o(),s("p",c,[r(e.$slots,"default")])}const _=t(n,[["render",a]]);export{_ as D};

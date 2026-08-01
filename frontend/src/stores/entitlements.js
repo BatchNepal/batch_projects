@@ -28,6 +28,12 @@ export const useEntitlementsStore = defineStore("entitlements", () => {
   const isExpired = computed(() => {
     return daysRemaining.value !== null && daysRemaining.value <= 0;
   });
+  // register()'s no-payment 60-day Business trial (bp-license) — separate
+  // from expiresAt/daysRemaining/isExpired above, which stay at "never
+  // expires" for a trial's whole life (see bp-gateway's LicenseClaims
+  // comment). A lapsed trial degrades tier only, never trips isExpired.
+  const isTrial = ref(false);
+  const trialDaysRemaining = ref(null);
   // { role: { capability: bool } }, same for every project (a
   // workspace-wide policy, not project data). Combine with the per-project
   // role from the project store's my_capabilities call to answer "can I see
@@ -106,6 +112,14 @@ export const useEntitlementsStore = defineStore("entitlements", () => {
     // License expiry
     expiresAt.value = e.expires_at || null;
     daysRemaining.value = e.days_remaining != null ? e.days_remaining : null;
+    // Trial banner signal — only the Frappe mirror carries these (same
+    // caveat as workspace_has_projects/onboarding_dismissed below), so
+    // leave them untouched at their fail-open defaults (false/null) when
+    // seeded from the bridge bootstrap payload instead.
+    if (e.is_trial !== undefined) isTrial.value = e.is_trial === true;
+    if (e.trial_days_remaining !== undefined) {
+      trialDaysRemaining.value = e.trial_days_remaining != null ? e.trial_days_remaining : null;
+    }
     // Only the Frappe mirror (batch_projects.entitlements.get_entitlements)
     // carries these two — the bridge bootstrap payload doesn't, so leave
     // them untouched (at their fail-open defaults) when seeded from there;
@@ -251,6 +265,7 @@ export const useEntitlementsStore = defineStore("entitlements", () => {
     dismissedNudges, isNudgeDismissed, dismissNudge,
     seatsUsed, seatsTotal, seatsRemaining, isAtCapacity,
     expiresAt, daysRemaining, isExpiringSoon, isExpired,
+    isTrial, trialDaysRemaining,
     load, loadBranding, applyEntitlements, can, canWorkspace, requiredPlanFor, hasCapability,
     showUpgradePrompt, dismissOnboarding,
   };

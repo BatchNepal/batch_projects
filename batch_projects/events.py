@@ -1698,7 +1698,11 @@ def build_custom_field_changes(old_cfv: dict, new_cfv: dict) -> list:
     Returns list of { field, from, to } using cf: prefix convention.
     """
     changes = []
-    all_keys = set(old_cfv.keys()) | set(new_cfv.keys())
+    # Underscore-prefixed keys (e.g. "_checklist") are internal storage
+    # piggybacking on this same JSON blob, not user-facing custom fields —
+    # logging their raw values as "Field Edit" activity would just dump
+    # checklist JSON into the task's activity feed on every edit.
+    all_keys = {k for k in (set(old_cfv.keys()) | set(new_cfv.keys())) if not k.startswith("_")}
     for key in all_keys:
         old_val = old_cfv.get(key)
         new_val = new_cfv.get(key)

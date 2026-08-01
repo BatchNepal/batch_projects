@@ -1,6 +1,22 @@
 <template>
   <div class="flex flex-col min-h-full">
 
+    <!-- Free trial banner — register()'s no-payment 60-day Business trial.
+         Informational, not urgent: no countdown-panic styling, no CTA to
+         upgrade before it "runs out" — it just says what's true and that
+         nothing breaks or gets deleted when it ends. -->
+    <div v-if="ent.isTrial" class="border-b px-8 py-3" style="background: var(--accent-soft); border-color: var(--border);">
+      <div class="max-w-6xl mx-auto w-full flex items-center gap-2.5 text-[13px]" style="color: var(--accent-soft-foreground);">
+        <Sparkles class="size-4 shrink-0" :stroke-width="2" />
+        <span>
+          You're on a free <strong>Business</strong> trial —
+          <strong class="tabular-nums">{{ ent.trialDaysRemaining }}</strong>
+          day{{ ent.trialDaysRemaining === 1 ? '' : 's' }} left, no card required.
+          When it ends you'll move to the free Starter plan automatically — nothing is deleted.
+        </span>
+      </div>
+    </div>
+
     <!-- ─── ACCOUNT HEADER — who you are billed as, not a marketing pitch ─── -->
     <section class="border-b" style="border-color: var(--border);">
       <div class="px-8 py-6 max-w-6xl mx-auto w-full">
@@ -306,6 +322,7 @@
 <script setup>
 import { ref, computed, onMounted, defineComponent, h } from 'vue'
 import { toast } from 'vue-sonner'
+import { Sparkles } from 'lucide-vue-next'
 import { useEntitlementsStore } from '@/stores/entitlements'
 import { createCheckoutSession, getPlans, getMySubscriptions, getBillingPortal } from '@/utils/api'
 

@@ -1485,7 +1485,7 @@ async function confirmLink(r) { try{await addTaskLink(issue.value.name,r.name,ne
 // ERPNext reference functions
 async function loadAllowedDoctypes() {
   if (allowedDoctypes.value.length) return
-  try { allowedDoctypes.value = await getAllowedDoctypes() } catch {}
+  try { allowedDoctypes.value = await getAllowedDoctypes(store.currentProject?.name) } catch {}
 }
 
 const debouncedRefSearch = debounce(async () => {
