@@ -7,7 +7,7 @@
         <div class="w-7 h-7 rounded-md overflow-hidden flex items-center justify-center shrink-0">
           <img :src="'/assets/batch_projects/images/bp-logo-new.svg'" class="w-full h-full object-cover" alt="" />
         </div>
-        <span class="text-sm font-semibold text-foreground">Batch Projects</span>
+        <span class="text-sm font-semibold text-foreground">BatchProjects</span>
       </div>
 
       <!-- Step indicators -->

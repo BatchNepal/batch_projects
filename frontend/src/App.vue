@@ -121,7 +121,7 @@ const isProjectRoute = computed(() =>
 const currentPageTitle = computed(() => {
   if (route.params.key) return route.params.key.toUpperCase()
   const map = { '/workspace': 'Home', '/workspace/my-tasks': 'My Tasks', '/workspace/notifications': 'Inbox', '/workspace/all': 'Projects' }
-  return map[route.path] || 'Batch Projects'
+  return map[route.path] || 'BatchProjects'
 })
 
 // White-label branding (Team plan+) — applies the moment entitlements load

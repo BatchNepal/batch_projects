@@ -206,7 +206,7 @@
 
     <!-- Brand footer -->
     <footer class="shrink-0 py-3 text-center">
-      <span class="text-[11px] text-muted">Shared with <span class="font-semibold text-foreground">Batch Projects</span></span>
+      <span class="text-[11px] text-muted">Shared with <span class="font-semibold text-foreground">BatchProjects</span></span>
     </footer>
   </div>
 </template>
