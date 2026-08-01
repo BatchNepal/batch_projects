@@ -295,11 +295,27 @@
 
           <!-- ══ INTAKE ══ -->
           <template v-else-if="activeTab === 'intake'">
-            <div class="mb-4">
-              <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Intake Forms</h1>
-              <p class="text-[13px] text-muted mt-1">Create public forms that submit tasks to this project.</p>
+            <div class="mb-4 flex items-center gap-2">
+              <div>
+                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Intake Forms</h1>
+                <p class="text-[13px] text-muted mt-1">Create public forms that submit tasks to this project.</p>
+              </div>
+              <span v-if="!intakeFormsUnlocked"
+                class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
+                       bg-[var(--surface-secondary)] text-muted uppercase tracking-wider">
+                <Icon :icon="Lock" class="size-3" /> {{ intakeFormsRequiredPlan }}
+              </span>
             </div>
 
+            <EmptyState v-if="!intakeFormsUnlocked" :icon="Lock" title="Intake forms need a plan upgrade"
+              :description="`Available on the ${intakeFormsRequiredPlan} plan and up. Upgrade to let clients submit tasks through a public form.`"
+              class="bp-set-card mb-4">
+              <template #action>
+                <Button size="sm" color="primary" @click="ent.showUpgradePrompt('feature', 'Intake forms require an upgrade.')">Upgrade</Button>
+              </template>
+            </EmptyState>
+
+            <template v-else>
             <div v-if="intakeForms.length" class="space-y-2 mb-4">
               <div v-for="f in intakeForms" :key="f.name" class="bp-set-card">
                 <div class="flex items-center justify-between py-1">
@@ -411,6 +427,7 @@
                 <Button size="sm" color="primary" :isLoading="savingForm" @click="saveIntakeForm">Save</Button>
               </ModalFooter>
             </Modal>
+            </template>
           </template>
 
           <!-- ══ BILLING ══ -->
@@ -1207,6 +1224,8 @@ function askRemoveEpic(ep) {
 const taskTemplates = ref([])
 const templatesUnlocked = computed(() => ent.can('templates'))
 const templatesRequiredPlan = computed(() => ent.requiredPlanFor('templates'))
+const intakeFormsUnlocked = computed(() => ent.can('intake_forms'))
+const intakeFormsRequiredPlan = computed(() => ent.requiredPlanFor('intake_forms'))
 
 async function loadTaskTemplates() {
   if (!store.currentProject?.name) return
@@ -1920,7 +1939,7 @@ function _intakeFieldsPayload(list) {
 }
 
 async function loadIntakeForms() {
-  if (!store.currentProject?.name) return
+  if (!store.currentProject?.name || !intakeFormsUnlocked.value) return
   try { intakeForms.value = await listIntakeForms(store.currentProject.name) }
   catch (e) { intakeForms.value = [] }
 }
