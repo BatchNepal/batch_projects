@@ -23,11 +23,23 @@ Resolution order for the current tier:
        unsigned or unverifiable header is never trusted, same fail-closed
        rule current_max_users() already applies to X-BP-Max-Users.
     2. site_config "bp_dev_tier" — dev/testing override, but ONLY on sites
-       that have NOT configured bp_gateway_shared_secret. A site with the
-       secret set has declared itself gateway-enforced; honoring bp_dev_tier
-       there would let a request that skips the gateway entirely (e.g. a
-       direct curl to Frappe's own port) self-assert any paid tier for free.
-       Both resolution steps are fail-closed for exactly this reason.
+       that have NOT configured bp_gateway_shared_secret AND have Frappe's
+       own developer_mode turned on. A site with the secret set has
+       declared itself gateway-enforced; honoring bp_dev_tier there would
+       let a request that skips the gateway entirely (e.g. a direct curl to
+       Frappe's own port) self-assert any paid tier for free. The
+       developer_mode requirement closes the other half of that gap: a
+       production site that simply never got a gateway installed could
+       otherwise set bp_dev_tier itself and unlock every Frappe-side
+       feature gate permanently, for free, with no gateway involved at
+       all — confirmed as a real, working bypass, not a hypothetical one.
+       developer_mode is a real Frappe flag with its own very visible
+       production costs (verbose tracebacks shown to users, degraded
+       caching), so a customer flipping it on purely to also flip
+       bp_dev_tier is trading away things no real production site wants —
+       while genuine local dev/test sites already run with it on anyway,
+       so the legitimate use case is unaffected. Both resolution steps are
+       fail-closed for exactly this reason.
     3. last value cached from a prior request (for background jobs/scheduler)
     4. "starter"                       (free)
 """
@@ -141,8 +153,9 @@ def current_tier() -> str:
         return tier
 
     # Inert on any site that has declared itself gateway-enforced (secret
-    # configured) — see the module docstring.
-    if not frappe.conf.get("bp_gateway_shared_secret"):
+    # configured), AND requires Frappe's own developer_mode — see the
+    # module docstring for why both gates exist.
+    if not frappe.conf.get("bp_gateway_shared_secret") and frappe.conf.get("developer_mode"):
         override = frappe.conf.get("bp_dev_tier")
         if override:
             return override
@@ -288,13 +301,16 @@ def current_max_users() -> int:
         pass
     # Same fail-closed rule current_tier() applies to bp_dev_tier:
     # bp_dev_max_users must be inert on any site that
-    # has declared itself gateway-enforced (bp_gateway_shared_secret set).
-    # Without this guard, a request that arrives with no verified header at
-    # all — a background job, or a direct-to-Frappe call that skips the
-    # gateway entirely — would let a stale/misconfigured bp_dev_max_users
-    # silently override the real cap on a site that's supposed to be
-    # fully gateway-enforced.
-    if not frappe.conf.get("bp_gateway_shared_secret"):
+    # has declared itself gateway-enforced (bp_gateway_shared_secret set),
+    # AND requires developer_mode too — a production site that never
+    # configured a gateway at all could otherwise set this itself and grant
+    # unlimited seats for free, permanently, with nothing to enforce
+    # otherwise. Without the bp_gateway_shared_secret guard specifically, a
+    # request that arrives with no verified header at all — a background
+    # job, or a direct-to-Frappe call that skips the gateway entirely —
+    # would let a stale/misconfigured bp_dev_max_users silently override
+    # the real cap on a site that's supposed to be fully gateway-enforced.
+    if not frappe.conf.get("bp_gateway_shared_secret") and frappe.conf.get("developer_mode"):
         override = frappe.conf.get("bp_dev_max_users")
         if override is not None:
             return int(override)
