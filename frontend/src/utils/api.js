@@ -306,7 +306,26 @@ export const getBillingPortal = () =>
 
 let _gatewayJWT = null;
 export const getGatewayJWT = () => _gatewayJWT;
-export const setGatewayJWT = (t) => { _gatewayJWT = t || null; };
+
+// realtime.js subscribes so it can proactively swap to a freshly-minted
+// token before the old one expires, instead of waiting for its EventSource
+// to break and reconnecting reactively — see its own comment for why that
+// reactive path has a real gap (a missed event during the drop) on top of
+// the console noise. Only fires on an actual change, not every call —
+// bootstrapBridge()'s silent refresh re-sets the same handler either way.
+const _jwtListeners = new Set();
+export function onGatewayJWTChange(handler) {
+  _jwtListeners.add(handler);
+  return () => _jwtListeners.delete(handler);
+}
+export const setGatewayJWT = (t) => {
+  const next = t || null;
+  if (next === _gatewayJWT) return;
+  _gatewayJWT = next;
+  for (const handler of _jwtListeners) {
+    try { handler(_gatewayJWT); } catch (e) { console.error("[BP] gateway JWT listener error:", e); }
+  }
+};
 
 // Resolved once bootstrapBridge() settles (success or failure) so callPath
 // can safely await it instead of racing ahead — see callPath's cross-origin

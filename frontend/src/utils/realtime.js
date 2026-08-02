@@ -14,7 +14,7 @@
 // gateway-issued JWT (api.js's getGatewayJWT(), set by bootstrapBridge())
 // goes in a ?token= query param — a route added specifically for this on
 // the gateway side (session.go resolve()), scoped to this one endpoint.
-import { bridgeBase, getGatewayJWT } from "./api";
+import { bridgeBase, getGatewayJWT, onGatewayJWTChange } from "./api";
 
 let _es = null;
 let _reconnectTimer = null;
@@ -127,3 +127,21 @@ export function teardownRealtime() {
 export function isRealtimeConnected() {
   return _es?.readyState === EventSource.OPEN;
 }
+
+// api.js's bootstrapBridge() silently re-mints the gateway JWT ~30s before
+// it expires (REFRESH_SAFETY_MARGIN_SECS), but that alone doesn't help an
+// already-open EventSource — native EventSource has no way to swap its
+// query-string token mid-connection, so without this the connection just
+// sits on its old, soon-to-expire token until the server eventually cuts
+// it off. Confirmed live: every ~5 minutes the connection died (the
+// chunked response cut short), the browser retried the same now-expired
+// token once or twice (a stray 401 in the console each time), and only
+// then did onerror's readyState===CLOSED path reconnect with a fresh one
+// — a real gap where any event published during that window was silently
+// missed, on top of the console noise. Proactively swapping the moment a
+// fresh token lands removes both.
+onGatewayJWTChange((token) => {
+  if (!_es || _es.readyState !== EventSource.OPEN || !token) return;
+  teardownRealtime();
+  connectRealtime();
+});
