@@ -86,10 +86,39 @@ function _redirectToLogin() {
 //     the gateway is the mandatory passage for every request.
 const MINT_BRIDGE_TOKEN_METHOD = "batch_projects.api.session.mint_bridge_token";
 
+// Every backend method that is BOTH @frappe.whitelist(allow_guest=True) AND
+// skips gateway_guard.verify_gateway_request() — the exact set a visitor to
+// one of the three public routes (/share/:token, /workspace/invite/:token,
+// /intake/:token) can legitimately call while logged out. These bypass the
+// bridge entirely and go straight to Frappe same-origin, REGARDLESS of
+// bridgeIsCrossOrigin() — the bridge/JWT dance exists to prove identity to a
+// cross-origin gateway, but a guest visitor has no identity to bootstrap and
+// nothing ever calls bootstrapBridge() on a public route (only App.vue's
+// authenticated branch does). Routing these through the bridge branch left
+// _gatewayJWT null forever: the call sat behind `await _bridgeReady` for a
+// full 8s, then threw "Bridge session not ready — please retry." — a public
+// share link was unusable for any topology where the bridge runs cross-origin
+// (found live: get_shared() never even reached the network tab).
+//
+// Do NOT add authenticated methods here even if they're allow_guest=True for
+// other reasons (get_session_info bootstraps BEFORE any identity exists on
+// every route, public or not, and is called via a raw fetch in main.js/
+// stores/project.js — never through callPath — so it doesn't belong in this
+// set either).
+const GUEST_SAFE_METHODS = new Set([
+  "batch_projects.api.sharing.get_shared",
+  "batch_projects.api.sharing.add_guest_comment",
+  "batch_projects.api.sharing.update_shared_task",
+  "batch_projects.api.invitations.get_invitation",
+  "batch_projects.api.invitations.signup_and_accept",
+  "batch_projects.api.forms.get_public_form",
+  "batch_projects.api.forms.submit_intake_form",
+]);
+
 async function callPath(fullMethod, params = {}) {
   // Cross-origin: route through the bridge proxy.
   // The bridge proxies /api/method/* to Frappe with HMAC-signed headers.
-  if (bridgeIsCrossOrigin()) {
+  if (bridgeIsCrossOrigin() && !GUEST_SAFE_METHODS.has(fullMethod)) {
     // Components mount (and fire their own onMounted API calls) in Vue's
     // child-before-parent order, which means e.g. Sidebar's notification-count
     // fetch runs BEFORE App.vue's onMounted even calls bootstrapBridge() —
@@ -557,8 +586,23 @@ export const searchErpnextProjects = (txt) =>
   callErpLink("search_erpnext_projects", { txt });
 export const getProjectMoney = (project, period) =>
   callErpLink("get_project_money", { project, period });
-export const generateInvoice = (project, period) =>
-  callErpLink("generate_invoice", { project, period });
+// `project` is one BP Project name, or an array for the batch path (N
+// projects -> one invoice, each line tagged to its own project).
+// currency/conversion_rate/amount drive the payment-first flow: the money
+// already landed, so the invoice must state that exact currency and total.
+export const generateInvoice = (project, period, opts = {}) =>
+  callErpLink("generate_invoice", {
+    project: Array.isArray(project) ? JSON.stringify(project) : project,
+    period,
+    ...(opts.tasks ? { tasks: JSON.stringify(opts.tasks) } : {}),
+    ...(opts.currency ? { currency: opts.currency } : {}),
+    ...(opts.conversion_rate ? { conversion_rate: opts.conversion_rate } : {}),
+    ...(opts.amount !== undefined && opts.amount !== null && opts.amount !== ""
+      ? { amount: opts.amount } : {}),
+  });
+
+export const getBatchInvoiceCandidates = () =>
+  callErpLink("get_batch_invoice_candidates");
 export const generateExpenseInvoice = (project) =>
   callErpLink("generate_expense_invoice", { project });
 export const getErpDocSummary = (project, doctype, name) =>
@@ -593,6 +637,12 @@ export const getDrawing = (name) => callDrawings("get_drawing", { name });
 export const createDrawing = (project, title) => callDrawings("create_drawing", { project, title });
 export const saveDrawing = (name, params) => callDrawings("save_drawing", { name, ...params });
 export const deleteDrawing = (name) => callDrawings("delete_drawing", { name });
+
+// Ephemeral live-collaboration signals — never persisted, see drawings.py.
+export const broadcastDrawingChange = (name, elementsJson) =>
+  callDrawings("broadcast_drawing_change", { name, elements_json: elementsJson });
+export const broadcastDrawingPresence = (name, leaving = false) =>
+  callDrawings("broadcast_drawing_presence", { name, leaving: leaving ? 1 : 0 });
 
 // ─── CUSTOM FIELD LIBRARY (workspace-level field library) ──────────────────
 // Definition CRUD is workspace-admin-only; attach/detach is project-Admin;
@@ -1082,9 +1132,24 @@ export const getPeople = () => call("get_people");
 
 // ─── PROJECT FILES ────────────────────────────────────────────────────────────
 
-/** All files attached to tasks in a project, with task context. */
+/** All files attached to the project directly OR to any of its tasks. */
 export const getProjectFiles = (project) =>
   call("get_project_files", { project });
+
+/** Upload a file straight to the project (not through any task) — reuses
+ * the same native Frappe upload_file endpoint TaskAttachments.vue already
+ * uses, just with 'BP Project' as the attached-to target. No custom upload
+ * endpoint needed: BP Project's has_permission hook (hooks.py) is already
+ * registered, so Frappe's own check_write_permission(doctype, docname) call
+ * inside upload_file enforces Member+ correctly without any extra code. */
+export const uploadProjectFile = (file, project) =>
+  uploadAttachment(file, "BP Project", project);
+
+export const renameProjectFile = (fileName, newName) =>
+  call("rename_project_file", { file_name: fileName, new_name: newName });
+
+export const deleteProjectFile = (fileName) =>
+  call("delete_project_file", { file_name: fileName });
 
 // ─── TIMESHEETS ───────────────────────────────────────────────────────────────
 
@@ -1232,6 +1297,64 @@ export const getPublicForm = (form) =>
 
 export const submitIntakeForm = (form, values) =>
   callForms("submit_intake_form", { form, values });
+
+// ─── DASHBOARDS (Wrike-style live dashboards, BP Dashboard — distinct from ────
+// the scheduled/exportable BP Report above) ────────────────────────────────────
+// Same reasoning as INTAKE FORMS above: call the real module path directly so
+// bp-gateway's MethodGate table (gated on "dashboards", Team tier) actually
+// matches the request.
+
+const DASHBOARDS_BASE = "batch_projects.api.dashboards";
+const callDashboards = (method, params = {}) => callPath(`${DASHBOARDS_BASE}.${method}`, params);
+
+export const listDashboards = () =>
+  callDashboards("list_dashboards");
+
+export const getDashboardRecord = (dashboard) =>
+  callDashboards("get_dashboard", { dashboard });
+
+export const saveDashboard = (params) =>
+  callDashboards("save_dashboard", params);
+
+export const deleteDashboard = (dashboard) =>
+  callDashboards("delete_dashboard", { dashboard });
+
+export const getColumnWidgetData = (params) =>
+  callDashboards("get_column_widget_data", {
+    ...params,
+    filters: JSON.stringify(params.filters || []),
+  });
+
+// ─── Generic doctype-source widget engine (any doctype other than BP Task) ────
+export const getWidgetSourceDoctypes = () =>
+  callDashboards("get_widget_source_doctypes");
+
+export const getWidgetSourceFields = (doctype) =>
+  callDashboards("get_widget_source_fields", { doctype });
+
+export const getWidgetSourceFieldOptions = (doctype, fieldname, query) =>
+  callDashboards("get_widget_source_field_options", { doctype, fieldname, query });
+
+// Relative-date vocabulary for the filter builder ("Overdue", "Next 7 days",
+// ...). Served by the backend so the token list can't drift from what
+// _date_preset_filter() knows how to resolve.
+export const getDatePresets = () => callDashboards("get_date_presets");
+
+export const getDoctypeGroupData = (params) =>
+  callDashboards("get_doctype_group_data", { ...params, filters: JSON.stringify(params.filters || []) });
+
+export const getDoctypeColumnData = (params) =>
+  callDashboards("get_doctype_column_data", {
+    ...params,
+    filters: JSON.stringify(params.filters || []),
+    label_fields: JSON.stringify(params.label_fields || []),
+  });
+
+export const getWidgetSourceDocQuickview = (doctype, name) =>
+  callDashboards("get_widget_source_doc_quickview", { doctype, name });
+
+export const updateWidgetSourceField = (doctype, name, fieldname, value) =>
+  callDashboards("update_widget_source_field", { doctype, name, fieldname, value });
 
 // ─── CHECKLIST ────────────────────────────────────────────────────────────────
 

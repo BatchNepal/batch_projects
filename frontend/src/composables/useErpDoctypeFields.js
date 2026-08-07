@@ -4,6 +4,12 @@ import { getErpDoctypeFields, getErpDoctypeFieldsReadonly, getErpDocumentLabel }
 // Doctypes search_erp_documents (board.py) actually allows — mirrors
 // board.py's _ERP_SEARCH_DOCTYPES exactly. A Link field pointing anywhere
 // else falls back to free text rather than a Combobox that will always 400.
+//
+// 'ToDo' is listed here but NOT in the backend's _ERP_SEARCH_DOCTYPES (found
+// while adding get_erp_document_label — the two lists had already drifted).
+// Left as-is rather than fixed in this pass: unclear whether ToDo should be
+// added backend-side or dropped here, and no current call site exercises it
+// either way, so guessing risks silently changing intended future scope.
 export const SEARCHABLE_LINK_DOCTYPES = new Set([
   'Sales Order', 'Purchase Order', 'Sales Invoice', 'Purchase Invoice',
   'Project', 'Customer', 'Supplier', 'Lead', 'Opportunity',
