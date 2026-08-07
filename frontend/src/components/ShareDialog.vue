@@ -140,6 +140,7 @@ import { Button, Spinner, Select, SelectItem } from '@/ui'
 import { useEntitlementsStore } from '@/stores/entitlements'
 import { createShareLink, listShareLinks, revokeShareLink } from '@/utils/api'
 import { toast } from 'vue-sonner'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -236,7 +237,7 @@ async function copy(l) {
 }
 
 async function revoke(l) {
-  if (!confirm('Revoke this link? Anyone using it will lose access immediately.')) return
+  if (!await confirmDialog('Revoke this link? Anyone using it will lose access immediately.', { danger: true })) return
   try {
     await revokeShareLink(l.name)
     links.value = links.value.filter(x => x.name !== l.name)

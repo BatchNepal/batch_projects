@@ -288,8 +288,14 @@ function fmtSize(bytes) {
 
 .ia-drop-text { font-size: 13px; color: var(--muted); margin: 0; text-align: center; }
 .ia-drop-hint { font-size: 12px; color: var(--muted); margin: 0; }
-.ia-drop-link { color: var(--foreground); font-weight: 600; text-decoration: underline;}
-.ia-drop:hover .ia-drop-link { color: var(--accent); }
+/* Was permanently underlined — including "Attach more files", the row that
+   sits below an already-populated attachment list and is visible on every
+   task with files, not just the empty first-load state. A link styled as
+   always-underlined chrome reads as broken/dated; underline now only
+   appears on hover, same affordance every other in-app link already uses
+   (.ia-file-name below does the same hover-only underline). */
+.ia-drop-link { color: var(--foreground); font-weight: 600; }
+.ia-drop:hover .ia-drop-link { color: var(--accent); text-decoration: underline; }
 .ia-drop--compact .ia-drop-link { font-size: 13px; }
 
 .ia-hidden-input { display: none; }

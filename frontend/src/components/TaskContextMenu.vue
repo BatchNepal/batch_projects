@@ -206,6 +206,7 @@ import ProjectAvatar from '@/ui/ProjectAvatar.vue'
 import { toast } from 'vue-sonner'
 import * as api from '@/utils/api.js'
 import { UpgradeRequiredError } from '@/utils/api'
+import { confirmDialog, promptDialog } from '@/composables/useConfirmDialog'
 
 const props = defineProps({
   issue: { type: Object, default: null },
@@ -312,7 +313,7 @@ async function toggleAssignee(m) {
   catch { toast.error('Failed') }
 }
 
-function act(action) {
+async function act(action) {
   if (action === 'open') { store.openTaskDetail(props.issue.name); emit('close') }
   else if (action === 'copy-key') {
     navigator.clipboard?.writeText(props.issue.task_key)
@@ -339,15 +340,19 @@ function act(action) {
     store.showCreateTask = true
     emit('close')
   } else if (action === 'delete') {
-    if (!confirm(`Delete "${props.issue.title}"?`)) return
+    // Close the (tiny, floating) context menu BEFORE awaiting the confirm
+    // dialog — otherwise it stays open behind the centered modal for as
+    // long as the user takes to decide, since this branch is no longer
+    // synchronous like window.confirm() was.
+    emit('close')
+    if (!await confirmDialog(`Delete "${props.issue.title}"?`, { danger: true })) return
     const name = props.issue.name
     api.deleteTask(name)
       .then(() => { store.refreshBoard(); store.issueCreatedCount++ ; toast.success('Deleted'); emit('deleted', name) })
       .catch(() => toast.error('Failed to delete'))
-    emit('close')
   } else if (action === 'save-template') {
-    const name = window.prompt('Template name', props.issue.title)
     emit('close')
+    const name = await promptDialog({ title: 'Template name', inputLabel: 'Name', defaultValue: props.issue.title })
     if (!name || !name.trim()) return
     api.saveTaskAsTemplate(props.issue.name, name.trim())
       .then(() => toast.success('Saved as template'))

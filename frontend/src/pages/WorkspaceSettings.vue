@@ -777,6 +777,7 @@ import {
 } from '@/utils/api'
 import { useEntitlementsStore } from '@/stores/entitlements'
 import { fieldMeta } from '@/utils/customFields'
+import { confirmDialog, promptDialog } from '@/composables/useConfirmDialog'
 
 const route  = useRoute()
 const router = useRouter()
@@ -1155,7 +1156,7 @@ async function saveRule() {
   }
 }
 async function removeRule(r) {
-  if (!confirm(`Delete rule "${r.rule_name}"?`)) return
+  if (!await confirmDialog(`Delete rule "${r.rule_name}"?`, { danger: true })) return
   try {
     await deleteNotificationRule(r.name)
     rules.value = rules.value.filter(x => x.name !== r.name)
@@ -1204,7 +1205,7 @@ function useTemplate(t) {
 }
 
 async function renameProjectTemplate(t) {
-  const name = window.prompt('Rename template', t.template_name)
+  const name = await promptDialog({ title: 'Rename template', inputLabel: 'Name', defaultValue: t.template_name })
   if (!name || !name.trim() || name.trim() === t.template_name) return
   try {
     const saved = await updateProjectTemplate({ template: t.name, template_name: name.trim() })
@@ -1215,7 +1216,7 @@ async function renameProjectTemplate(t) {
   }
 }
 async function removeProjectTemplate(t) {
-  if (!confirm(`Delete template "${t.template_name}"? This can't be undone.`)) return
+  if (!await confirmDialog(`Delete template "${t.template_name}"? This can't be undone.`, { danger: true })) return
   try {
     await deleteProjectTemplate(t.name)
     projectTemplates.value = projectTemplates.value.filter(x => x.name !== t.name)

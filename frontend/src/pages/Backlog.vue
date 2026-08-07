@@ -407,6 +407,7 @@ import ErpMirrorFieldsButton from '@/components/ErpMirrorFieldsButton.vue'
 import { useErpDocOpener } from '@/composables/useErpDocOpener.js'
 import { useMirrorColumns } from '@/composables/useMirrorColumns.js'
 import { getTaskWord } from '@/constants/project-templates'
+import { confirmDialog, alertDialog } from '@/composables/useConfirmDialog'
 
 const route = useRoute()
 const store = useProjectStore()
@@ -582,7 +583,7 @@ async function submitCreateSprint() {
     newSprintStart.value = null
     newSprintEnd.value = null
   } catch (e) {
-    alert(e.message || 'Failed to create sprint')
+    alertDialog(e.message || 'Failed to create sprint')
   } finally {
     creating.value = false
   }
@@ -606,7 +607,7 @@ async function handleStartSprint(sprint) {
     await load()
     collapsed.value['__active__'] = false
   } catch (e) {
-    alert(e.message || 'Failed to start sprint')
+    alertDialog(e.message || 'Failed to start sprint')
   }
 }
 
@@ -625,19 +626,19 @@ async function submitCompleteSprint() {
     collapsed.value = {}
     await load()
   } catch (e) {
-    alert(e.message || 'Failed to complete sprint')
+    alertDialog(e.message || 'Failed to complete sprint')
   } finally {
     completing.value = false
   }
 }
 
 async function handleDeleteSprint(sprint) {
-  if (!confirm(`Delete "${sprint.sprint_name}"? Issues will be moved to the backlog.`)) return
+  if (!await confirmDialog(`Delete "${sprint.sprint_name}"? Issues will be moved to the backlog.`, { danger: true })) return
   try {
     await api.deleteSprint(sprint.name)
     await load()
   } catch (e) {
-    alert(e.message || 'Failed to delete sprint')
+    alertDialog(e.message || 'Failed to delete sprint')
   }
 }
 

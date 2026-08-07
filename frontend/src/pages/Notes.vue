@@ -115,6 +115,7 @@ import {
 import { Plus, Pin, PinOff, Lock, NotebookText } from 'lucide-vue-next'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import { listNotes, createNote, updateNote, deleteNote, getMembers, FeatureDisabledError } from '@/utils/api'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 const route = useRoute()
 const store = useProjectStore()
@@ -220,7 +221,7 @@ async function saveNote() {
 
 async function removeNote() {
   if (!editing.value) return
-  if (!confirm(`Delete "${editing.value.title || 'this note'}"? This can't be undone.`)) return
+  if (!await confirmDialog(`Delete "${editing.value.title || 'this note'}"? This can't be undone.`, { danger: true })) return
   deleting.value = true
   try {
     await deleteNote(editing.value.name)

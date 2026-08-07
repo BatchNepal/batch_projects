@@ -959,6 +959,7 @@ import ConnectCell      from '@/components/list/ConnectCell.vue'
 import MoneyDrawer      from '@/components/MoneyDrawer.vue'
 import ConnectorCell    from '@/components/list/ConnectorCell.vue'
 import BlockedCell      from '@/components/list/BlockedCell.vue'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 const route      = useRoute()
 const store      = useProjectStore()
@@ -1259,7 +1260,7 @@ async function bulkPriority(priority){const names=[...selected];await Promise.al
 async function bulkAssign(user){const names=[...selected];await Promise.allSettled(names.map(n=>store.updateTaskField(n,'assignees',[{user}])));toast.success(`${names.length} tasks assigned`);selected.clear()}
 async function bulkMoveSprint(sprint){const names=[...selected];await Promise.allSettled(names.map(n=>store.updateTaskField(n,'sprint',sprint)));toast.success(`${names.length} tasks → ${sprint}`);selected.clear()}
 async function bulkMoveEpic(epic){const names=[...selected];await Promise.allSettled(names.map(n=>store.updateTaskField(n,'epic',epic)));toast.success(`${names.length} tasks → ${epic}`);selected.clear()}
-async function bulkDelete(){const names=[...selected];if(!confirm(`Delete ${names.length} tasks? This cannot be undone.`))return;await Promise.allSettled(names.map(n=>deleteTask(n)));selected.clear();store.refreshBoard();toast.success(`${names.length} tasks deleted`)}
+async function bulkDelete(){const names=[...selected];if(!await confirmDialog(`Delete ${names.length} tasks? This cannot be undone.`,{danger:true}))return;await Promise.allSettled(names.map(n=>deleteTask(n)));selected.clear();store.refreshBoard();toast.success(`${names.length} tasks deleted`)}
 
 const ctxIssue=ref(null),ctxX=ref(0),ctxY=ref(0)
 function openCtx(e,issue){ctxIssue.value=issue;ctxX.value=e.clientX;ctxY.value=e.clientY}

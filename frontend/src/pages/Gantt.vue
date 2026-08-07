@@ -224,6 +224,7 @@ import { useGanttScale } from '@/composables/useGanttScale'
 import TaskContextMenu from '@/components/TaskContextMenu.vue'
 import MoneyDrawer from '@/components/MoneyDrawer.vue'
 import { useErpDocOpener } from '@/composables/useErpDocOpener.js'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 const route = useRoute()
 const store = useProjectStore()
@@ -724,7 +725,7 @@ async function _removeEdge(from, to) {
 }
 async function onWireClick(a) {
   if (!a.from || !a.to) return
-  if (!confirm(`Remove dependency ${a.title}?`)) return
+  if (!await confirmDialog(`Remove dependency ${a.title}?`, { danger: true })) return
   await _removeEdge(a.from, a.to)
 }
 

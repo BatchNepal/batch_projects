@@ -81,6 +81,7 @@ import SaveViewModal from '@/components/SaveViewModal.vue'
 import { useProjectStore } from '@/stores/project'
 import { toast } from 'vue-sonner'
 import { updateView, setViewSubscription } from '@/utils/api'
+import { promptDialog } from '@/composables/useConfirmDialog'
 
 const props = defineProps({
   isBoard: { type: Boolean, default: false },
@@ -131,7 +132,7 @@ async function toggleSubscribe(v) {
 }
 
 async function renameView(v) {
-  const name = window.prompt('Rename view', v.name)
+  const name = await promptDialog({ title: 'Rename view', inputLabel: 'View name', defaultValue: v.name })
   if (!name || name.trim() === v.name) return
   try {
     await updateView(v.id, { view_name: name.trim() })

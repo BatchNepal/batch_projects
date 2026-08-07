@@ -352,6 +352,7 @@ import Button from '@/ui/Button.vue'
 import IconButton from '@/ui/IconButton.vue'
 import Icon from '@/ui/Icon.vue'
 import { nodeMeta } from '@/constants/automation-node-registry'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 // Generic, schema-driven config editor for ANY node type — reads
 // config_schema straight from the node registry (automation.py::
@@ -562,7 +563,7 @@ async function createNewWebhookToken() {
 }
 async function revokeSelectedWebhookToken() {
   const tok = selectedWebhookToken.value
-  if (!tok || !confirm(`Revoke "${tok.label}"? Any external service still calling it will start getting rejected.`)) return
+  if (!tok || !await confirmDialog(`Revoke "${tok.label}"? Any external service still calling it will start getting rejected.`, { danger: true })) return
   try {
     await revokeWebhookToken(tok.name)
     tok.is_active = 0

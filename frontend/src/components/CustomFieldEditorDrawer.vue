@@ -142,6 +142,7 @@ import {
 import { Plus, X } from 'lucide-vue-next'
 import { createLibraryField, updateLibraryField, deleteLibraryField } from '@/utils/api'
 import { FIELD_TYPES, NUMERIC_FIELD_TYPES } from '@/utils/customFields'
+import { confirmDialog, alertDialog } from '@/composables/useConfirmDialog'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -234,14 +235,14 @@ async function saveField() {
 
 async function removeField() {
   if (!props.field) return
-  if (!confirm(`Delete "${props.field.field_label}"? This can't be undone.`)) return
+  if (!await confirmDialog(`Delete "${props.field.field_label}"? This can't be undone.`, { danger: true })) return
   deletingField.value = true
   try {
     await deleteLibraryField(props.field.name)
     emit('deleted', props.field.name)
     emit('update:open', false)
   } catch (e) {
-    alert(e.message || 'Could not delete this field.')
+    alertDialog(e.message || 'Could not delete this field.')
   } finally {
     deletingField.value = false
   }

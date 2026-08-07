@@ -373,6 +373,17 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   flex: 1; font-size: 15px; font-family: inherit;
   color: var(--foreground); background: none; border: none; outline: none;
 }
+/* The global *:focus-visible rule (index.css) draws its accent outline on
+   ANY focused element including this one — but this input auto-focuses the
+   instant the palette opens and .sp-input-row has no focus-within ring of
+   its own to hand off to, so the result was a stray blue rectangle around
+   just the input's own box (not the icon beside it) every time the palette
+   was used. Nothing else in this row needs a focus indicator: there's
+   nowhere else focus could usefully move to that isn't itself already
+   obviously highlighted (the result list has its own :hover/selected state). */
+.sp-input:focus-visible {
+  outline: none;
+}
 .sp-input::placeholder { color: var(--muted); }
 .sp-esc-hint {
   font-size: 10.5px; font-weight: 600; color: var(--muted);

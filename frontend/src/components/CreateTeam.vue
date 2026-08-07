@@ -132,6 +132,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import * as api from '@/utils/api.js'
 import FieldDropdown from '@/components/FieldDropdown.vue'
 import DropdownItem  from '@/components/DropdownItem.vue'
+import { alertDialog } from '@/composables/useConfirmDialog'
 
 const emit = defineEmits(['close', 'created'])
 
@@ -182,7 +183,7 @@ async function submit() {
     })
     emit('created', team)
   } catch (e) {
-    alert(e.message || 'Failed to create team')
+    alertDialog(e.message || 'Failed to create team')
   } finally {
     creating.value = false
   }

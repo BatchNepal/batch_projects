@@ -248,6 +248,7 @@ import * as api from '@/utils/api.js'
 import FieldDropdown from '@/components/FieldDropdown.vue'
 import DropdownItem  from '@/components/DropdownItem.vue'
 import ProjectAvatar from '@/ui/ProjectAvatar.vue'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 const route  = useRoute()
 const router = useRouter()
@@ -316,7 +317,7 @@ async function addMember() {
 }
 
 async function removeMember(m) {
-  if (!confirm(`Remove ${m.full_name || m.user}?`)) return
+  if (!await confirmDialog(`Remove ${m.full_name || m.user}?`, { danger: true })) return
   members.value = members.value.filter(x => x.user !== m.user)
   await saveMembers()
 }
@@ -348,7 +349,7 @@ async function assignProject(p) {
 }
 
 async function unassignProject(p) {
-  if (!confirm(`Remove ${p.project_name} from this team?`)) return
+  if (!await confirmDialog(`Remove ${p.project_name} from this team?`, { danger: true })) return
   try {
     await api.assignProjectToTeam(p.name, '')
     p.team = null
@@ -358,7 +359,7 @@ async function unassignProject(p) {
 }
 
 async function archiveTeamConfirm() {
-  if (!confirm(`Archive "${team.value.team_name}"? It will be hidden and unlinked from its projects. Data is preserved.`)) return
+  if (!await confirmDialog(`Archive "${team.value.team_name}"? It will be hidden and unlinked from its projects. Data is preserved.`, { danger: true })) return
   try {
     await api.archiveTeam(team.value.name)
     await store.fetchTeams()

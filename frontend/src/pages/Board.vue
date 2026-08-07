@@ -101,6 +101,7 @@ import TaskContextMenu from "@/components/TaskContextMenu.vue";
 import MoneyDrawer from "@/components/MoneyDrawer.vue";
 import { useErpDocOpener } from "@/composables/useErpDocOpener.js";
 import { useMirrorColumnsStore } from "@/stores/mirrorColumns.js";
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 const route = useRoute();
 const router = useRouter();
@@ -300,7 +301,7 @@ function openCreateForStatus(columnTitle) {
 
 async function handleContextAction({ action, issue }) {
   if (action === 'delete') {
-    if (!confirm(`Delete "${issue.title}"?`)) return
+    if (!await confirmDialog(`Delete "${issue.title}"?`, { danger: true })) return
     try {
       await api.deleteTask(issue.name)
       await store.refreshBoard()

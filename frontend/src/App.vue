@@ -4,6 +4,7 @@
   <div v-if="isPublicRoute" class="h-full overflow-auto bg-background">
     <router-view />
     <Toaster position="bottom-right" :duration="4000" :close-button="true" />
+    <GlobalConfirmDialog />
   </div>
 
   <div v-else class="flex h-full overflow-hidden bg-overlay">
@@ -69,6 +70,7 @@
     <SearchPopup v-model="showSearch"/>
     <ShortcutsOverlay v-model="showCheatSheet"/>
     <Toaster position="bottom-right" :duration="4000" :close-button="true" />
+    <GlobalConfirmDialog />
     </template>
   </div>
   </div>
@@ -91,6 +93,7 @@ import GlobalTimerIndicator from '@/components/GlobalTimerIndicator.vue'
 import BlockerConfirmModal from '@/components/BlockerConfirmModal.vue'
 import SearchPopup from '@/components/SearchPopup.vue'
 import ShortcutsOverlay from '@/components/ShortcutsOverlay.vue'
+import GlobalConfirmDialog from '@/components/GlobalConfirmDialog.vue'
 import OrgOnboarding from '@/components/onboarding/OrgOnboarding.vue'
 import NoProjectsSharedYet from '@/components/onboarding/NoProjectsSharedYet.vue'
 import { Loader2 } from 'lucide-vue-next'

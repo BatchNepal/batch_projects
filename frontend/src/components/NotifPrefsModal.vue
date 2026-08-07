@@ -15,8 +15,8 @@
         </p>
 
         <!-- ── In-app channel ─────────────────────────────────────── -->
-        <section class="rounded-xl border border-border bg-surface shadow-sm">
-          <div class="flex items-center gap-3 px-4 py-3.5">
+        <section class="rounded-lg border border-border bg-surface shadow-sm">
+          <div class="flex items-center gap-3 px-4 py-3.5" :class="prefs.inapp_enabled && 'border-b border-separator'">
             <span class="size-8 rounded-lg grid place-items-center bg-accent-soft text-accent-soft-foreground shrink-0">
               <Bell class="size-4" />
             </span>
@@ -26,10 +26,18 @@
             </div>
             <Switch :is-selected="!!prefs.inapp_enabled" @update:is-selected="toggle('inapp_enabled')" />
           </div>
+          <div v-if="prefs.inapp_enabled" class="px-4 py-3.5">
+            <PrefRow
+              label="Ping sound"
+              description="Play a chime when a live notification (e.g. a new assignment) arrives"
+              :value="soundOn"
+              @toggle="toggleSound"
+            />
+          </div>
         </section>
 
         <!-- ── Desktop push channel ───────────────────────────────── -->
-        <section class="rounded-xl border border-border bg-surface shadow-sm">
+        <section class="rounded-lg border border-border bg-surface shadow-sm">
           <div class="flex items-center gap-3 px-4 py-3.5">
             <span class="size-8 rounded-lg grid place-items-center bg-accent-soft text-accent-soft-foreground shrink-0">
               <MonitorSmartphone class="size-4" />
@@ -43,7 +51,7 @@
         </section>
 
         <!-- ── Email channel ──────────────────────────────────────── -->
-        <section class="rounded-xl border border-border bg-surface shadow-sm">
+        <section class="rounded-lg border border-border bg-surface shadow-sm">
           <div class="flex items-center gap-3 px-4 py-3.5" :class="prefs.email_enabled && 'border-b border-separator'">
             <span class="size-8 rounded-lg grid place-items-center bg-accent-soft text-accent-soft-foreground shrink-0">
               <Mail class="size-4" />
@@ -94,12 +102,20 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, defineComponent, h } from 'vue'
+import { ref, reactive, computed, onMounted, defineComponent, h } from 'vue'
 import { Loader2, Bell, Mail, MonitorSmartphone } from 'lucide-vue-next'
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button, Switch } from '@/ui'
 import { getNotificationPreferences, updateNotificationPreferences } from '@/utils/api'
+import { useNotificationSoundMuted, setSoundMuted, playNotificationPing } from '@/composables/useNotificationSound'
 
 defineEmits(['close'])
+
+const soundMuted = useNotificationSoundMuted()
+const soundOn = computed(() => !soundMuted.value)
+function toggleSound() {
+  setSoundMuted(soundOn.value) // was on -> mute; was off -> unmute
+  if (!soundMuted.value) playNotificationPing() // audible confirmation on unmute
+}
 
 const loading = ref(true)
 const saving  = ref(false)
