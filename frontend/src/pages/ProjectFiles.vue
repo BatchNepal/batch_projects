@@ -38,6 +38,13 @@
         {{ filteredFiles.length }} {{ filteredFiles.length === 1 ? 'file' : 'files' }}
       </span>
 
+      <!-- Upload -->
+      <input ref="fileInputEl" type="file" multiple class="hidden" @change="onFilePicked" />
+      <Button size="sm" color="primary" :isLoading="uploading" @click="fileInputEl?.click()">
+        <template #startContent><Icon :icon="UploadIcon" :size="13" /></template>
+        Upload
+      </Button>
+
       <!-- Group by task toggle -->
       <button
         type="button"
@@ -77,7 +84,25 @@
     </div>
 
     <!-- ── Content ───────────────────────────────────────────────────── -->
-    <div class="px-6 py-5">
+    <!-- Drag-and-drop target spans the whole content area, not just the
+         empty state — dropping a file onto an already-populated grid must
+         work exactly like dropping onto an empty one. dragCounter (not a
+         plain boolean) is required: child elements firing their own
+         dragenter/dragleave as the pointer crosses card boundaries would
+         otherwise flicker isDraggingOver off mid-drag. -->
+    <div
+      class="px-6 py-5 relative"
+      @dragenter.prevent="onDragEnter"
+      @dragover.prevent
+      @dragleave.prevent="onDragLeave"
+      @drop.prevent="onDrop"
+    >
+      <div v-if="isDraggingOver" class="fp-drop-overlay">
+        <div class="fp-drop-card">
+          <UploadIcon :size="22" :stroke-width="1.5" />
+          <p>Drop to upload to this project</p>
+        </div>
+      </div>
 
       <!-- Loading -->
       <div v-if="loading" class="flex items-center justify-center py-24">
@@ -89,7 +114,7 @@
         <EmptyState
           :icon="search || typeFilter !== 'all' ? SearchX : Paperclip"
           :title="search || typeFilter !== 'all' ? 'No files match' : 'No files yet'"
-          :description="search || typeFilter !== 'all' ? 'Try adjusting the search or filter.' : 'Files attached to tasks in this project will appear here.'"
+          :description="search || typeFilter !== 'all' ? 'Drag and drop files here, or use Upload.' : 'Files uploaded here or attached to tasks in this project will appear here.'"
         />
       </div>
 
@@ -100,12 +125,18 @@
           :key="group.task_name || '__flat__'"
           :class="gi > 0 ? 'mt-6' : ''"
         >
-          <!-- Group header (only shown in group-by-task mode) -->
-          <div v-if="groupByTask && group.task_name" class="flex items-center gap-2 mb-3 px-0.5">
+          <!-- Group header (only shown in group-by-task mode). The
+               task_name-less bucket is files uploaded to the project
+               directly — it used to render NO header at all (v-if
+               silently skipped it), so those files appeared to belong to
+               whichever group happened to render right before them. -->
+          <div v-if="groupByTask" class="flex items-center gap-2 mb-3 px-0.5">
             <button
+              v-if="group.task_name"
               class="text-[13px] font-semibold text-foreground hover:text-accent transition-colors"
               @click="openTask(group.task_name)"
             >{{ group.task_title }}</button>
+            <span v-else class="text-[13px] font-semibold text-foreground">Project files</span>
             <span class="text-[11px] text-muted font-normal">
               {{ group.files.length }} {{ group.files.length === 1 ? 'file' : 'files' }}
             </span>
@@ -121,6 +152,7 @@
               :key="f.name"
               class="group relative bg-overlay rounded-lg border border-border overflow-hidden hover:border-border-secondary hover:shadow-md transition-[border-color,box-shadow] cursor-pointer select-none"
               @click="openPreview(f)"
+              @contextmenu.prevent="openContextMenu(f, $event)"
             >
               <!-- Thumbnail area -->
               <div class="aspect-[4/3] bg-surface-secondary flex items-center justify-center overflow-hidden relative">
@@ -157,8 +189,8 @@
                 <p
                   v-if="!groupByTask"
                   class="text-[10.5px] text-muted mt-0.5 truncate"
-                  :title="f.task_title"
-                >{{ f.task_title }}</p>
+                  :title="f.task_title || 'Project file'"
+                >{{ f.task_title || 'Project file' }}</p>
                 <p class="text-[10.5px] text-muted mt-0.5 tabular-nums">{{ fmtSize(f.file_size) }}</p>
               </div>
             </div>
@@ -182,6 +214,7 @@
                   :key="f.name"
                   class="border-b border-separator last:border-0 hover:bg-surface-secondary transition-colors cursor-pointer"
                   @click="openPreview(f)"
+                  @contextmenu.prevent="openContextMenu(f, $event)"
                 >
                   <!-- Icon + name -->
                   <td class="px-5 py-3">
@@ -199,9 +232,11 @@
                   <!-- Task (hidden in group mode) -->
                   <td v-if="!groupByTask" class="px-4 py-3">
                     <button
+                      v-if="f.task_name"
                       class="text-[12px] text-muted hover:text-accent transition-colors truncate max-w-[180px] text-left block"
                       @click.stop="openTask(f.task_name)"
                     >{{ f.task_title }}</button>
+                    <span v-else class="text-[12px] text-muted truncate max-w-[180px] block">Project file</span>
                   </td>
 
                   <!-- Uploaded by -->
@@ -317,6 +352,14 @@
       </Transition>
     </Teleport>
 
+    <!-- ── Right-click context menu ──────────────────────────────────── -->
+    <FileContextMenu
+      :file="ctxFile" :x="ctxPos.x" :y="ctxPos.y"
+      @close="ctxFile = null"
+      @rename="onRename"
+      @delete="onDelete"
+    />
+
   </div>
 </template>
 
@@ -324,9 +367,13 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
-import { getProjectFiles } from '@/utils/api'
+import { getProjectFiles, uploadProjectFile, renameProjectFile, deleteProjectFile } from '@/utils/api'
+import { confirmDialog, promptDialog } from '@/composables/useConfirmDialog'
+import { Button, Icon } from '@/ui'
 import EmptyState from '@/ui/EmptyState.vue'
-import { Paperclip, LayoutGrid, List, Search, X, Download, Layers, SearchX } from 'lucide-vue-next'
+import FileContextMenu from '@/components/FileContextMenu.vue'
+import { toast } from 'vue-sonner'
+import { Paperclip, LayoutGrid, List, Search, X, Download, Layers, SearchX, Upload as UploadIcon } from 'lucide-vue-next'
 
 const route = useRoute()
 const store = useProjectStore()
@@ -339,6 +386,7 @@ const viewMode    = ref('grid')
 const typeFilter  = ref('all')
 const groupByTask = ref(false)
 const preview     = ref(null)
+const projectName = ref(null) // BP Project docname (not the :key route param)
 
 const TYPE_FILTERS = [
   { value: 'all',       label: 'All'    },
@@ -408,6 +456,7 @@ async function load() {
     if (!store.projects.length) await store.fetchProjects()
     const proj = store.projects.find(p => p.key === route.params.key)
     if (!proj) return
+    projectName.value = proj.name
     const res = await getProjectFiles(proj.name)
     allFiles.value = res || []
   } catch (e) {
@@ -418,6 +467,90 @@ async function load() {
 }
 
 onMounted(load)
+
+// ── Upload (button + drag-and-drop) ────────────────────────────────────
+const fileInputEl   = ref(null)
+const uploading      = ref(false)
+const isDraggingOver = ref(false)
+let dragCounter = 0 // see the drop-zone template comment: children re-firing
+                     // dragenter/dragleave as the cursor crosses them would
+                     // flicker a plain boolean; a depth counter doesn't.
+
+async function uploadFiles(fileList) {
+  const files = Array.from(fileList || [])
+  if (!files.length || !projectName.value) return
+  uploading.value = true
+  let okCount = 0
+  for (const file of files) {
+    try {
+      await uploadProjectFile(file, projectName.value)
+      okCount++
+    } catch (e) {
+      toast.error(`Could not upload "${file.name}"`, { description: e.message })
+    }
+  }
+  uploading.value = false
+  if (okCount) toast.success(`${okCount} file${okCount === 1 ? '' : 's'} uploaded`)
+  if (okCount) await load()
+}
+
+function onFilePicked(e) {
+  uploadFiles(e.target.files)
+  e.target.value = '' // same file picked twice in a row must still fire @change
+}
+
+function onDragEnter(e) {
+  // Only real files, not e.g. a task card being dragged from the board in
+  // another tab/window — dataTransfer.types is the one thing available
+  // during dragenter (the actual File objects only exist at drop time).
+  if (!e.dataTransfer?.types?.includes('Files')) return
+  dragCounter++
+  isDraggingOver.value = true
+}
+function onDragLeave() {
+  dragCounter = Math.max(0, dragCounter - 1)
+  if (dragCounter === 0) isDraggingOver.value = false
+}
+function onDrop(e) {
+  dragCounter = 0
+  isDraggingOver.value = false
+  uploadFiles(e.dataTransfer?.files)
+}
+
+// ── Right-click context menu ────────────────────────────────────────────
+const ctxFile = ref(null)
+const ctxPos  = ref({ x: 0, y: 0 })
+function openContextMenu(f, e) {
+  ctxFile.value = f
+  ctxPos.value = { x: e.clientX, y: e.clientY }
+}
+
+async function onRename(f) {
+  ctxFile.value = null
+  const newName = await promptDialog({
+    title: 'Rename file', inputLabel: 'Name', defaultValue: f.file_name,
+  })
+  if (!newName || !newName.trim() || newName.trim() === f.file_name) return
+  try {
+    await renameProjectFile(f.name, newName.trim())
+    toast.success('Renamed')
+    await load()
+  } catch (e) {
+    toast.error('Could not rename file', { description: e.message })
+  }
+}
+
+async function onDelete(f) {
+  ctxFile.value = null
+  if (!await confirmDialog(`Delete "${f.file_name}"? This can't be undone.`, { danger: true })) return
+  try {
+    await deleteProjectFile(f.name)
+    toast.success('File deleted')
+    await load()
+  } catch (e) {
+    toast.error('Could not delete file', { description: e.message })
+  }
+}
 
 // ── Preview / lightbox ────────────────────────────────────────────────
 function openPreview(f) { preview.value = f }
@@ -501,4 +634,29 @@ function fmtDate(d) {
 .lb-enter-from, .lb-leave-to { opacity: 0; }
 .lb-enter-active > div, .lb-leave-active > div { transition: transform 0.18s cubic-bezier(0.32,0.72,0,1); }
 .lb-enter-from > div, .lb-leave-to > div { transform: scale(0.96); }
+
+.fp-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--backdrop);
+  pointer-events: none;
+}
+.fp-drop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 40px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-xl);
+  background: var(--overlay);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--overlay-shadow);
+}
 </style>
