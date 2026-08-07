@@ -361,6 +361,30 @@
    "options": "Sales Order",
    "read_only": 1,
    "description": "Set when this project was created from a Sales Order (Phase 8C)."
+  },
+  {
+   "fieldname": "source_lead",
+   "fieldtype": "Link",
+   "label": "Source Lead",
+   "options": "Lead",
+   "read_only": 1,
+   "description": "Set when this project was created from a Lead."
+  },
+  {
+   "fieldname": "source_opportunity",
+   "fieldtype": "Link",
+   "label": "Source Opportunity",
+   "options": "Opportunity",
+   "read_only": 1,
+   "description": "Set when this project was created from an Opportunity."
+  },
+  {
+   "fieldname": "source_quotation",
+   "fieldtype": "Link",
+   "label": "Source Quotation",
+   "options": "Quotation",
+   "read_only": 1,
+   "description": "Set when this project was created from a Quotation."
   }
  ],
  "permissions": [
@@ -437,6 +461,9 @@
   "section_erp_integration",
   "erpnext_project",
   "column_break_erp_integration",
-  "source_sales_order"
+  "source_sales_order",
+  "source_lead",
+  "source_opportunity",
+  "source_quotation"
  ]
 }

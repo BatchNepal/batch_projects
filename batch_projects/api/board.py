@@ -449,7 +449,7 @@ def get_projects():
             "project_icon", "theme", "schema_version", "visibility", "project_type",
             "client", "budget_amount", "hourly_rate", "retainer_hours",
             "currency", "start_date", "target_end_date", "template_used", "team",
-            "source_sales_order",
+            "source_sales_order", "source_lead", "source_opportunity", "source_quotation",
         ],
         order_by="creation desc",
     )
@@ -954,6 +954,9 @@ def get_board(project, show_child_issues=False):
             "start_date": str(proj.start_date) if proj.start_date else None,
             "target_end_date": str(proj.target_end_date) if proj.target_end_date else None,
             "source_sales_order": proj.source_sales_order or "",
+            "source_lead": proj.source_lead or "",
+            "source_opportunity": proj.source_opportunity or "",
+            "source_quotation": proj.source_quotation or "",
             "enabled_views": proj.get_enabled_views(),
             "pinned_views": proj.get_pinned_views(),
             "default_view": proj.get("default_view") or "summary",

@@ -49,11 +49,15 @@ fixtures = [
                        "Expense Claim Detail-custom_is_billable",
                        "Expense Claim Detail-custom_sales_invoice",
                        "Expense Claim Type-custom_reinvoice_policy",
-                       "Expense Claim Type-custom_markup_percent"]
+                       "Expense Claim Type-custom_markup_percent",
+                       "Lead-custom_bp_project", "Opportunity-custom_bp_project",
+                       "Quotation-custom_bp_project"]
     ]]},
-    # Client Script on Sales Order — the "Create Batch Project" button (8C).
+    # Client Script on Sales Order (8C) / Lead / Opportunity / Quotation —
+    # the "Create Batch Project" button, one per stage of the pipeline.
     {"dt": "Client Script", "filters": [[
-        "name", "in", ["Sales Order Batch Project Button"]
+        "name", "in", ["Sales Order Batch Project Button", "Lead Batch Project Button",
+                       "Opportunity Batch Project Button", "Quotation Batch Project Button"]
     ]]},
 ]
 
