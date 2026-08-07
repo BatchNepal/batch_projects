@@ -100,18 +100,43 @@ _FEATURE_MIN_TIER = {
     "dashboards": "team",
     "exports": "team",
     "custom_branding": "team",
-    "goals": "business",
+    "goals": "team",
     # Business
-    "profitability": "business",
-    "portfolio": "business",
-    "billing_writeback": "business",
-    "api": "business",
+    "profitability": "team",
+    "portfolio": "team",
+    "billing_writeback": "team",
+    "api": "team",
     # Enterprise
-    "sso": "enterprise",
-    "audit_log": "enterprise",
+    "sso": "business",
+    "audit_log": "business",
 }
 
 _TIER_CACHE_KEY = "bp_current_tier"
+
+# How long a gateway-asserted tier/seat-cap stays trusted after the last
+# verified request. MUST NOT be unbounded.
+#
+# These caches exist for ONE reason: background jobs (scheduler, RQ workers)
+# have no HTTP request, so they can't read the gateway's signed X-BP-Tier
+# header and would otherwise all run as `starter`. They are a convenience for
+# code paths the gateway cannot reach — never an entitlement source of truth.
+#
+# Written with no expiry, they became exactly that. Redis kept `bp_current_tier`
+# = the last paid tier FOREVER, so once any gateway-verified request had ever
+# touched a site, `current_tier()` returned that tier for good — with the
+# gateway stopped, uninstalled, or the licence expired/revoked/downgraded.
+# bp-license's revoke path and expire_trials() both work by declining to
+# re-issue the JWT; with nothing ever re-reading it, both were no-ops. A lapsed
+# 60-day Business trial stayed Business permanently.
+#
+# 24h is deliberate: the gateway phone-homes daily (license.go StartPhoneHome)
+# and every proxied request rewrites these keys, so a healthy install refreshes
+# them continuously and never notices the TTL — while a site the gateway has
+# genuinely stopped fronting decays to `starter` within one licence-refresh
+# cycle. Shorter would downgrade legitimately quiet sites mid-cycle (an
+# overnight gap between the last user request and a 3am scheduled automation is
+# routinely 12h+); unbounded is what we just fixed.
+_TIER_CACHE_TTL_SECONDS = 24 * 60 * 60
 
 # Workspace-admin-configurable on/off switches (BP Workspace Settings.features_json).
 # Independent of the tier map above — a workspace admin can turn a free, core
@@ -147,7 +172,9 @@ def current_tier() -> str:
     if tier:
         # write-through so background jobs (scheduler, hooks) see the latest
         try:
-            frappe.cache().set_value(_TIER_CACHE_KEY, tier)
+            frappe.cache().set_value(
+                _TIER_CACHE_KEY, tier, expires_in_sec=_TIER_CACHE_TTL_SECONDS
+            )
         except Exception:
             pass
         return tier
@@ -207,10 +234,14 @@ def require_feature(feature: str):
     if not is_feature_enabled(feature):
         min_tier = _FEATURE_MIN_TIER.get(feature, "team")
         frappe.throw(
-            f"This feature requires the {_TIER_LABEL.get(min_tier, min_tier.title())} "
-            f"plan or higher. Upgrade to unlock it.",
+            # Deliberately does NOT name a tier. Plans differ by seat count,
+            # not by feature, so "requires the Business plan" was both
+            # inconsistent across screens and wrong about how pricing works.
+            # Tone: state availability, don't demand payment. Naming a tier
+            # was also wrong — plans differ by seat count, not by feature.
+            "This one's available on any paid plan.",
             exc=BPUpgradeRequired,
-            title="Upgrade Required",
+            title="Available on paid plans",
         )
 
 
@@ -293,7 +324,10 @@ def current_max_users() -> int:
                 if getattr(frappe.local, "_bp_gateway_verified", False):
                     val = int(mu)
                     try:
-                        frappe.cache().set_value(_MAX_USERS_CACHE_KEY, val)
+                        frappe.cache().set_value(
+                            _MAX_USERS_CACHE_KEY, val,
+                            expires_in_sec=_TIER_CACHE_TTL_SECONDS,
+                        )
                     except Exception:
                         pass
                     return val

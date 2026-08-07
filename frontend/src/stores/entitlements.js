@@ -219,10 +219,10 @@ export const useEntitlementsStore = defineStore("entitlements", () => {
   const canWorkspace = (feature) => workspaceFeatures.value[feature] !== false;
 
   /** The plan label required to unlock `feature` (for upgrade copy). */
-  const requiredPlanFor = (feature) => {
-    const t = featureMinTier.value[feature] || "team";
-    return t.charAt(0).toUpperCase() + t.slice(1);
-  };
+  // Plans differ by seat count, not by feature — so premium copy never names
+  // a tier. Kept as a function (not a constant) so every existing caller
+  // keeps working unchanged.
+  const requiredPlanFor = () => "paid";
 
   /** Pure lookup, given an already-resolved role string (the
    *  project store resolves the caller's role per project via
