@@ -98,6 +98,29 @@ def stop_timer():
     return {"ok": True, "logged": True, **result}
 
 
+def _rate_in_company_currency(rate, project_currency, company):
+    """Restate a BP-Project-denominated rate in company currency.
+
+    Returns the rate unchanged when there's nothing to convert (no rate, no
+    project currency, or it already matches the company's). If a conversion IS
+    needed and no exchange rate exists, we keep the number as-is rather than
+    throwing: a timer stop must never fail — losing someone's tracked time to
+    a missing Currency Exchange record is a far worse outcome than a rate that
+    needs correcting. generate_invoice() is where money actually gets
+    committed, and it refuses loudly there instead."""
+    if not rate or not project_currency or not company:
+        return rate
+    company_currency = frappe.get_cached_value("Company", company, "default_currency")
+    if not company_currency or project_currency == company_currency:
+        return rate
+    from erpnext.setup.utils import get_exchange_rate
+    try:
+        fx = get_exchange_rate(project_currency, company_currency, frappe.utils.nowdate())
+    except Exception:
+        fx = None
+    return flt(rate) * flt(fx) if fx else rate
+
+
 def _resolve_employee(user):
     """Same Employee.user_id lookup the utilization code reads with
     (board.py's _timesheet_hours_by_user) — here for the write side. No
@@ -164,7 +187,15 @@ def _stop(active_timer_name):
     company = (employee and frappe.db.get_value("Employee", employee, "company")) or proj.company
     ts = _get_or_create_draft_timesheet(user, employee, company, proj.erpnext_project)
 
-    rate = flt(proj.hourly_rate or 0)
+    # BP Project.hourly_rate is denominated in BP Project.currency, but
+    # Timesheet Detail.billing_rate is ERPNext's field and ERPNext reads it as
+    # COMPANY currency everywhere downstream (Timesheet.total_billable_amount,
+    # Project.total_billable_amount, every stock report). Storing 50 for a
+    # project priced at 50 USD on an NPR-books company therefore recorded
+    # 50 NPR of revenue — off by the entire exchange rate. Convert once, here,
+    # at capture, so ERPNext's own rollups are right; generate_invoice converts
+    # back when it bills in the project's currency.
+    rate = _rate_in_company_currency(flt(proj.hourly_rate or 0), proj.currency, company)
     # Real per-employee cost, not the client's billing rate wearing a
     # different field name: ERPNext's own get_activity_cost() (the same
     # lookup its native Timesheet UI uses) checks Activity Cost

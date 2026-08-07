@@ -78,6 +78,18 @@
       "description": "Replaces the browser tab icon."
     },
     {
+      "fieldname": "section_billing",
+      "fieldtype": "Section Break",
+      "label": "Billing"
+    },
+    {
+      "fieldname": "default_service_item",
+      "fieldtype": "Link",
+      "options": "Item",
+      "label": "Default Service Item",
+      "description": "Optional. When set, generated invoice lines carry this item_code, which is what lets ERPNext fetch HSN/SAC (hard-mandatory for GST invoices in India) and resolve the customer's Price List rate. Leave blank to keep the current item-less behaviour."
+    },
+    {
       "fieldname": "section_features",
       "fieldtype": "Section Break",
       "label": "Features"
