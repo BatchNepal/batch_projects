@@ -31,14 +31,14 @@
               {{ currentProject?.project_name || projectKey }}
             </h1>
             <a
-              v-if="currentProject?.source_sales_order"
-              :href="`/app/sales-order/${currentProject.source_sales_order}`"
+              v-if="pipelineSource"
+              :href="pipelineSource.href"
               target="_blank" rel="noopener noreferrer"
               class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
                      bg-[var(--surface-secondary)] text-muted hover:text-foreground shrink-0 transition-colors"
-              :title="`Created from Sales Order ${currentProject.source_sales_order}`"
+              :title="`Created from ${pipelineSource.typeLabel} ${pipelineSource.name}`"
             >
-              <Banknote :size="10" :stroke-width="2" /> From {{ currentProject.source_sales_order }}
+              <component :is="pipelineSource.icon" :size="10" :stroke-width="2" /> From {{ pipelineSource.name }}
             </a>
           </div>
         </div>
@@ -290,9 +290,10 @@ import {
   Settings, Copy, Archive, Search, Check,
   Play, Download,
   LayoutDashboard, Kanban, List, ListTodo, Paperclip, GanttChart,
-  Banknote, Lock, NotebookText, PenTool, FileText,
+  Banknote, Lock, NotebookText, PenTool, FileText, Target, UserPlus,
 } from 'lucide-vue-next'
 import { saveProjectAsTemplate, updateProjectGeneral } from '@/utils/api'
+import { promptDialog, confirmDialog } from '@/composables/useConfirmDialog'
 
 const route  = useRoute()
 const router = useRouter()
@@ -314,6 +315,18 @@ const shareOpen     = ref(false)
 
 const projectKey     = computed(() => route.params.key)
 const currentProject = computed(() => store.projects.find(p => p.key === projectKey.value))
+
+// A project has at most one pipeline origin — checked in pipeline order
+// (a Quotation implies the Opportunity/Lead it came from already converted).
+const pipelineSource = computed(() => {
+  const p = currentProject.value
+  if (!p) return null
+  if (p.source_sales_order) return { name: p.source_sales_order, typeLabel: 'Sales Order', href: `/app/sales-order/${p.source_sales_order}`, icon: Banknote }
+  if (p.source_quotation)   return { name: p.source_quotation,   typeLabel: 'Quotation',   href: `/app/quotation/${p.source_quotation}`,     icon: Banknote }
+  if (p.source_opportunity) return { name: p.source_opportunity, typeLabel: 'Opportunity', href: `/app/opportunity/${p.source_opportunity}`, icon: Target }
+  if (p.source_lead)        return { name: p.source_lead,        typeLabel: 'Lead',        href: `/app/lead/${p.source_lead}`,               icon: UserPlus }
+  return null
+})
 
 const COLORS = ['#225DFB','#7C3AED','#059669','#DC2626','#D97706','#0891B2','#BE185D','#9333EA']
 const projectColor = computed(() => {
@@ -364,7 +377,7 @@ const activeChips = computed(() => {
 // "just snapshot it now with sensible defaults" from the board itself.
 async function quickSaveAsTemplate() {
   moreOpen.value = false
-  const name = window.prompt('Template name', `${store.currentProject?.project_name || 'Project'} template`)
+  const name = await promptDialog({ title: 'Template name', inputLabel: 'Name', defaultValue: `${store.currentProject?.project_name || 'Project'} template` })
   if (!name || !name.trim()) return
   try {
     await saveProjectAsTemplate({
@@ -565,7 +578,7 @@ function exportCsv() {
 }
 function exportXlsx() {
   moreOpen.value = false
-  if (!ent.can('exports')) { toast.error(`Excel export requires the ${ent.requiredPlanFor('exports')} plan`); return }
+  if (!ent.can('exports')) { toast.error('Excel export is available on any paid plan'); return }
   const base = window.__BP_BRIDGE_URL__ || ''
   if (!base) { toast.error('Export requires the Batch Gateway'); return }
   if (!projectKey.value) return
@@ -573,7 +586,7 @@ function exportXlsx() {
 }
 function exportPdf() {
   moreOpen.value = false
-  if (!ent.can('exports')) { toast.error(`PDF export requires the ${ent.requiredPlanFor('exports')} plan`); return }
+  if (!ent.can('exports')) { toast.error('PDF export is available on any paid plan'); return }
   const base = window.__BP_BRIDGE_URL__ || ''
   if (!base) { toast.error('Export requires the Batch Gateway'); return }
   if (!projectKey.value) return
@@ -581,7 +594,7 @@ function exportPdf() {
 }
 
 async function archiveProject() {
-  if (!confirm(`Archive "${currentProject.value?.project_name}"?`)) return
+  if (!await confirmDialog(`Archive "${currentProject.value?.project_name}"?`, { danger: true })) return
   moreOpen.value = false
   try {
     const { updateProjectGeneral } = await import('@/utils/api.js')
