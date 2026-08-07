@@ -15,6 +15,16 @@
       </div>
 
       <div class="flex items-center gap-3 shrink-0">
+        <!-- Who else has this drawing open right now — Jira/Monday-style
+             avatar row with a live-presence dot. Only OTHER people show
+             here; your own presence is implicit (you're looking at it). -->
+        <div v-if="presentUsers.length" class="flex items-center -space-x-1.5">
+          <div v-for="p in presentUsers.slice(0, 4)" :key="p.user" class="relative" :title="p.full_name">
+            <Avatar :name="p.full_name" size="sm" class="ring-2 ring-[var(--surface)]" />
+            <span class="dc-presence-dot" />
+          </div>
+          <span v-if="presentUsers.length > 4" class="dc-presence-overflow">+{{ presentUsers.length - 4 }}</span>
+        </div>
         <Transition name="fade">
           <span v-if="saving" key="saving" class="flex items-center gap-1.5 text-[12px] text-muted">
             <Spinner size="sm" /> Saving…
@@ -40,7 +50,7 @@
       <div v-else-if="error" class="absolute inset-0 flex items-center justify-center">
         <EmptyState :icon="AlertCircle" title="Can't open this drawing" :description="error" />
       </div>
-      <ExcalidrawHost v-else :key="drawingId" :initial-data="initialData" :view-mode-enabled="!canEdit"
+      <ExcalidrawHost v-else ref="hostRef" :key="drawingId" :initial-data="initialData" :view-mode-enabled="!canEdit"
         @change="onChange" />
     </div>
   </div>
@@ -51,13 +61,17 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { debounce } from 'lodash'
 import { useProjectStore } from '@/stores/project'
-import { Button, Input, Icon, Spinner, EmptyState } from '@/ui'
+import { Button, Input, Icon, Spinner, EmptyState, Avatar } from '@/ui'
 import { ArrowLeft, Check, TriangleAlert, AlertCircle } from 'lucide-vue-next'
 import ExcalidrawHost from '@/components/ExcalidrawHost.vue'
+import { reconcileElements, CaptureUpdateAction } from '@excalidraw/excalidraw'
 import {
   getDrawing, saveDrawing, deleteDrawing, getMembers,
+  broadcastDrawingChange, broadcastDrawingPresence,
   FeatureDisabledError, UpgradeRequiredError,
 } from '@/utils/api'
+import { confirmDialog } from '@/composables/useConfirmDialog'
+import { onRealtimeEvent } from '@/utils/realtime'
 
 const route  = useRoute()
 const router = useRouter()
@@ -112,8 +126,13 @@ async function load() {
   }
 }
 
-onMounted(load)
-watch(drawingId, load)
+async function loadAndJoin() {
+  stopRealtimeCollab() // leaving whatever drawing (if any) we were just on
+  await load()
+  if (!error.value) startRealtimeCollab()
+}
+onMounted(loadAndJoin)
+watch(drawingId, loadAndJoin)
 
 // ── Autosave ─────────────────────────────────────────────────────────────────
 const saving       = ref(false)
@@ -150,12 +169,20 @@ const doSave = debounce(async () => {
 function onChange(elements, appState, files) {
   if (!canEdit.value || loading.value) return
   if (!skippedFirstChange) { skippedFirstChange = true; return }
+  // A remotely-applied update triggers this same onChange as a side effect
+  // of updateScene() — must not re-save/re-broadcast the data we just
+  // received (see applyRemoteElements / the applyingRemote flag above).
+  if (applyingRemote) return
   latestScene = JSON.stringify({
     elements,
     appState: { viewBackgroundColor: appState.viewBackgroundColor },
     files,
   })
   doSave()
+  // Live sync: a separate, faster debounce than the 2s autosave above — the
+  // whole point is that other viewers see strokes appear quickly, not only
+  // once the durable save lands.
+  broadcastChange(JSON.stringify(elements))
 }
 
 async function saveTitleIfChanged() {
@@ -169,8 +196,106 @@ async function saveTitleIfChanged() {
   }
 }
 
+// ── Live collaboration ──────────────────────────────────────────────────────
+// Two independent signals, both ephemeral (see api/drawings.py's broadcast_
+// only endpoints — nothing here is durable; saveDrawing above remains the
+// only write to the actual BP Drawing doc):
+//   1. Presence — who else has this drawing open (the avatar row in the
+//      header). A client that vanishes without a clean unmount just ages out
+//      of PRESENCE_STALE_MS — same posture as composables/usePresence.js's
+//      existing workspace-wide online-dot heartbeat.
+//   2. Scene sync — every local edit is pushed (debounced, separately and
+//      faster than the 2s save) so everyone else's canvas updates live
+//      instead of only on next reload; incoming pushes are merged via
+//      Excalidraw's own reconcileElements (version-based, the same utility
+//      their official collaboration example uses) so two people editing at
+//      once don't stomp each other.
+const hostRef      = ref(null)
+const presentUsers = ref([]) // [{ user, full_name, lastSeen }], others only
+const PRESENCE_HEARTBEAT_MS = 20000
+const PRESENCE_STALE_MS     = 45000
+let presenceHeartbeatTimer = null
+let presenceSweepTimer     = null
+
+// Set while applying a REMOTELY-received scene into Excalidraw — its own
+// onChange fires as a side effect of updateScene(), and without this guard
+// that would immediately re-save and re-broadcast the exact data we just
+// received, in a wasteful (harmless but pointless) echo loop.
+let applyingRemote = false
+
+function upsertPresence(user, full_name) {
+  if (!user || user === sessionUser) return
+  const row = presentUsers.value.find(p => p.user === user)
+  if (row) { row.full_name = full_name; row.lastSeen = Date.now() }
+  else presentUsers.value.push({ user, full_name, lastSeen: Date.now() })
+}
+function removePresence(user) {
+  presentUsers.value = presentUsers.value.filter(p => p.user !== user)
+}
+function sweepStalePresence() {
+  const cutoff = Date.now() - PRESENCE_STALE_MS
+  presentUsers.value = presentUsers.value.filter(p => p.lastSeen >= cutoff)
+}
+
+function pingPresence(leaving = false) {
+  if (!drawingId.value) return
+  broadcastDrawingPresence(drawingId.value, leaving).catch(() => {}) // best-effort
+}
+
+const broadcastChange = debounce((elementsJson) => {
+  if (!drawingId.value) return
+  broadcastDrawingChange(drawingId.value, elementsJson).catch(() => {}) // best-effort
+}, 400)
+
+function applyRemoteElements(elements) {
+  const api = hostRef.value?.getApi?.()
+  if (!api) return
+  const local = api.getSceneElementsIncludingDeleted()
+  const reconciled = reconcileElements(local, elements, api.getAppState())
+  applyingRemote = true
+  api.updateScene({ elements: reconciled, captureUpdate: CaptureUpdateAction.NEVER })
+  // Reset on next tick — onChange fires synchronously off updateScene, so by
+  // the time this line runs the guarded onChange call has already happened.
+  Promise.resolve().then(() => { applyingRemote = false })
+}
+
+let stopRealtimeListener = null
+function startRealtimeCollab() {
+  stopRealtimeListener = onRealtimeEvent((payload) => {
+    if (payload?.drawing !== drawingId.value || payload?.user === sessionUser) return
+
+    if (payload.event === 'drawing.presence') {
+      if (payload.leaving) removePresence(payload.user)
+      else upsertPresence(payload.user, payload.full_name)
+      return
+    }
+    if (payload.event === 'drawing.changed') {
+      try {
+        const scene = JSON.parse(payload.elements_json)
+        const elements = Array.isArray(scene) ? scene : scene?.elements
+        if (Array.isArray(elements)) applyRemoteElements(elements)
+      } catch (e) {
+        console.error('drawing.changed parse error', e)
+      }
+    }
+  })
+
+  pingPresence()
+  presenceHeartbeatTimer = setInterval(() => pingPresence(), PRESENCE_HEARTBEAT_MS)
+  presenceSweepTimer = setInterval(sweepStalePresence, PRESENCE_HEARTBEAT_MS)
+}
+function stopRealtimeCollab() {
+  stopRealtimeListener?.()
+  stopRealtimeListener = null
+  if (presenceHeartbeatTimer) { clearInterval(presenceHeartbeatTimer); presenceHeartbeatTimer = null }
+  if (presenceSweepTimer) { clearInterval(presenceSweepTimer); presenceSweepTimer = null }
+  pingPresence(true) // best-effort "I'm leaving" — a clean unmount's fast path;
+                      // an unclean one (closed tab) just relies on the 45s age-out
+  presentUsers.value = []
+}
+
 async function removeDrawing() {
-  if (!confirm(`Delete "${titleDraft.value || 'this drawing'}"? This can't be undone.`)) return
+  if (!await confirmDialog(`Delete "${titleDraft.value || 'this drawing'}"? This can't be undone.`, { danger: true })) return
   deleting.value = true
   try {
     await deleteDrawing(drawingId.value)
@@ -188,10 +313,35 @@ onBeforeUnmount(() => {
   doSave.flush()
   clearTimeout(savedFlashTimer)
   clearTimeout(staleTimer)
+  stopRealtimeCollab()
 })
 </script>
 
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.dc-presence-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--success);
+  border: 1.5px solid var(--surface);
+}
+.dc-presence-overflow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--default);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 500;
+  box-shadow: 0 0 0 2px var(--surface);
+}
 </style>
