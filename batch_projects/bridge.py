@@ -8,7 +8,26 @@ and Frappe does the transactional work. This module is only the outbound
 registration half.
 
 Config (site_config.json / env, never hard-coded):
-    bp_bridge_url               e.g. "http://127.0.0.1:8001"
+    bp_bridge_url               e.g. "http://127.0.0.1:8001" — used here AND
+                                 injected into every page as
+                                 window.__BP_BRIDGE_URL__ for the browser's
+                                 own /v1/* calls (see api/gateway.py).
+    bp_bridge_internal_url      optional override, THIS module only. Exists
+                                 because a browser and this backend process
+                                 don't always reach the gateway at the same
+                                 address — e.g. a docker-compose dev topology
+                                 where the gateway sits behind a Caddy
+                                 container only reachable from the host at
+                                 127.0.0.1:8080, but that address is the
+                                 *backend container's own loopback* from in
+                                 here (confirmed live 2026-08-05:
+                                 publish_event()/publish_realtime_event() were
+                                 silently failing — connection refused — for
+                                 exactly this reason, even though the same
+                                 URL works fine for the browser). Falls back
+                                 to bp_bridge_url when unset, so every normal
+                                 single-address deployment (self-hosted
+                                 install.sh, Frappe Cloud) is unaffected.
     bp_scheduler_ingest_token   shared token == gateway scheduler.ingest_token
 
 If either is unset the functions are no-ops (dev without a bridge still saves
@@ -24,7 +43,11 @@ _EVENT_TIMEOUT = 2  # seconds — event publish is on the mutation hot-path
 
 
 def _config():
-    url = (frappe.conf.get("bp_bridge_url") or "").rstrip("/")
+    url = (
+        frappe.conf.get("bp_bridge_internal_url")
+        or frappe.conf.get("bp_bridge_url")
+        or ""
+    ).rstrip("/")
     token = frappe.conf.get("bp_scheduler_ingest_token") or ""
     return url, token
 
@@ -122,6 +145,59 @@ def publish_event(payload: dict) -> bool:
     if resp.status_code >= 300:
         frappe.logger("bp.bridge").warning(
             f"event publish {resp.status_code}: {resp.text[:200]}"
+        )
+        return False
+    return True
+
+
+def publish_realtime_event(event: str, project: str, payload: dict) -> bool:
+    """Publish a live-update event to the gateway's browser realtime plane
+    (POST /v1/realtime/publish -> internal/realtime.Handler.Publish), which
+    fans it out over SSE to every connected client whose visible-project set
+    includes `project` (see gateway's realtime.go membership.sees).
+
+    Was frappe.publish_realtime() — Frappe's own native socket.io/pub-sub
+    mechanism, which this gateway's Subscribe() never consumed: two
+    completely disconnected systems. Confirmed live (2026-08-05): a
+    publish_realtime() broadcast never reached a connected SSE client with a
+    valid session token, correct CORS, and a genuinely open stream — every
+    realtime-dependent feature in the app (board live-refresh, drawing
+    collaboration, notification badge) was silently non-functional in any
+    topology where the gateway is a separate origin from Frappe. This is the
+    fix: publish through the gateway's own plane instead.
+
+    Deliberately NOT /v1/events (automation ingest) despite both ultimately
+    feeding the same Redis stream — that endpoint also LPushes to the
+    automation queue and gates on the "automations" feature; see
+    realtime.go's Publish doc comment for why reusing it would be wrong for
+    a plane that can fire many times a second under active use (drawing
+    collaboration, live board updates).
+
+    Fire-and-forget, same posture as publish_event: a down/unconfigured
+    bridge must never slow down or fail the caller's save."""
+    url, token = _config()
+    if not (url and token):
+        frappe.logger("bp.bridge").debug("bridge not configured — skipping realtime publish")
+        return False
+
+    body = {"event": event, "project": project or "", "payload": payload}
+    try:
+        resp = requests.post(
+            f"{url}/v1/realtime/publish",
+            data=json.dumps(body),
+            headers={
+                "Content-Type": "application/json",
+                "X-BP-Service-Token": token,
+            },
+            timeout=_EVENT_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        frappe.logger("bp.bridge").warning(f"realtime publish failed: {e}")
+        return False
+
+    if resp.status_code >= 300:
+        frappe.logger("bp.bridge").warning(
+            f"realtime publish {resp.status_code}: {resp.text[:200]}"
         )
         return False
     return True

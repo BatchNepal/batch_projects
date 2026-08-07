@@ -32,6 +32,9 @@ SPRINT_COMPLETED    = "sprint.completed"
 ERP_INVOICE_SUBMITTED = "erp.invoice_submitted"
 ERP_PAYMENT_RECEIVED  = "erp.payment_received"
 ERP_SO_CONFIRMED      = "erp.so_confirmed"
+# Ephemeral (broadcast_only, never persisted) — see api/drawings.py.
+DRAWING_CHANGED   = "drawing.changed"
+DRAWING_PRESENCE  = "drawing.presence"
 
 
 # ─── PAYLOAD SHAPES ──────────────────────────────────────────────────────────
@@ -191,51 +194,29 @@ def _invalidate_cache(event_name: str, payload: dict):
         # Never let cache failure break a mutation
         frappe.log_error(frappe.get_traceback(), "bp_cache invalidation failed in emit")
 
-def _get_broadcast_recipients(project: str) -> list:
+def _broadcast(event_name: str, payload: dict, after_commit: bool = True):
     """
-    Return the list of users who should receive realtime events for a project.
-    Cached for 60 seconds — membership changes are infrequent and a short
-    stale window is acceptable. Call invalidate_recipients() after any
-    membership mutation to bust the cache immediately.
-    """
-    from batch_projects.cache import get as cache_get, set as cache_set, VIEW_RECIPIENTS
-    cached = cache_get(VIEW_RECIPIENTS, project)
-    if cached is not None:
-        return cached
+    Publish once to the gateway's realtime plane (bridge.publish_realtime_event
+    -> POST /v1/realtime/publish -> internal/realtime.Handler.Publish), which
+    fans the event out over SSE to every connected client. Per-user scoping
+    happens on the GATEWAY side, not here: each open SSE connection filters
+    the shared per-tenant stream by that user's own visible-project set
+    (api.board.get_member_projects, resolved via membership.sees() —
+    System Managers/Administrator see "all": true), the mirror image of what
+    the old per-recipient frappe.publish_realtime() loop did in-process.
 
-    member_users = [
-        m["user"] for m in frappe.get_all(
-            "BP Project Member",
-            filters={"parent": project},
-            fields=["user"],
-        )
-    ]
-    sys_managers = frappe.get_all(
-        "Has Role",
-        filters={"role": "System Manager", "parenttype": "User"},
-        pluck="parent",
-    )
-    recipients = list(set(member_users) | set(sys_managers))
-    cache_set(VIEW_RECIPIENTS, project, recipients)
-    return recipients
+    Was frappe.publish_realtime() looped over _get_broadcast_recipients(project)
+    — Frappe's own native socket.io/pub-sub, which bp-gateway's SSE Subscribe()
+    never consumed (two disconnected systems, confirmed live 2026-08-05: a
+    publish_realtime() broadcast never reached a connected SSE client with a
+    valid token, correct CORS, and a genuinely open stream). Removed that
+    recipient cache (_get_broadcast_recipients/invalidate_recipients) along
+    with this change — a single tenant-wide publish plus gateway-side
+    filtering makes the Frappe-side recipient list dead weight.
 
-
-def invalidate_recipients(project: str):
-    """Call this after update_project_members so the next event sees fresh data."""
-    from batch_projects.cache import _key, VIEW_RECIPIENTS
-    try:
-        frappe.cache().delete_value(_key(VIEW_RECIPIENTS, project))
-    except Exception:
-        pass
-
-
-def _broadcast(event_name: str, payload: dict):
-    """
-    Scoped broadcast: publish only to project members and System Managers.
-    Recipient list is cached; after_commit=True queues publishes after the
-    DB transaction commits so latency stays off the save hot-path.
-    Trade-off: non-member System Users won't receive realtime updates —
-    they see correct data on next refresh.
+    after_commit=True (the default, used by every mutation-driven event)
+    defers the publish until the DB transaction commits, so latency stays off
+    the save hot-path.
     """
     from batch_projects.entitlements import is_feature_enabled
     if not is_feature_enabled("realtime"):
@@ -245,16 +226,33 @@ def _broadcast(event_name: str, payload: dict):
         return
 
     try:
-        recipients = _get_broadcast_recipients(project)
-        for user in recipients:
-            frappe.publish_realtime(
-                event="bp_event",
-                message=payload,
-                user=user,
-                after_commit=True,
+        from batch_projects import bridge
+        if after_commit:
+            frappe.db.after_commit.add(
+                lambda: bridge.publish_realtime_event(event_name, project, payload)
             )
+        else:
+            bridge.publish_realtime_event(event_name, project, payload)
     except Exception:
         frappe.log_error(frappe.get_traceback(), "bp_event broadcast failed")
+
+
+def broadcast_only(event_name: str, payload: dict, after_commit: bool = False):
+    """Enrichment + realtime broadcast, deliberately skipping the rest of
+    emit()'s pipeline (cache invalidation, automation rules, notifications,
+    ReBAC sync) — for ephemeral, high-frequency, non-durable signals where
+    those side effects would be actively wrong, not just wasted work: a live
+    collaborative-drawing scene push (batch_projects.api.drawings.
+    broadcast_drawing_change) can fire every few hundred ms per active
+    editor, and running full automation-rule evaluation or busting the
+    project cache on every keystroke-level update would be both a real
+    performance cost and a correctness risk (an automation rule matching a
+    transient mid-drag payload that was never actually saved).
+    after_commit defaults to False here (unlike _broadcast's True) — these
+    callers typically write nothing to the DB, so there's no save-latency
+    reason to defer, and the whole point is minimizing live-sync latency."""
+    payload = _enrich(event_name, payload)
+    _broadcast(event_name, payload, after_commit=after_commit)
 
 
 # ─── AUTOMATION RULES ────────────────────────────────────────────────────────
@@ -1034,7 +1032,7 @@ def _notify_comment(payload, actor, task_name, project):
 
     # On edits we only ping the newly-mentioned; on a new comment everyone involved is notified
     if payload.get("mentions_only"):
-        _push_notification_badge(mentioned)
+        _push_notification_badge(mentioned, project)
         return
 
     message = f"{actor_name} commented on {task_key}: {preview}"
@@ -1045,7 +1043,7 @@ def _notify_comment(payload, actor, task_name, project):
             email_extras={"comment_text": preview},
         )
 
-    _push_notification_badge(recipients | mentioned)
+    _push_notification_badge(recipients | mentioned, project)
 
 
 def _notify_assignment(payload, actor, task_name, project):
@@ -1067,7 +1065,7 @@ def _notify_assignment(payload, actor, task_name, project):
             "due_date": task_data.get("due_date"),
         },
     )
-    _push_notification_badge({assigned_user})
+    _push_notification_badge({assigned_user}, project)
 
 
 def _notify_status_change(payload, actor, task_name, project):
@@ -1085,7 +1083,7 @@ def _notify_status_change(payload, actor, task_name, project):
             recipient, "Status Change", task_name, project, actor, message,
             email_extras={"from_status": from_status, "to_status": to_status},
         )
-    _push_notification_badge(recipients)
+    _push_notification_badge(recipients, project)
 
 
 def _notify_task_created(payload, actor, task_name, project):
@@ -1099,7 +1097,7 @@ def _notify_task_created(payload, actor, task_name, project):
         task_title = frappe.db.get_value("BP Task", task_name, "title") or task_name
         message = f"{actor_name} created {task_key}: {task_title}"
         _create_notification(default_assignee, "Assignment", task_name, project, actor, message)
-        _push_notification_badge({default_assignee})
+        _push_notification_badge({default_assignee}, project)
 
 
 def _notify_task_updated(payload, actor, task_name, project):
@@ -1131,7 +1129,7 @@ def _notify_task_updated(payload, actor, task_name, project):
             recipient, "Update", task_name, project, actor, message,
             email_extras={"changes": notable},
         )
-    _push_notification_badge(recipients)
+    _push_notification_badge(recipients, project)
 
 
 def _notify_task_unassigned(payload, actor, task_name, project):
@@ -1144,7 +1142,7 @@ def _notify_task_unassigned(payload, actor, task_name, project):
     task_title = frappe.db.get_value("BP Task", task_name, "title") or task_name
     message    = f"{actor_name} unassigned you from {task_key}: {task_title}"
     _create_notification(removed_user, "Unassigned", task_name, project, actor, message)
-    _push_notification_badge({removed_user})
+    _push_notification_badge({removed_user}, project)
 
 
 def send_due_date_reminders():
@@ -1653,20 +1651,37 @@ def _notify_sprint(event_name, payload, actor, project):
     for user in recipients:
         # task=None → project-level notification; honors mute (project) + email pref
         _create_notification(user, "Sprint", None, project, actor, message)
-    _push_notification_badge(recipients)
+    _push_notification_badge(recipients, project)
 
 
-def _push_notification_badge(recipients: set):
-    """Push realtime unread count update to each recipient."""
+def _push_notification_badge(recipients: set, project: str = None):
+    """Push a realtime unread-count update to each recipient via bp-gateway's
+    realtime plane. Was frappe.publish_realtime(event="bp_notification_count",
+    user=user, ...) — dead for the identical reason _broadcast() was (see its
+    docstring): this SPA has no socket.io connection, only bp-gateway's SSE
+    plane, which never listened on Frappe's own native realtime. Sidebar.vue's
+    matching window.frappe.realtime.on('bp_notification_count', ...) listener
+    was equally dead (window.frappe.realtime doesn't exist here) — both sides
+    replaced together, 2026-08-06.
+
+    Routed per-recipient rather than a single project-wide publish because
+    unread_count is personal; the gateway fans this out to every connected
+    client who can see `project` (same as any other event), and the
+    frontend listener discards anything whose "recipient" isn't itself —
+    the same coarse-server/fine-client filtering pattern DrawCanvas.vue's
+    presence and drawing-change listeners already use."""
+    if not project:
+        return
+    from batch_projects import bridge
     for user in recipients:
         try:
             unread = frappe.db.count("BP Notification", {"recipient": user, "is_read": 0})
-            frappe.publish_realtime(
-                event="bp_notification_count",
-                message={"unread_count": unread},
-                user=user,
-                after_commit=True,
-            )
+            bridge.publish_realtime_event("notification.badge", project, {
+                "event": "notification.badge",
+                "project": project,
+                "recipient": user,
+                "unread_count": unread,
+            })
         except Exception:
             pass
 

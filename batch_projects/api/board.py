@@ -1393,9 +1393,17 @@ def update_task(issue, fields, force=False):
                 v = None
             setattr(doc, k, v)
 
+    # NOTE: does NOT emit TASK_ASSIGNED/TASK_UNASSIGNED/TASK_UPDATED itself —
+    # BP Task.on_update() (the doctype controller) already diffs old vs new
+    # assignees/fields and emits on every save, regardless of which API
+    # called it. An earlier version of this function duplicated that same
+    # diff-and-emit here, which fired every assignment notification/broadcast
+    # TWICE (confirmed live 2026-08-06: two "Assignment" BP Notification rows
+    # ~1s apart per single update_task() call) — removed, not re-added.
     doc.save(ignore_permissions=True)
     from batch_projects.cache import invalidate_project
     invalidate_project(doc.project)
+
     return doc.as_dict()
 
 
@@ -6659,9 +6667,6 @@ def update_project_members(project, members):
                 "project": project, "user": user,
                 "old_role": old_role, "new_role": new_role,
             })
-
-    from batch_projects.events import invalidate_recipients
-    invalidate_recipients(project)
 
     users = {u["name"]: u["full_name"] for u in frappe.get_all(
         "User", fields=["name", "full_name"]

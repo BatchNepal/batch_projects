@@ -130,3 +130,71 @@ def delete_drawing(name):
     frappe.delete_doc("BP Drawing", name, ignore_permissions=True, force=True)
     frappe.db.commit()
     return {"ok": True}
+
+
+# ─── LIVE COLLABORATION (ephemeral — nothing here is persisted; save_drawing
+# above remains the sole durable write path, on its own 2s debounce) ─────────
+#
+# Was entirely absent: this module had autosave and a "stale — you just
+# overwrote someone else's change" warning (see save_drawing's docstring),
+# but nothing broadcast a change AS it happened, and nothing showed who else
+# had a drawing open — every "collaborative" whiteboard was single-player
+# until the next full reload. These two endpoints, paired with DrawCanvas.
+# vue's onRealtimeEvent subscription and Excalidraw's own reconcileElements
+# (version-based merge, the same utility their official collaboration
+# example uses), are what actually makes it live.
+
+def _drawing_project(name: str) -> str:
+    project = frappe.db.get_value("BP Drawing", name, "project")
+    if not project:
+        frappe.throw("Drawing not found.")
+    return project
+
+
+@frappe.whitelist()
+def broadcast_drawing_change(name, elements_json):
+    """Fired on every local Excalidraw onChange (frontend-debounced, not
+    here) — pushes the current element array to every other client with
+    this drawing open. broadcast_only(), not emit(): this can fire many
+    times a minute per active editor and writes nothing to the DB, so the
+    full mutation pipeline (cache bust, automation rules, notifications,
+    ReBAC) would be pure overhead at best and a false-trigger risk at worst."""
+    _guard()
+    project = _drawing_project(name)
+    access.require(project, "Member")
+    _require_gates()
+
+    from batch_projects.events import broadcast_only, DRAWING_CHANGED
+    broadcast_only(DRAWING_CHANGED, {
+        "project": project,
+        "drawing": name,
+        "elements_json": elements_json,
+    })
+    return {"ok": True}
+
+
+@frappe.whitelist()
+def broadcast_drawing_presence(name, leaving=False):
+    """'I have this drawing open right now' heartbeat — DrawCanvas.vue calls
+    this on mount, every ~20s while open, and once with leaving=True on
+    unmount. Viewer-level (not Member): a read-only viewer still counts as
+    present and should show up in the who's-here avatar row. No server-side
+    presence STATE is kept — each recipient's own client ages out an entry
+    that hasn't re-pinged in ~45s (mirrors composables/usePresence.js's
+    existing workspace-wide online-dot pattern), so a tab that closes
+    uncleanly self-heals without any backend cleanup job."""
+    _guard()
+    project = _drawing_project(name)
+    access.require(project, "Viewer")
+    _require_gates()
+
+    from batch_projects.events import broadcast_only, DRAWING_PRESENCE
+    broadcast_only(DRAWING_PRESENCE, {
+        "project": project,
+        "drawing": name,
+        "leaving": bool(frappe.utils.cint(leaving)),
+        # Resolved once here rather than making every recipient's client do
+        # its own lookup for each of possibly several concurrent viewers.
+        "full_name": frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user,
+    })
+    return {"ok": True}

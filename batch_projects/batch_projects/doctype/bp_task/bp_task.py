@@ -295,6 +295,13 @@ class BPTask(Document):
         old_assignees = set(r.user for r in (old.assignees or []))
         new_assignees = set(r.user for r in (self.assignees or []))
 
+        if old_assignees != new_assignees:
+            # Resolved once, not per-assignee — same actor for the whole diff,
+            # and it's what the frontend's realtime assignment-ping toast
+            # ("<actor> assigned you to <key>: <title>") reads directly off
+            # the broadcast payload, no follow-up fetch.
+            actor_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
+
         for usr in (new_assignees - old_assignees):
             full_name = frappe.db.get_value("User", usr, "full_name") or usr
             self._log_activity("Assignment", "", full_name)
@@ -306,6 +313,8 @@ class BPTask(Document):
                 # the actor as the session user, not the person being assigned
                 "assignee": usr,
                 "full_name": full_name,
+                "title": self.title,
+                "actor_name": actor_name,
             })
 
         for usr in (old_assignees - new_assignees):
@@ -317,6 +326,8 @@ class BPTask(Document):
                 "task_key": self.task_key,
                 "assignee": usr,
                 "full_name": full_name,
+                "title": self.title,
+                "actor_name": actor_name,
             })
 
         # Custom field changes
