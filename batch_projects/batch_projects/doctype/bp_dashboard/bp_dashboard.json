@@ -1,0 +1,131 @@
+{
+  "name": "BP Dashboard",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "autoname": "format:DASH-{####}",
+  "naming_rule": "Expression",
+  "creation": "2026-08-02 00:00:00",
+  "modified": "2026-08-02 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "dashboard_name",
+      "fieldtype": "Data",
+      "label": "Dashboard Name",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "icon",
+      "fieldtype": "Data",
+      "label": "Icon",
+      "default": "LayoutDashboard"
+    },
+    {
+      "fieldname": "color",
+      "fieldtype": "Data",
+      "label": "Accent Color"
+    },
+    {
+      "fieldname": "starred",
+      "fieldtype": "Check",
+      "label": "Starred",
+      "default": "0"
+    },
+    {
+      "fieldname": "pinned",
+      "fieldtype": "Check",
+      "label": "Pinned to Sidebar",
+      "default": "0"
+    },
+    {
+      "fieldname": "scope_section",
+      "fieldtype": "Section Break",
+      "label": "Scope"
+    },
+    {
+      "fieldname": "scope",
+      "fieldtype": "Select",
+      "label": "Scope",
+      "options": "project\nworkspace",
+      "default": "project",
+      "in_standard_filter": 1,
+      "description": "workspace-scope dashboards can aggregate across every project."
+    },
+    {
+      "fieldname": "visibility",
+      "fieldtype": "Select",
+      "label": "Visibility",
+      "options": "private\nworkspace",
+      "default": "private",
+      "description": "private = only you can see/edit it. workspace = every member can read; owner or a workspace admin can edit."
+    },
+    {
+      "fieldname": "project",
+      "fieldtype": "Link",
+      "label": "Project",
+      "options": "BP Project",
+      "in_standard_filter": 1,
+      "description": "Leave blank for a cross-project (workspace) dashboard."
+    },
+    {
+      "fieldname": "milestone",
+      "fieldtype": "Link",
+      "label": "Milestone",
+      "options": "BP Milestone"
+    },
+    {
+      "fieldname": "column_break_scope",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "period",
+      "fieldtype": "Select",
+      "label": "Period",
+      "options": "all_time\nlast_7_days\nlast_30_days\nlast_90_days\nthis_quarter\nthis_year",
+      "default": "last_30_days"
+    },
+    {
+      "fieldname": "layout_section",
+      "fieldtype": "Section Break",
+      "label": "Layout"
+    },
+    {
+      "fieldname": "layout",
+      "fieldtype": "Long Text",
+      "label": "Layout",
+      "description": "JSON array of widget definitions."
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Projects User",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Projects Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}
