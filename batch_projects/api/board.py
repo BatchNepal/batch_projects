@@ -4716,8 +4716,17 @@ def mark_triaged(task):
 
 @frappe.whitelist()
 def get_project_files(project):
-    """Returns all files attached to tasks in the given project,
-    with task context and uploader info."""
+    """Returns all files attached to the project directly (the real "project
+    files" surface — uploaded from the Files tab itself, not through any
+    task) UNIONed with files attached to tasks in the project, with task
+    context and uploader info.
+
+    Was BP-Task-only (INNER JOIN on `tabBP Task`, hard-requiring
+    attached_to_doctype='BP Task'): the Files tab had no way to represent a
+    file that belongs to the project as a whole rather than one task — it was
+    a task-attachment lister wearing a "Files" tab label, exactly the gap
+    upload_project_file/rename_project_file/delete_project_file below now
+    close on the write side."""
     _check_permission(project, "BP Viewer")
 
     files = frappe.db.sql("""
@@ -4731,7 +4740,20 @@ def get_project_files(project):
         LEFT JOIN `tabUser` u ON u.name = f.owner
         WHERE f.attached_to_doctype = 'BP Task'
           AND t.project = %(project)s
-        ORDER BY f.creation DESC
+
+        UNION ALL
+
+        SELECT f.name, f.file_name, f.file_url, f.file_size,
+               f.is_private, f.creation, f.owner,
+               NULL AS task_name,
+               NULL AS task_title,
+               u.full_name AS uploaded_by_name
+        FROM `tabFile` f
+        LEFT JOIN `tabUser` u ON u.name = f.owner
+        WHERE f.attached_to_doctype = 'BP Project'
+          AND f.attached_to_name = %(project)s
+
+        ORDER BY creation DESC
     """, {"project": project}, as_dict=True)
 
     return [
@@ -4749,6 +4771,60 @@ def get_project_files(project):
         }
         for f in files
     ]
+
+
+def _file_project_and_min_role(doc, min_role):
+    """Resolve (project, min_role) for a File attached to either a BP Task or
+    a BP Project — the two attachment surfaces this app writes files to —
+    and run the same _check_permission every other mutation in this module
+    uses. Shared by rename_project_file/delete_project_file so the two
+    doctypes are never checked two different ways."""
+    if doc.attached_to_doctype == "BP Task":
+        project = frappe.db.get_value("BP Task", doc.attached_to_name, "project")
+    elif doc.attached_to_doctype == "BP Project":
+        project = doc.attached_to_name
+    else:
+        frappe.throw("Not a project or task attachment.")
+    _check_permission(project, min_role)
+    return project
+
+
+@frappe.whitelist()
+def rename_project_file(file_name, new_name):
+    """Rename a file's DISPLAY name (File.file_name) — the underlying
+    storage path/content is untouched, same as renaming a file in any
+    desktop file manager. The original extension is preserved even if the
+    caller's new_name drops it, so a rename can't silently turn a .pdf into
+    something a browser won't know how to open."""
+    doc = frappe.get_doc("File", file_name)
+    _file_project_and_min_role(doc, "BP Member")
+
+    new_name = (new_name or "").strip()
+    if not new_name:
+        frappe.throw("Name can't be empty.")
+    old_ext = doc.file_name.rsplit(".", 1)[-1] if "." in doc.file_name else ""
+    if old_ext and not new_name.lower().endswith("." + old_ext.lower()):
+        new_name = f"{new_name}.{old_ext}"
+    doc.file_name = new_name[:255]
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+    return {"ok": True, "file_name": doc.file_name}
+
+
+@frappe.whitelist()
+def delete_project_file(file_name):
+    """The Files tab's one delete action for whichever kind of file the user
+    right-clicked — task-attached or project-attached (get_project_files
+    lists both in one view, so the UI needs one action, not two).
+    delete_attachment (BP-Task-only, hard-throws otherwise) stays exactly as
+    it was for TaskAttachments.vue's own narrower delete button — this isn't
+    a replacement for it, just the general-purpose sibling the Files tab
+    needs."""
+    doc = frappe.get_doc("File", file_name)
+    _file_project_and_min_role(doc, "BP Member")
+    doc.delete(ignore_permissions=True)
+    frappe.db.commit()
+    return {"ok": True}
 
 # Intake-form and milestone-invoice routers were removed from here — they
 # were thin aliases to api.forms.*/api.erp_link.*
