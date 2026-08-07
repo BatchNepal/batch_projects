@@ -27,7 +27,7 @@
       <div
         v-for="(invite, i) in modelValue"
         :key="invite.email"
-        class="flex items-center gap-3 px-3 py-2 bg-surface-secondary border border-border rounded-sm"
+        class="ob-invite flex items-center gap-3 px-3 py-2 bg-surface border border-border"
       >
         <div class="w-6 h-6 rounded-full bg-accent-soft flex items-center justify-center text-xs font-semibold text-accent-soft-foreground shrink-0">
           {{ invite.email[0].toUpperCase() }}
@@ -49,13 +49,19 @@
       </div>
     </div>
 
-    <p v-else class="text-sm text-muted py-4 text-center">No invites added yet. This step is optional.</p>
+    <!-- Was a bare centred <p> floating in whitespace, which read as a layout
+         gap rather than a deliberate empty state. Dashed well is the standard
+         "this slot is empty and that's fine" affordance. -->
+    <div v-else class="ob-empty">
+      <UserPlus :size="18" :stroke-width="1.5" class="text-muted-tertiary" />
+      <p class="text-[12.5px] text-muted">No invites yet — this step is optional.</p>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import { X } from 'lucide-vue-next'
+import { X, UserPlus } from 'lucide-vue-next'
 import { Button, Input, Select, SelectItem } from '@/ui'
 
 const props = defineProps({ modelValue: { type: Array, required: true } })
@@ -89,3 +95,25 @@ function updateRole(idx, role) {
   emit('update:modelValue', next)
 }
 </script>
+
+<style scoped>
+/* Invite rows are small cards, so 8px (--radius-lg), not the 4px rounded-sm
+   they had — and a plain surface with the hairline doing the work, rather
+   than a grey fill that fought the fields sitting inside it. */
+.ob-invite {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--surface-shadow-sm);
+}
+
+.ob-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  border: 1px dashed var(--border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--surface-secondary);
+}
+</style>

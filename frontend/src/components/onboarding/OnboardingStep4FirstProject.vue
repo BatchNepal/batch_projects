@@ -47,11 +47,10 @@
           :key="t.id"
           type="button"
           @click="updateField('type', t.id)"
+          :aria-pressed="modelValue.type === t.id"
           :class="[
-            'flex flex-col items-center gap-1 px-2 py-2.5 rounded-md border-2 text-center transition-all',
-            modelValue.type === t.id
-              ? 'bg-overlay border-accent shadow-xs'
-              : 'bg-surface-secondary border-border hover:bg-surface-hover',
+            'ob-type flex flex-col items-center gap-1 px-2 py-2.5 rounded-md border text-center',
+            modelValue.type === t.id ? 'is-on bg-accent-soft' : 'bg-surface-secondary',
           ]"
         >
           <component :is="t.icon" :size="16" :stroke-width="1.5"
@@ -109,3 +108,30 @@ function onKeyInput(val) {
   updateField('key', val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))
 }
 </script>
+
+<style scoped>
+/* Same fix as Step 3: `border-2` made the selected tile 1px larger than its
+   neighbours (shifting the grid), and `transition-all` animated that shift.
+   Hairline border in both states; selection reads from the accent edge and
+   the soft fill. */
+.ob-type {
+  border-color: var(--border);
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-out),
+    border-color 140ms var(--ease-out);
+}
+
+@media (hover: hover) {
+  .ob-type:not(.is-on):hover {
+    background: var(--surface-hover);
+    border-color: var(--border-tertiary);
+  }
+}
+
+.ob-type.is-on { border-color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-type { transition: none; }
+}
+</style>
