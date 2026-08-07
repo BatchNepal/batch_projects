@@ -311,7 +311,7 @@
               :description="`Available on the ${intakeFormsRequiredPlan} plan and up. Upgrade to let clients submit tasks through a public form.`"
               class="bp-set-card mb-4">
               <template #action>
-                <Button size="sm" color="primary" @click="ent.showUpgradePrompt('feature', 'Intake forms require an upgrade.')">Upgrade</Button>
+                <Button size="sm" color="primary" @click="ent.showUpgradePrompt('feature', 'Intake forms are available on any paid plan.')">See plans</Button>
               </template>
             </EmptyState>
 
@@ -339,6 +339,7 @@
             </div>
 
             <EmptyState v-else :icon="FormInput" title="No intake forms yet"
+              image="/images/projs/intake-forms.png"
               description="Create a public form below to start collecting task submissions." class="bp-set-card mb-4" />
 
             <!-- Create form -->
@@ -452,27 +453,57 @@
 
               <template v-if="generalDraft.project_type !== 'internal'">
 
-                <!-- Client -->
+                <!-- Client — BP Project.client is a Link to Customer at the DB
+                     layer; this used to render as free text, so a typo (or an
+                     honest "Acme Corp" vs the real record "Acme Corp Pvt Ltd")
+                     produced a string matching zero actual Customer records.
+                     generate_invoice's customer resolution and Money tab
+                     rollups key off this field, so a mistyped client silently
+                     broke billing rather than erroring — a real typeahead
+                     against actual records is the fix, not just a UI nicety. -->
                 <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                   <div class="pt-1">
                     <p class="text-[13px] font-medium text-foreground">Client</p>
                     <p class="text-[12px] text-muted mt-0.5">Shown on invoices and reports.</p>
                   </div>
-                  <Input v-model="generalDraft.client" size="sm"
-                    placeholder="e.g. Acme Corp" @blur="autoSave" />
+                  <!-- Explicit :model-value/@update:model-value, not v-model —
+                       v-model here PLUS this @update:model-value handler both
+                       compile to the same onUpdate:modelValue prop; Vue merges
+                       duplicate listeners into an array and fires both, which
+                       intermittently left `query` set from the wrong render
+                       pass and threw "n.value.trim is not a function" inside
+                       Combobox — caught live while exercising this exact field.
+                       Matches ErpFieldValueInput's existing convention, which
+                       never mixes the two for this reason. -->
+                  <Combobox
+                    :model-value="generalDraft.client" :model-label="clientLabel"
+                    size="sm" :loader="searchClients" :min-chars="1"
+                    placeholder="Search customers…"
+                    @update:model-value="v => { generalDraft.client = v; autoSave() }"
+                    @update:model-label="v => { clientLabel = v }"
+                  />
                 </div>
 
-                <!-- Currency -->
+                <!-- Currency — was a hand-typed 3-char Data field with no
+                     validation against real ISO codes, so "USDD"→"USD" (via
+                     maxlength) was fine but "XYZ" saved silently and every
+                     downstream fmtMoney() call rendered an Intl.NumberFormat
+                     fallback for a currency that doesn't exist. Curated list
+                     covers the currencies this app's client base actually
+                     bills in; allow-create keeps the field's real type (free
+                     Data, not a Link) for anything exotic outside the list. -->
                 <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                   <div class="pt-1">
                     <p class="text-[13px] font-medium text-foreground">Currency</p>
-                    <p class="text-[12px] text-muted mt-0.5">Three-letter ISO code (USD, EUR, NPR…).</p>
+                    <p class="text-[12px] text-muted mt-0.5">Used for all rates, budgets and invoices on this project.</p>
                   </div>
-                  <div class="max-w-[100px]">
-                    <Input v-model="generalDraft.currency" size="sm" placeholder="USD" maxlength="3"
-                      class="uppercase font-mono"
-                      @input="generalDraft.currency = generalDraft.currency.toUpperCase()"
-                      @blur="autoSave" />
+                  <div class="max-w-[220px]">
+                    <Combobox
+                      :model-value="generalDraft.currency" size="sm"
+                      :options="CURRENCY_OPTIONS" allow-create
+                      placeholder="Search currencies…"
+                      @update:model-value="v => { generalDraft.currency = (v || '').toUpperCase(); autoSave() }"
+                    />
                   </div>
                 </div>
 
@@ -824,14 +855,9 @@
                 <Icon :icon="Plus" class="mr-1" /> Add epic
               </Button>
             </div>
-
-            <div v-if="!epics.length"
-              class="flex flex-col items-center justify-center py-16 text-center rounded-md border border-dashed border-[var(--border-secondary)]">
-              <span class="size-11 rounded-md bg-[var(--surface-secondary)] flex items-center justify-center mb-3">
-                <Icon :icon="Boxes" class="size-5 text-muted" />
-              </span>
-              <p class="text-[13px] font-medium text-foreground">No epics yet</p>
-            </div>
+            <EmptyState v-if="!epics.length" title="No epics yet"
+                        image="/images/projs/epics.png"
+                        description="Create an epic below to start organizing your tasks." class="bp-set-card mb-4" />
 
             <div v-else class="bp-set-card">
               <div v-for="ep in epics" :key="ep.name"
@@ -1131,13 +1157,14 @@ import {
   listIntakeForms, createIntakeForm, updateIntakeForm, deleteIntakeForm, getIntakeFormDetail,
 } from '@/utils/api.js'
 import { fieldMeta } from '@/utils/customFields.js'
+import { searchErpDocuments, getErpDocumentLabel } from '@/utils/api'
 import ThemePicker from '@/components/create-project/ThemePicker.vue'
 import CustomFieldInput from '@/components/CustomFieldInput.vue'
 import CustomFieldEditorDrawer from '@/components/CustomFieldEditorDrawer.vue'
 
 import {
   Button, Input, Select, SelectItem, Textarea, Switch, Checkbox, Avatar, Icon, IconButton,
-  Modal, ModalHeader, ModalBody, ModalFooter, Spinner, Chip, EmptyState,
+  Modal, ModalHeader, ModalBody, ModalFooter, Spinner, Chip, EmptyState, Combobox,
   Drawer, DrawerHeader, DrawerBody, DrawerFooter,
   Dropdown, DropdownItem, DropdownSeparator, DropdownLabel,
 } from '@/ui'
@@ -1159,6 +1186,7 @@ import { Boxes } from 'lucide-vue-next'
 import AutomationRules from '@/components/AutomationRules.vue'
 import { useEntitlementsStore } from '@/stores/entitlements'
 import { getTaskWord } from '@/constants/project-templates'
+import { confirmDialog, promptDialog } from '@/composables/useConfirmDialog'
 
 // ── Setup ──────────────────────────────────────────────────────────────────────
 const route  = useRoute()
@@ -1239,7 +1267,7 @@ watch([activeTab, () => store.currentProject?.name], ([tab]) => {
 }, { immediate: true })
 
 async function renameTemplate(t) {
-  const name = window.prompt('Template name', t.template_name)
+  const name = await promptDialog({ title: 'Template name', inputLabel: 'Name', defaultValue: t.template_name })
   if (!name || !name.trim() || name.trim() === t.template_name) return
   try {
     await updateTaskTemplate({ template: t.name, template_name: name.trim() })
@@ -1319,6 +1347,29 @@ const generalDraft = ref({
   hourly_rate: null, budget_amount: null, retainer_hours: null,
   default_view: 'summary',
 })
+
+// The Combobox needs a human label to show for the currently-set client, but
+// BP Project only stores the raw Customer docname — resolved once on load
+// (initDrafts) and again whenever a user picks a new one (searchClients'
+// results already carry the label, no extra round trip there).
+const clientLabel = ref('')
+
+function searchClients(q) {
+  return searchErpDocuments('Customer', q, store.currentProject?.name)
+    .then(rows => rows.map(r => ({ value: r.name, label: r.label })))
+}
+
+// Common billing currencies first (this workspace's real client base spans
+// NPR/INR/USD per the erp_link.py billing work), then the rest of ISO 4217's
+// actively-circulating codes so the field never feels like a locked list —
+// it's still a free Data field underneath (allow-create), this is a curated
+// shortcut, not a constraint.
+const CURRENCY_OPTIONS = [
+  'NPR', 'INR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'SGD', 'AED', 'JPY',
+  'CNY', 'CHF', 'HKD', 'NZD', 'THB', 'MYR', 'PKR', 'BDT', 'LKR', 'ZAR',
+  'SAR', 'QAR', 'KWD', 'BHD', 'OMR', 'PHP', 'IDR', 'VND', 'KRW', 'BRL',
+  'MXN', 'SEK', 'NOK', 'DKK', 'PLN', 'TRY', 'RUB', 'EGP', 'NGN', 'KES',
+].map(c => ({ value: c, label: c }))
 
 const newMember     = ref(null)
 const newRole       = ref('Member')
@@ -1511,6 +1562,23 @@ function initDrafts() {
     retainer_hours:   p.retainer_hours   || null,
     default_view:     p.default_view     || 'summary',
   }
+
+  // Resolve the Combobox's display label for whatever client is already set
+  // — the draft only carries the raw Customer docname. Cleared first so a
+  // stale label from a previously-open project never flashes while this
+  // resolves (initDrafts can re-run on project switch).
+  clientLabel.value = ''
+  if (p.client) {
+    // getErpDocumentLabel resolves {name,label,doctype} — NOT a bare string.
+    // Assigning the raw response into clientLabel (a String-typed prop)
+    // corrupted Combobox's internal `query` ref the moment it read
+    // props.modelLabel, throwing "n.value.trim is not a function" on first
+    // focus. Caught live while verifying this exact field — extract `.label`.
+    getErpDocumentLabel('Customer', p.client)
+      .then(res => { if (generalDraft.value.client === p.client) clientLabel.value = res?.label || p.client })
+      .catch(() => { clientLabel.value = p.client })
+  }
+
   // Seed the autosave baseline so the first real edit is what triggers a save.
   lastSavedJson = JSON.stringify(generalPayload())
 
@@ -1569,6 +1637,12 @@ async function saveGeneral() {
     const updated = await updateProjectGeneral(store.currentProject.name, payload)
     lastSavedJson = json
     Object.assign(store.currentProject, updated)
+    // store.projects (the sidebar's list) is a separate array fetched once at
+    // boot, not a reference into currentProject — without this the sidebar
+    // avatar/name/color keeps showing whatever it last fetched until a full
+    // reload, even though the "open" project reflects the save immediately.
+    const listEntry = store.projects.find(p => p.name === store.currentProject.name)
+    if (listEntry) Object.assign(listEntry, updated)
     flashSaved()
   } catch (e) {
     showToast(e.message || 'Failed to save', 'error')
@@ -1990,7 +2064,7 @@ async function saveIntakeForm() {
 }
 
 async function confirmDeleteIntakeForm(f) {
-  if (!confirm(`Delete "${f.form_title}"?`)) return
+  if (!await confirmDialog(`Delete "${f.form_title}"?`, { danger: true })) return
   try {
     await deleteIntakeForm(f.name)
     intakeForms.value = intakeForms.value.filter(x => x.name !== f.name)
@@ -2164,9 +2238,8 @@ function goBack() {
   background: var(--surface);
   box-shadow: var(--surface-shadow);
   border-radius: 12px;
-  padding: 2px 24px;
+  padding: 14px 24px;
 }
-.bp-set-card > * + * { border-top: 1px solid var(--separator); }
 
 /* Left settings nav items */
 .set-nav-item {
