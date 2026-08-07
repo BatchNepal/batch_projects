@@ -6,7 +6,7 @@ View-only public **share links** — distinct from invitations.
   • Invitation = "come work on this project" → an account + membership + role.
   • Share link = "come look at this"        → a bearer token in the URL is the
     credential. No account, no login, strictly read-only, revocable, optionally
-    expiring. Mirrors Wrike "Public Link" / Monday "Shareable" view-only links.
+    expiring. 
 
 Three scopes: `board` (the kanban, read-only), `project` (project + board), and
 `task` (a single task, read-only).

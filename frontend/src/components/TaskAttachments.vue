@@ -71,7 +71,7 @@
         <p class="ia-drop-text">
           <span class="ia-drop-link">Click to attach</span> or drag and drop
         </p>
-        <p class="ia-drop-hint">Any file up to 10MB</p>
+        <p class="ia-drop-hint">Any file up to {{ maxFileSizeMB }}MB</p>
       </template>
       <template v-else>
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -107,6 +107,15 @@ const error      = ref('')
 // files = server attachments + pending uploads
 const files = computed(() => props.modelValue)
 
+// Max file size from backend (in bytes), default 25MB
+const maxFileSize = computed(() => {
+  return window.frappe?.boot?.max_file_size || 25 * 1024 * 1024
+})
+
+const maxFileSizeMB = computed(() => {
+  return Math.round(maxFileSize.value / (1024 * 1024))
+})
+
 // ── Upload ────────────────────────────────────────────────────────────────────
 function onDrop(e) {
   isDragging.value = false
@@ -119,9 +128,9 @@ function onFileInput(e) {
 
 async function handleFiles(rawFiles) {
   error.value = ''
-  const oversized = rawFiles.filter(f => f.size > 10 * 1024 * 1024)
+  const oversized = rawFiles.filter(f => f.size > maxFileSize.value)
   if (oversized.length) {
-    error.value = `${oversized.map(f => f.name).join(', ')} exceeds 10MB limit.`
+    error.value = `${oversized.map(f => f.name).join(', ')} exceeds ${maxFileSizeMB.value}MB limit.`
     return
   }
 

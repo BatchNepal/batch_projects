@@ -1016,7 +1016,7 @@ def _notify_comment(payload, actor, task_name, project):
 
     task_key = frappe.db.get_value("BP Task", task_name, "task_key") or task_name
 
-    # Commenting auto-subscribes you to the issue (Jira behaviour)
+    # Commenting auto-subscribes user to the issue
     add_watcher(task_name, actor)
 
     # Mentioned users get a dedicated "Mention" (takes priority over a plain comment notif)
@@ -1057,7 +1057,7 @@ def _notify_assignment(payload, actor, task_name, project):
     task_key   = task_data.get("task_key") or task_name
     task_title = task_data.get("title")    or task_name
     message = f"{actor_name} assigned you to {task_key}: {task_title}"
-    add_watcher(task_name, assigned_user)  # auto-watch on assignment (Jira behaviour)
+    add_watcher(task_name, assigned_user)  # auto-watch on assignment
     _create_notification(
         assigned_user, "Assignment", task_name, project, actor, message,
         email_extras={
@@ -1549,6 +1549,18 @@ _VIEW_FILTER_MAP = {
     "filterPriority": "priority", "filterType": "task_type",
     "filterAssignee": "assignee", "filterLabel": "labels",
 }
+
+def _digest_task_rows(tasks: list, limit: int = 15) -> str:
+    """Build a simple HTML table of tasks for digest / summary emails."""
+    rows = []
+    for t in tasks[:limit]:
+        key = frappe.utils.escape_html(t.get("task_key") or "")
+        title = frappe.utils.escape_html(t.get("title") or "")
+        url = _task_url(t.get("project"), t.get("task_key"))
+        rows.append(f'<tr><td><a href="{url}">{key}</a></td><td>{title}</td></tr>')
+    if len(tasks) > limit:
+        rows.append(f'<tr><td colspan="2" style="text-align:center">…and {len(tasks) - limit} more</td></tr>')
+    return f'<table style="width:100%;border-collapse:collapse;">{"".join(rows)}</table>'
 
 
 def _send_view_subscriptions(frequency: str):

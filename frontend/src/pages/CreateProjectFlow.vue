@@ -3,7 +3,7 @@
 
     <!-- ── Top bar ──────────────────────────────────────────────────── -->
     <div class="shrink-0 border-b border-separator bg-surface">
-      <div class="max-w-6xl mx-auto w-full px-8 h-16 flex items-center justify-between">
+      <div class="max-w-[1980px] w-[90%] mx-auto px-8 h-16 flex items-center justify-between">
         <div class="min-w-0">
           <h2 class="text-xl font-bold text-foreground whitespace-nowrap leading-tight">Create a new project</h2>
           <p class="text-[12.5px] text-muted mt-0.5 truncate">{{ STEP_SUBTITLES[step - 1] }}</p>
@@ -49,7 +49,7 @@
          scrollbar-gutter:stable — steps differ in height, so without it the
          scrollbar pops in/out and shifts the preview pane horizontally. -->
     <div class="flex-1 overflow-y-auto" style="scrollbar-gutter: stable">
-      <div class="max-w-6xl mx-auto w-full px-8 py-8 lg:grid lg:grid-cols-[440px_1fr] lg:gap-16 items-start">
+      <div class="max-w-7xl mx-auto w-full px-8 py-8 lg:grid lg:grid-cols-[440px_1fr] lg:gap-16 items-start">
 
         <!-- LEFT — step content -->
         <div class="min-w-0">
@@ -492,7 +492,7 @@ function cancel() {
 
 .cp-label { display: block; font-size: 13px; font-weight: 500; color: var(--foreground); margin-bottom: 6px; line-height: 1.3; }
 
-/* ── Template rows (Jira-style full-width rows, HeroUI v2 skin) ──────
+/* ── Template rows ( full-width rows, HeroUI v2 skin) ──────
    Dense list → shadow-small at rest, shadow-medium only on hover. */
 .cp-row {
   box-shadow: var(--surface-shadow-sm);
@@ -517,8 +517,7 @@ function cancel() {
    The previous `0 0 0 1.5px var(--accent)` drew a 1.5px ring around the whole
    card, which reads as a browser focus outline rather than a chosen item —
    and it was indistinguishable from the :focus-visible state directly above.
-   Monday/Jira both tint the row instead; the ring drops to 1px so the
-   selected card no longer looks 0.5px larger than its neighbours. */
+ */
 .cp-row--selected,
 .cp-row--selected:hover {
   background: var(--accent-soft);

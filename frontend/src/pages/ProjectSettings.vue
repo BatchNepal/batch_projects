@@ -657,7 +657,7 @@
             </p>
 
             <div class="bp-set-card">
-              <EmptyState v-if="!projectMembers.length" :icon="Users"
+              <EmptyState v-if="!projectMembers.length" image="/images/projs/bp-team.png"
                 title="No members yet"
                 description="Add an org member or invite someone by email to start collaborating." />
               <div v-for="m in projectMembers" :key="m.user"
@@ -2229,7 +2229,7 @@ function goBack() {
 .tabs-scroll { -ms-overflow-style: none; scrollbar-width: none; }
 .tabs-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
-/* Settings row group → bordered card, inset rows (Stripe/Jira register).
+/* Settings row group → bordered card, inset rows.
    Rows inside keep their py-4; the card supplies the frame + h-padding. */
 /* Settings sections = airy divided lists. NO container box, NO gray panel —
    structure from whitespace + hairline rows; only the form controls carry an

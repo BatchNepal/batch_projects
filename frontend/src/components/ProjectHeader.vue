@@ -471,7 +471,7 @@ function _patchCurrentProject(fields) {
   if (p) Object.assign(p, fields)
 }
 
-// ── Tab drag-reorder (Monday-style: drag directly in the header strip) ──
+// ── Tab drag-reorder (drag directly in the header strip) ──
 const _dragTab  = ref(null)
 const _dropTab  = ref(null)
 const _dropSide = ref('left')

@@ -6,7 +6,7 @@
 
 @layer base {
   * {
-    font-family: "Inter", sans-serif !important;
+    font-family: "Inter" , sans-serif !important;
   }
   /* Class specificity (0,1,0) beats the universal `* !important` (0,0,0),
      so mono survives the nuclear sans rule above. */
@@ -64,6 +64,40 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 body:focus-visible,
 [tabindex="-1"]:focus-visible {
   outline: none;
+}
+
+/* Suppress the global *:focus-visible outline and any browser default focus
+   ring on form fields. Individual components handle their own focus styling
+   (border-color, box-shadow, or wrapper rings). Without this, the global
+   outline or browser default draws only around the bare <input> box
+   (excluding icons), creating a double-ring effect. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* But inputs INSIDE .hui-field should NOT get this — the wrapper already
+   handles the focus ring via :focus-within. The global outline above would
+   otherwise double up on the bare <input> inside the wrapper. */
+.hui-field input:focus-visible,
+.hui-field textarea:focus-visible,
+.hui-field select:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Rich text editors (TipTap) use contenteditable divs. The .rte-wrap.rte-focused
+   class handles the border + box-shadow ring. Suppress the global outline on
+   contenteditable elements and anything inside .rte-wrap to avoid double-ringing. */
+[contenteditable]:focus-visible,
+[contenteditable="true"]:focus-visible,
+.rte-wrap :focus-visible,
+.rte-wrap:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 /* .hui-field (Input/Select/Combobox's composite icon+field+button wrapper)
@@ -373,7 +407,7 @@ section[aria-label^="Notifications"] [data-sonner-toast] {
 
 /* ── Field language: OUTLINED (user-picked via Design Lab iterations).
    White bg, crisp 2px border (--field-border), rounded-md. Hover darkens
-   the border toward text color (monday pattern). Focus = accent border
+   the border toward text color. Focus = accent border
    doubled with a 1px ring for a 2px read. ONE recipe for Input, Select
    trigger, Textarea, and raw inputs. */
 .hui-field {
@@ -404,4 +438,11 @@ section[aria-label^="Notifications"] [data-sonner-toast] {
 }
 @media (prefers-reduced-motion: reduce) {
   .hui-field { transition: none; }
+}
+
+.ct-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: #050c1f75 !important;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
 }

@@ -135,7 +135,7 @@
 
   /* Foreground — Brex --color-content-primary:#15191e (near-black ink,
      not grey-700). */
-  --foreground: #15191e;
+  --foreground: #292a2e;
 
   /* Surfaces (cards, panels) — --surface was already effectively #fff via
      var(--white); --surface-secondary retuned to Brex's
@@ -154,13 +154,14 @@
   --overlay-foreground: var(--foreground);
 
   /* Muted text — Brex --color-content-secondary:#60646c. */
-  --muted: #60646c;
+  --muted: #6b6e76;
+  --subtle-text: #505258;
   /* Third ink tier — Brex --color-content-tertiary:#6f737b — feeds
      --field-placeholder below (was a separate oklch guess). */
   --muted-tertiary: #6f737b;
 
   /* Default (neutral interactive) */
-  --default:            oklch(0.93 0.004 264);
+  --default:            oklch(0.96 0 284);
   --default-foreground: var(--eclipse);
   --default-hover:      oklch(0.885 0.006 264);
 
@@ -204,7 +205,7 @@
   --info-soft-foreground:oklch(0.42 0.16 293);
   --info-soft-hover:     oklch(0.62 0.20 293 / 0.19);
 
-  /* Form fields — OUTLINED language (user-picked, monday-style):
+  /* Form fields — OUTLINED language (user-picked):
      white bg, crisp 1px border, hover darkens border toward text,
      focus = accent border (doubled via 1px ring for a 2px read).
      Phase 22F: --field-border retuned to Brex's tinted-translucent
@@ -212,12 +213,12 @@
      #C3C6D4 was chosen specifically to avoid a too-faint prior bug; that
      concern doesn't apply to a CALIBRATED tint (real alpha value from
      Brex's own CSS, not the old broken one), so it converts too. */
-  --field-background:    var(--white);
+  --field-background:    oklch(0.98 0 68);
   --field-foreground:    var(--foreground);
   --field-placeholder:   var(--muted-tertiary);
   --field-border:        #abacb1;
-  --field-hover:         var(--white);
-  --field-focus:         var(--white);
+  --field-hover:         oklch(0.98 0 68);
+  --field-focus:         oklch(0.98 0 68);
   --field-border-hover:  rgba(97, 106, 136, 0.4);
   --field-border-focus:  var(--accent);
   --field-radius:        var(--radius-md); /* 6px — rounded-md */
@@ -251,8 +252,8 @@
   --row-h:            40px;
 
 
-  /* Backdrop */
-  --backdrop: oklch(0 0 0 / 0.42);
+  /* Backdrop — neutral black, no blue tint */
+  --backdrop: rgba(0, 0, 0, 0.46);
 
   /* Scrollbar */
   --scrollbar-thumb: oklch(0.78 0.006 264);
@@ -412,8 +413,8 @@
   --link:  var(--accent);
 
 
-  /* Backdrop */
-  --backdrop: oklch(0 0 0 / 0.62);
+  /* Backdrop — neutral black, darker in dark mode for contrast */
+  --backdrop: rgba(0, 0, 0, 0.65);
 
   /* Scrollbar */
   --scrollbar-thumb: oklch(0.35 0.009 264);
@@ -444,7 +445,7 @@
    mode, where black on near-black is invisible.
 
    Family A wins — it's the tuned, theme-aware one, and its layered
-   contact + ambient + hairline structure is the Jira/Monday/Wrike register.
+   contact + ambient + hairline structure.
    Family B is kept as ALIASES so the ~20 existing `shadow-md`/`shadow-lg`/
    `shadow-popover` call sites keep working and instantly become theme-aware,
    with no component edits. One ladder, two vocabularies pointing at it. */
@@ -483,7 +484,7 @@
 
 /* ONE motion scale. Pick by the SIZE OF THE THING MOVING, not by feel:
    the further an element travels and the more of the screen it covers, the
-   longer it takes — this is the Atlassian/Monday rule and it's what makes
+   longer it takes — this is the BatchNepal rule and it's what makes
    motion read as one system rather than per-component taste.
 
    Retuned because the kit had 17 different ad-hoc durations (130ms ×14,
@@ -493,7 +494,7 @@
    own terms: --duration-modal (180ms) was FASTER than --duration-slow
    (220ms), so a full-screen modal animated quicker than a dropdown.
 
-   Values sit in the Jira/Monday band — fast enough to feel instant on
+   Values that are fast enough to feel instant on
    micro-feedback, slow enough that large surfaces don't snap. */
 :root {
   --duration-instant: 70ms;   /* press/active — must feel like contact, not animation */

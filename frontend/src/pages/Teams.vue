@@ -1,25 +1,28 @@
 <template>
-  <div class="min-h-full bg-[var(--background)] font-sans text-[var(--foreground)]">
+  <div class="min-h-full font-sans text-[var(--foreground)]">
     <div class="max-w-[1600px] mx-auto px-6 py-6">
 
       <!-- ── Header ─────────────────────────────────────────────────── -->
       <header class="flex items-center justify-between mb-6 gap-4">
         <div>
-          <h1 class="text-xl font-semibold text-foreground leading-7">Teams</h1>
+          <h1 class="text-2xl font-bold text-foreground leading-7">Teams</h1>
           <p class="mt-0.5 text-sm text-muted">
+            Manage teams, members, and projects in one place.
+          </p>
+          <!-- <p class="mt-0.5 text-sm text-muted">
             {{ teams.length }} team{{ teams.length !== 1 ? 's' : '' }}
             <template v-if="totalMembers">
               · {{ totalMembers }} member{{ totalMembers !== 1 ? 's' : '' }}
             </template>
-          </p>
+          </p> -->
         </div>
         <button
           type="button"
-          class="flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-accent hover:bg-accent-hover active:scale-[0.97] text-white text-xs font-semibold transition-colors duration-100"
+          class="flex items-center gap-1.5 h-8 px-3.5 rounded-md bg-accent hover:bg-accent-hover active:scale-[0.97] text-white text-xs font-semibold transition-colors duration-100"
           @click="showCreate = true"
         >
           <Plus :size="13" :stroke-width="2.5" class="-ml-0.5" />
-          New team
+          Create team
         </button>
       </header>
 
@@ -87,7 +90,7 @@
       <!-- ── Empty ─────────────────────────────────────────────────── -->
       <div v-else-if="!teams.length" class="bg-overlay rounded-lg border border-border overflow-hidden">
         <EmptyState
-          :icon="UsersRound"
+          image="/images/projs/bp-team.png"
           title="No teams yet"
           description="Create a team to group projects and members and track workload together."
         >

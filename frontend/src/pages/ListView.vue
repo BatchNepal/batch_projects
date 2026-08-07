@@ -989,7 +989,7 @@ const hiddenCols = ref(new Set(DEFAULT_HIDDEN))
 const cw         = reactive({ cb:36, title:400, ...Object.fromEntries(ALL_COLS.map(c=>[c.key,c.defaultWidth])) })
 const density    = ref('default')
 
-// ERPNext data columns (monday "Connect"-style): user-added, persisted.
+// ERPNext data columns ( user-added, persisted.
 // Entries: { doctype, twoWay } — twoWay also backlinks the ERP document.
 const erpCols = ref([])
 // Mirror columns project whitelisted fields of connected docs: {doctype, field}
@@ -1000,7 +1000,7 @@ const mirrorData = reactive({}) // {doctype: {ref_name: {field: value}}}
 function dtAbbr(dt){ return dt.split(' ').map(w => w[0]).join('').toUpperCase() }
 function mirrorFieldMeta(dt, field){ return (mirrorSchema.value[dt] || []).find(f => f.fieldname === field) }
 
-// Custom fields → first-class columns (monday/Jira style)
+// Custom fields → first-class columns
 const CF_WIDTHS = { number: 100, date: 130, select: 150, multiselect: 190, textarea: 200 }
 const cfDefs = computed(() => (store.customFieldsSchema || []).map(f => ({
   key: 'cf:' + f.id, label: f.label, sortField: null,
@@ -1333,7 +1333,7 @@ function groupColor(g,k){
   return null
 }
 
-// Monday-style group summaries (sum / counts) shown inline in the group heading.
+// Group summaries (sum / counts) shown inline in the group heading.
 // Only surfaces aggregates for columns that are currently visible.
 function groupSummaries(group){
   const items = group.issues || []
@@ -1359,7 +1359,7 @@ function groupSummaries(group){
 
 // ── Cell helpers ──────────────────────────────────────────────────────────────
 // Status colors are arbitrary hex the user picks in Project Settings — a
-// fixed white label (Monday's own approach) fails on light picks (yellow,
+// fixed white label  fails on light picks (yellow,
 // mint), so pick white/near-black by relative luminance instead of assuming.
 function _readableOn(hex){
   const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex||'')
@@ -1530,7 +1530,7 @@ async function createSprintInline(issue, name) {
   }
 }
 
-// ── monday-style inline add + group summaries ───────────────────────────────
+// ──  inline add + group summaries ───────────────────────────────
 const addingIn=ref(null), newTitle=ref('')
 async function addInline(group){
   const t=newTitle.value.trim(); if(!t) return
@@ -2168,7 +2168,7 @@ thead .lv-sticky {
   width:100%;
   height:100%;
 }
-/* Status — full-bleed color fill across the whole cell (Monday-style),
+/* Status — full-bleed color fill across the whole cell,
    text color picked for contrast per-status (see _readableOn). */
 .lv-status-pill {
   display:flex;
@@ -2230,7 +2230,7 @@ thead .lv-sticky {
   background:var(--surface-secondary);
 }
 
-/* ── Full-cell editing (Excel / Monday) ──────────────────────────────────────
+/* ── Full-cell editing  ──────────────────────────────────────
    The whole cell is the click/edit target: the field control fills the cell,
    left-aligned with a consistent inset, and the cell shows a subtle ring on
    hover so it reads as editable. */

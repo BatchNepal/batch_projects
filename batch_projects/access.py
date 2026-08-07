@@ -181,7 +181,7 @@ def require(project: str, min_role: str, user: str | None = None) -> None:
 # update_task just appends a row to BP Task.assignees, no check) — but
 # get_effective_role only ever resolves membership/visibility on the
 # PROJECT, so an assignee with no other standing on the project couldn't
-# open the very task they were assigned. Mirrors how Jira/Asana/Monday treat
+# open the very task they were assigned. Mirrors how big companies treat
 # "assigned to me": implicit access to that one row, never the parent
 # project or its other tasks. Deliberately narrow — only wired into the
 # single-task endpoints that need it (board.get_task/update_task, timers.

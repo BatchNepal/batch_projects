@@ -4,7 +4,7 @@ batch_projects/api/project_templates.py
 user-defined project templates: "save as template" → "create from
 template", on top of the hardcoded 11 built-ins in setup/project_templates.py.
 
-Snapshot doctype, not a live copy-source project (Odoo's model) — our
+Snapshot doctype, not a live copy-source project  — our
 projects carry ERP wiring (erpnext_project, source_sales_order), members, and
 counters that must NEVER leak into a template. `save_project_as_template`
 copies exactly the JSON shape blobs BP Project already stores
@@ -12,8 +12,7 @@ copies exactly the JSON shape blobs BP Project already stores
 automation/custom-field snapshot — never client, company, erpnext_project,
 source_sales_order, or members.
 
-Dates are stored as offsets from the source project's start_date (Asana/
-Monday/Wrike convention), recomputed against the new project's start_date at
+Dates are stored as offsets from the source project's start_date, recomputed against the new project's start_date at
 create time — Odoo copies deadlines verbatim, we do better.
 
 Same house pattern as api/task_templates.py: _guard(), require_feature

@@ -57,7 +57,7 @@
                 <span v-if="dayW >= 22">{{ d.dom }}</span>
               </div>
             </div>
-            <!-- monday-style today marker: triangle cap at the header edge,
+            <!-- triangle cap at the header edge,
                  the line itself continues in the body overlay -->
             <div v-if="todayX !== null" class="gt-today-cap" :style="{ left: todayX + 'px' }"/>
           </div>
@@ -155,7 +155,7 @@
                   <span class="gt-rsz gt-rsz-l" @pointerdown.stop="onBarDown($event, vr.row, 'resize-l')"/>
                   <span class="gt-rsz gt-rsz-r" @pointerdown.stop="onBarDown($event, vr.row, 'resize-r')"/>
 
-                  <!-- Jira-style: avatar sits INSIDE the bar at the left,
+                  <!-- Avatar sits INSIDE the bar at the left,
                        label next to it; below the width threshold both move
                        outside-right instead. -->
                   <template v-if="vr.row.bar.w >= 64">
@@ -253,7 +253,7 @@ const DAY_BUFFER = 10      // windowed time grid: day-cells rendered beyond the 
 const { dayW, setPreset: scaleSetPreset, fitToRange: scaleFitToRange,
         zoomAboutPointer, xOf: scaleXOf, activeGrain } = useGanttScale(32)
 
-// Monday-style Day / Week / Month / Quarter view selector.
+// Day / Week / Month / Quarter view selector.
 const GRANULARITY = [
   { v: 'day', l: 'Day' },
   { v: 'week', l: 'Week' },
@@ -801,7 +801,7 @@ function onCtxDeleted() { _silentReload() }
 const linkPreview = computed(() => {
   const d = linkDrag.value
   if (!d) return null
-  // Balanced node-editor cubic (Jira/n8n style): leaves the source dot
+  // Balanced node-editor cubic: leaves the source dot
   // horizontally, arrives at the cursor horizontally from the opposite
   // side — a proper S-bend for end-to-end connections. With pointer
   // coordinates now zoom-corrected (see _timelinePoint), the tip sits
@@ -1361,7 +1361,7 @@ function scrollToToday(smooth = true) {
 .gt-day { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; font-size: var(--text-xs); color: var(--muted); border-left: 1px solid color-mix(in srgb, var(--surface-secondary) 60%, transparent); }
 .gt-day.is-weekend { color: var(--border-secondary); }
 .gt-day.is-today { color: var(--accent); font-weight: var(--font-bold); }
-/* monday-style today marker: circled date in the strip + triangle cap where
+/* today marker: circled date in the strip + triangle cap where
    the line meets the header. */
 .gt-day.is-today span {
   min-width: 20px; height: 20px; display: inline-grid; place-items: center;
@@ -1420,7 +1420,7 @@ function scrollToToday(smooth = true) {
 
 /* Timeline overlay */
 .gt-overlay { position: absolute; top: 0; z-index: 1; pointer-events: none; }
-/* monday-faint grid: the canvas must read as whitespace, not gray haze */
+/*faint grid: the canvas must read as whitespace, not gray haze */
 .gt-wkcol { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--surface-secondary) 30%, transparent); }
 .gt-todayline {
   position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent);
@@ -1455,7 +1455,7 @@ function scrollToToday(smooth = true) {
 .gt-bar.dim { opacity: .3; }
 .gt-bar.crit { box-shadow: 0 0 0 2px var(--danger), 0 1px 2px rgba(11,13,14,.1); }
 
-/* Bars — Jira timeline geometry: rounded RECT, not a pill */
+/* Bars —  rounded RECT, not a pill */
 .gt-bar {
   position: absolute; z-index: 2; pointer-events: auto; cursor: pointer;
   border-radius: 4px; display: flex; align-items: center; overflow: visible;
@@ -1476,7 +1476,7 @@ function scrollToToday(smooth = true) {
   opacity: 0; transition: opacity .15s, box-shadow .15s;
   cursor: crosshair; box-sizing: border-box;
 }
-/* Floating a few px OFF the bar (Jira/ClickUp) — a connector affordance,
+/* Floating a few px OFF the bar — a connector affordance,
    not part of the rectangle. */
 .gt-dot-l { left: -14px; }
 .gt-dot-r { right: -14px; }
@@ -1506,7 +1506,7 @@ function scrollToToday(smooth = true) {
   background: var(--accent); padding: 2px 8px; border-radius: 999px;
   box-shadow: var(--shadow-sm); font-variant-numeric: tabular-nums;
 }
-/* Done bars stay SOLID (monday/Jira behavior) — fading half the chart to
+/* Done bars stay SOLID — fading half the chart to
    55% pastel is what made the canvas read washed-out. Done-ness is the ✓. */
 .gt-bar-check {
   position: relative; z-index: 1; flex-shrink: 0; padding-right: 7px;

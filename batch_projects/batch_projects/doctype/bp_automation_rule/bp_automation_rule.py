@@ -1,7 +1,7 @@
 """
 BP Automation Rule
 ──────────────────
-A "When → If → Then" rule, in the spirit of Jira automation / Monday recipes /
+A "When → If → Then" rule, in the spirit of enterprise automation / Monday recipes /
 Asana rules / Odoo base_automation — v2: workspace scope + ordered
 multi-action list + richer triggers.
 

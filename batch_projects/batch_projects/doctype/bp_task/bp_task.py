@@ -83,9 +83,7 @@ class BPTask(Document):
         """Auto-check Unplanned the moment a task is assigned into a sprint
         that's already Active — mid-sprint scope creep, the thing the column
         exists to surface. Stays a plain Check afterward: the user can
-        un-flag it (e.g. it was actually agreed at planning) same as Monday's
-        column is a manual toggle, this just seeds the common case instead of
-        starting everything unchecked."""
+        un-flag it """
         if not self.sprint:
             return
         old = self.get_doc_before_save()

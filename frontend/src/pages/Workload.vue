@@ -71,7 +71,7 @@
       <div v-else-if="!members.length" class="bg-overlay rounded-md overflow-hidden"
         style="box-shadow:0 2px 4px 0 rgba(0,0,0,0.04),0 1px 2px 0 rgba(0,0,0,0.06),0 0 1px 0 rgba(0,0,0,0.06)">
         <EmptyState
-          :icon="UsersRound"
+          image="/images/projs/bp-team.png"
           title="No members found"
           description="Add members to a project or team to see workload data."
         />

@@ -85,7 +85,7 @@
             @blur="saveTitle" @keydown.enter.prevent="titleEl?.blur()" @keydown.escape="titleEl?.blur()">{{ issue.title }}</h1>
         </div>
 
-        <!-- Action bar (Jira-style transition buttons) -->
+        <!-- Action bar (transition buttons) -->
         <div class="jv-action-bar">
           <FieldDropdown width="w-44">
             <template #trigger>
@@ -1307,7 +1307,7 @@ function addCheck() {
     if (mySeq !== checklistSeq) return
     checklistItems.value = r.items || []
     // The new row is whichever id wasn't there before — focus it so typing
-    // can start immediately, matching Jira/Monday's "add item" feel.
+    // can start immediately, matching "add item" feel.
     const added = checklistItems.value.find(i => !previousIds.has(i.id))
     if (added) nextTick(() => checklistInputs.get(added.id)?.focus())
   }).catch(() => {})

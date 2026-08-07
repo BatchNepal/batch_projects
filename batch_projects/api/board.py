@@ -1580,7 +1580,7 @@ def duplicate_task(issue):
 
 @frappe.whitelist()
 def move_task_to_project(issue, target_project):
-    """Re-parent a task into a different project (Jira-style "Move").
+    """Re-parent a task into a different project.
 
     task_key is regenerated under the target project's own counter/prefix —
     the old key stops resolving. Fields that only make sense inside the

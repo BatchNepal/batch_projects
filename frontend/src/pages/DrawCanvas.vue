@@ -15,7 +15,7 @@
       </div>
 
       <div class="flex items-center gap-3 shrink-0">
-        <!-- Who else has this drawing open right now — Jira/Monday-style
+        <!-- Who else has this drawing open right now — 
              avatar row with a live-presence dot. Only OTHER people show
              here; your own presence is implicit (you're looking at it). -->
         <div v-if="presentUsers.length" class="flex items-center -space-x-1.5">

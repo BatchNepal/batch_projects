@@ -423,9 +423,7 @@
                   </div>
                 </div>
                 <div v-else class="flex flex-col items-center gap-3 py-8 text-center">
-                  <div class="w-11 h-11 rounded-full bg-primary-50 flex items-center justify-center">
-                    <Users class="w-5 h-5 text-primary-400" />
-                  </div>
+                  <img src="/images/projs/bp-team.png" alt="" class="h-24 w-auto opacity-80" />
                   <div>
                     <p class="text-sm font-semibold text-foreground">No members yet</p>
                     <p class="text-xs text-muted mt-0.5">Invite someone to join this team</p>
@@ -739,9 +737,7 @@
             </div>
           </div>
           <div v-else class="flex flex-col items-center justify-center gap-3 min-h-[220px] text-center">
-            <div class="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center">
-              <Users class="w-6 h-6 text-primary-400" />
-            </div>
+            <img src="/images/projs/bp-team.png" alt="" class="h-28 w-auto opacity-80" />
             <div>
               <p class="text-sm font-semibold text-foreground">No members yet</p>
               <p class="text-xs text-muted mt-0.5">Add your first team member to get started</p>

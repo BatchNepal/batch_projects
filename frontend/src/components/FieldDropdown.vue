@@ -8,18 +8,20 @@
     <!-- Dropdown -->
     <Teleport to="body">
       <Transition
-        enter-active-class="transform transition-all duration-200 ease-fluid"
+        enter-active-class="transform transition-[opacity,transform] duration-200 ease-fluid"
         enter-from-class="opacity-0 scale-95"
         enter-to-class="opacity-100 scale-100"
-        leave-active-class="transform transition-all duration-100 ease-in"
+        leave-active-class="transform transition-[opacity,transform] duration-100 ease-in"
         leave-from-class="opacity-100 scale-100"
         leave-to-class="opacity-0 scale-95"
+        @after-enter="position"
+        @enter-cancelled="position"
       >
         <div v-if="isOpen"
           ref="dropEl"
           :style="dropStyle"
           class="bp-overlay fixed z-dropdown bg-overlay rounded-lg shadow-overlay overflow-hidden"
-          :class="widthClass"
+          :class="[widthClass, !ready && 'invisible']"
           @click.stop>
           <!-- Search slot (optional) -->
           <slot name="search"/>
@@ -47,6 +49,7 @@ const emit = defineEmits(['open', 'close'])
 const rootEl = ref(null)
 const dropEl = ref(null)
 const isOpen = ref(false)
+const ready = ref(false)
 const dropStyle = ref({})
 
 const widthClass = computed(() => props.width)
@@ -54,34 +57,49 @@ const widthClass = computed(() => props.width)
 async function toggle() {
   if (isOpen.value) { close(); return }
   isOpen.value = true
+  ready.value = false
   emit('open')
   await nextTick()
   position()
+  // Reveal only AFTER the panel is positioned at its final spot — otherwise
+  // the first frame renders at the body default (no top/left yet) and the
+  // panel visibly jumps/flashes into place.
+  ready.value = true
 }
 
 function close() {
   isOpen.value = false
+  ready.value = false
   emit('close')
 }
 
 function position() {
   if (!rootEl.value || !dropEl.value) return
   const rect = rootEl.value.getBoundingClientRect()
-  const drop = dropEl.value.getBoundingClientRect()
+  // offsetWidth/offsetHeight give LAYOUT size, unaffected by the enter
+  // transition's `scale(0.95)` transform — getBoundingClientRect would
+  // measure the scaled box mid-animation and mis-place right-aligned /
+  // flip-up panels.
+  const dw = dropEl.value.offsetWidth
+  const dh = dropEl.value.offsetHeight
   const vw = window.innerWidth
   const vh = window.innerHeight
 
   let top = rect.bottom + 4
-  let left = props.align === 'right' ? rect.right - drop.width : rect.left
+  let left = props.align === 'right' ? rect.right - dw : rect.left
 
   // Flip up if too close to bottom
-  if (top + drop.height > vh - 8) top = rect.top - drop.height - 4
+  if (top + dh > vh - 8) top = rect.top - dh - 4
 
   // Keep within horizontal bounds
-  if (left + drop.width > vw - 8) left = vw - drop.width - 8
+  if (left + dw > vw - 8) left = vw - dw - 8
   if (left < 8) left = 8
 
-  dropStyle.value = { top: `${top}px`, left: `${left}px`, minWidth: `${rect.width}px` }
+  // `w-full` on a teleported-to-body dropdown would mean 100% of the VIEWPORT,
+  // not the trigger. Resolve it to the trigger's actual pixel width so the
+  // panel hugs its field (e.g. full-width selects in modals/drawers).
+  const width = props.width === 'w-full' ? `${rect.width}px` : undefined
+  dropStyle.value = { top: `${top}px`, left: `${left}px`, minWidth: `${rect.width}px`, width }
 }
 
 function onOutside(e) {

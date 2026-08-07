@@ -1,7 +1,7 @@
 """
 batch_projects/api/invitations.py
 ─────────────────────────────────
-Jira/Wrike-style project invitations: invite by email, pending until accepted,
+Project invitations: invite by email, pending until accepted,
 role chosen at invite time, revocable, with a clear accept flow.
 
 Authorization is the unified model (batch_projects.access):

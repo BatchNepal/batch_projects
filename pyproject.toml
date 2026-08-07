@@ -1,7 +1,7 @@
 [project]
 name = "batch_projects"
 authors = [{name = "BatchNepal Consultancy", email = "hello@batchnepal.com"}]
-description = "Jira-class Project Management for ERPNext"
+description = "Enterprise Project Management for ERPNext"
 requires-python = ">=3.10"
 dynamic = ["version"]
 

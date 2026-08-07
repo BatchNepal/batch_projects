@@ -918,7 +918,7 @@ const priorityChartItems = computed(() => {
     .map(k => ({ label: PRIORITY_PILL[k].label, value: counts[k], color: PRIORITY_PILL[k].color }))
 })
 
-// ── Types of work — plain % list (InlineProgress), matching how Jira
+// ── Types of work — plain % list (InlineProgress),
 // itself renders this (no chart needed for 2-4 categories) ──────────────
 const workTypeItems = computed(() => {
   const counts = {}

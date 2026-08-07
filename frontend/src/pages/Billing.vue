@@ -460,8 +460,6 @@ const TIER_RANK = { starter: 0, growth: 1, pro: 1, team: 1, business: 2, enterpr
 
 // Grouped by category (matches every competitor's pattern — a flat 27-row
 // list is unscannable). ERP & Finance gets its own section deliberately:
-// it's the one category no generic PM tool (Jira/Monday/Asana/etc) can
-// show, because it depends on the ERPNext bridge this app is built on.
 const FEATURE_GROUPS = [
   {
     category: 'Core project management',

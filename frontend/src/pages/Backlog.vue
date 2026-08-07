@@ -425,7 +425,7 @@ const completing     = ref(false)
 const showCompleted  = ref(false)
 const showCreateForm = ref(false)
 
-// ── Sprint column catalog (Monday-style "column center") — which optional
+// ── Sprint column catalog ( "column center") — which optional
 // badges/columns show per sprint, personal + persisted, not project data.
 // Progress/dates/goal stay always-on (core, already compact). Two groups:
 // header badges (summary, shown once per sprint) and task columns (shown
