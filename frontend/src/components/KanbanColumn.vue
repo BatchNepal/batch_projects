@@ -1,70 +1,21 @@
 <template>
-  <div
-    v-if="collapsed"
-    class="group flex flex-col items-center w-12 shrink-0 bg-background-secondary rounded-xl py-4 self-stretch cursor-pointer select-none hover:bg-default transition-colors duration-200 border border-transparent hover:border-border-secondary"
-    @click="collapsed = false"
-    :title="`${title} (${issues.length})`"
+  <KanbanColumnShell
+    :title="title"
+    :count="issues.length"
+    :color="color"
+    :collapsed="collapsed"
+    @update:collapsed="collapsed = $event"
+    :drag-over="isDragOver"
   >
-    <button
-      class="mb-4 opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-muted"
-    >
-      <ChevronRight class="size-3.5" />
-    </button>
-    <span
-      class="text-[11px] font-semibold text-muted uppercase tracking-[0.15em]"
-      style="writing-mode: vertical-rl; transform: rotate(180deg)"
-    >
-      {{ title }}
-    </span>
-    <span
-      class="mt-3 text-[10px] font-bold text-muted bg-overlay border border-border shadow-sm rounded-full w-5 h-5 flex items-center justify-center"
-    >
-      {{ issues.length }}
-    </span>
-  </div>
-
-  <div
-    v-else
-    class="flex flex-col w-[330px] shrink-0 rounded-sm p-2.5 self-stretch border transition-colors duration-150"
-    :class="isDragOver ? 'bg-accent-soft border-accent' : 'bg-background-secondary border-border'"
-  >
-    <div class="flex items-center justify-between mb-2.5 px-1.5 pb-2.5 pt-1 group">
-      <div class="flex items-center gap-2.5">
-        <div class="flex items-center gap-2">
-          <span v-if="color" class="inline-block size-2 rounded-full shrink-0" :style="{ background: color }" />
-          <p class="text-[13px] font-semibold text-foreground uppercase">
-            {{ title }}
-          </p>
-        </div>
-
-        <Transition name="kc-count" mode="out-in">
-          <span
-            :key="issues.length"
-            class="text-[11px] font-medium text-muted px-2 py-0.5 rounded-full bg-default min-w-[20px] text-center"
-          >
-            {{ issues.length }}
-          </span>
-        </Transition>
-      </div>
-      <div
-        class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+    <template #header-actions>
+      <button
+        @click="$emit('add', title)"
+        class="w-6 h-6 flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-default transition-colors"
+        title="Add task"
       >
-        <button
-          @click="$emit('add', title)"
-          class="w-6 h-6 flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-default transition-colors"
-          title="Add task"
-        >
-          <Plus class="size-3.5" />
-        </button>
-        <button
-          class="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded-md text-muted hover:text-foreground hover:bg-default -ml-1"
-          @click.stop="collapsed = true"
-          title="Collapse column"
-        >
-          <ChevronLeft class="size-3" />
-        </button>
-      </div>
-    </div>
+        <Plus class="size-3.5" />
+      </button>
+    </template>
 
     <div
       ref="dropZone"
@@ -115,12 +66,13 @@
         </button>
       </div>
     </div>
-  </div>
+  </KanbanColumnShell>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import { ChevronRight, ChevronLeft, Plus } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
+import KanbanColumnShell from '@/components/KanbanColumnShell.vue'
 import TaskCard from '@/components/TaskCard.vue'
 import { useProjectStore } from '@/stores/project'
 
@@ -227,12 +179,6 @@ function onDrop (e) {
 .task-list-move {
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
-
-/* Count badge number flip */
-.kc-count-enter-active,
-.kc-count-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
-.kc-count-enter-from { opacity: 0; transform: translateY(4px) scale(0.85); }
-.kc-count-leave-to   { opacity: 0; transform: translateY(-4px) scale(0.85); }
 
 /* Empty state fade */
 .kc-empty-enter-active { transition: opacity 0.2s ease 0.1s; }
