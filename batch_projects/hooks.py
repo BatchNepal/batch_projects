@@ -10,7 +10,7 @@ app_version = "1.0.0"
 # the gateway itself at boot (via get_session_info) to refuse starting
 # against an incompatible batch_projects, and by the gateway installer to
 # resolve which gateway version to install/update to.
-gateway_min_version = "1.0.0"
+gateway_min_version = "1.0.20"
 
 add_to_apps_screen = [
     {
