@@ -2249,10 +2249,10 @@ function goBack() {
   width: 100%;
   height: 34px;
   padding: 0 10px;
-  border-radius: 9px;
+  border-radius: 6px;
   font-size: 13.5px;
   font-weight: 500;
-  color: var(--muted);
+  color: #505258;
   background: none;
   border: none;
   cursor: pointer;

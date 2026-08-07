@@ -1,42 +1,21 @@
 <template>
-  <div class="fixed inset-0 z-overlay bg-surface flex flex-col overflow-hidden">
+  <div class="fixed inset-0 z-overlay bg-gray-50 flex flex-col overflow-hidden">
 
     <!-- ── Top bar ──────────────────────────────────────────────────── -->
-    <div class="shrink-0 border-b border-separator bg-surface">
+    <div class="shrink-0 border-b border-separator shadow-sm bg-surface">
       <div class="max-w-[1980px] w-[90%] mx-auto px-8 h-16 flex items-center justify-between">
-        <div class="min-w-0">
-          <h2 class="text-xl font-bold text-foreground whitespace-nowrap leading-tight">Create a new project</h2>
-          <p class="text-[12.5px] text-muted mt-0.5 truncate">{{ STEP_SUBTITLES[step - 1] }}</p>
+        <div class="min-w-0 flex items-center gap-2">
+          <div>
+            <img src="/images/bp-logo-new.svg" class="w-8 h-8 mr-2 inline-block" />
+          </div>
+         <div>
+           <h2 class="text-lg font-bold text-foreground whitespace-nowrap leading-tight">Create New Project</h2>
+          <p class="text-[12.5px] text-muted truncate">{{ STEP_SUBTITLES[step - 1] }}</p>
+         </div>
         </div>
 
-        <div class="flex items-center gap-5 shrink-0">
-          <!-- Step indicators -->
-          <div class="flex items-center gap-2">
-            <template v-for="i in TOTAL_STEPS" :key="i">
-              <button
-                type="button"
-                :disabled="i >= step"
-                :aria-label="`Go to step ${i}: ${STEP_LABELS[i - 1]}`"
-                class="flex items-center gap-1.5 group"
-                @click="i < step && (step = i)"
-              >
-                <span
-                  class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors duration-200 shrink-0"
-                  :class="[
-                    i === step ? 'bg-accent text-white' : i < step ? 'bg-accent-soft text-accent cursor-pointer' : 'bg-default text-muted',
-                  ]"
-                >
-                  <Check v-if="i < step" :size="11" :stroke-width="3" />
-                  <template v-else>{{ i }}</template>
-                </span>
-                <span
-                  class="text-[12.5px] font-medium transition-colors duration-200 hidden sm:inline"
-                  :class="i === step ? 'text-foreground' : i < step ? 'text-muted cursor-pointer group-hover:text-foreground' : 'text-muted'"
-                >{{ STEP_LABELS[i - 1] }}</span>
-              </button>
-              <span v-if="i < TOTAL_STEPS" class="w-4 h-px shrink-0" :class="i < step ? 'bg-accent-soft-hover' : 'bg-border'" />
-            </template>
-          </div>
+        <div class="flex items-center gap-5  shrink-0">
+       
 
           <Button isIconOnly variant="light" color="default" size="sm" aria-label="Close" @click="cancel">
             <X :size="16" :stroke-width="2" />
@@ -59,10 +38,9 @@
             <div v-if="step === 1" key="s1">
               <div v-for="group in templateGroups" :key="group.label" class="mb-6">
                 <p class="flex items-center gap-1.5 text-[11px] font-bold text-foreground uppercase tracking-wider mb-2.5">
-                  <span class="w-2 h-2 rounded-full" :style="{ background: groupColor(group.label) }" />
                   {{ group.label }}
                 </p>
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-3">
                   <button
                     v-for="t in group.templates"
                     :key="t.id"
@@ -116,6 +94,7 @@
                     v-model="form.name"
                     placeholder="e.g. Website Redesign"
                     size="md"
+                    class="bg-white"
                     autofocus
                     @update:modelValue="onNameInput"
                     @keyup.enter="canContinue && next()"
@@ -187,7 +166,7 @@
         </div>
 
         <!-- RIGHT — live preview (Asana-style) -->
-        <aside class="hidden lg:block sticky top-0" aria-hidden="true">
+        <aside class="hidden lg:block sticky top-12" aria-hidden="true">
           <div class="pv rounded-md overflow-hidden">
             <!-- Mock project header -->
             <div class="px-5 pt-4 pb-0 bg-surface">
@@ -203,7 +182,7 @@
               <!-- Mock tabs -->
               <div class="flex items-center gap-5 mt-3.5">
                 <span
-                  v-for="tab in ['Summary', 'Board', 'List', 'Backlog']"
+                  v-for="tab in ['Summary', 'Board', 'List', 'Backlog', 'Money']"
                   :key="tab"
                   class="pv-tab text-[12px] pb-2"
                   :class="tab === 'Board' ? 'pv-tab--active' : 'text-muted'"
@@ -219,7 +198,6 @@
                 class="pv-col flex-1 min-w-0"
               >
                 <div class="flex items-center gap-1.5 px-1 mb-2">
-                  <span class="w-2 h-2 rounded-full shrink-0 transition-colors duration-200" :style="{ background: s.color }" />
                   <span class="text-[11px] font-semibold text-foreground uppercase tracking-wide truncate">{{ s.name }}</span>
                   <span class="text-[10px] text-muted tabular-nums">{{ PREVIEW_COUNTS[ci % 4] }}</span>
                 </div>
@@ -263,16 +241,37 @@
 
     <!-- ── Bottom nav ───────────────────────────────────────────────── -->
     <div class="shrink-0 border-t border-separator bg-surface">
-      <div class="max-w-6xl mx-auto w-full px-8 h-[68px] flex items-center justify-between gap-4">
-        <div class="flex items-center gap-3 min-w-0">
-          <Button v-if="step > 1" variant="bordered" color="default" size="sm" @click="back">
-            <template #startContent><ArrowLeft class="size-3.5" /></template>
-            Back
-          </Button>
-          <p class="text-[13px] font-medium text-muted truncate">{{ footerHint }}</p>
-        </div>
-
+      <div class="max-w-7xl mx-auto w-full px-8 h-[68px] flex items-center justify-between gap-4">
+        
+   <!-- Step indicators -->
+          <div class="flex items-center gap-2 mr-6 ">
+            <template v-for="i in TOTAL_STEPS" :key="i">
+              <button
+                type="button"
+                :disabled="i >= step"
+                :aria-label="`Go to step ${i}: ${STEP_LABELS[i - 1]}`"
+                class="flex items-center gap-1.5 group"
+                @click="i < step && (step = i)"
+              >
+                <span
+                  class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors duration-200 shrink-0"
+                  :class="[
+                    i === step ? 'bg-accent text-white' : i < step ? 'bg-accent-soft text-accent cursor-pointer' : 'bg-default text-muted',
+                  ]"
+                >
+                  <Check v-if="i < step" :size="11" :stroke-width="3" />
+                  <template v-else>{{ i }}</template>
+                </span>
+                <span
+                  class="text-[12.5px] font-medium transition-colors duration-200 hidden sm:inline"
+                  :class="i === step ? 'text-foreground' : i < step ? 'text-muted cursor-pointer group-hover:text-foreground' : 'text-muted'"
+                >{{ STEP_LABELS[i - 1] }}</span>
+              </button>
+              <span v-if="i < TOTAL_STEPS" class="w-4 h-px shrink-0" :class="i < step ? 'bg-accent-soft-hover' : 'bg-border'" />
+            </template>
+          </div>
         <div class="flex items-center gap-3 shrink-0">
+          
           <Button
             v-if="step < TOTAL_STEPS"
             color="accent" size="md"
@@ -322,7 +321,7 @@ const STEP_SUBTITLES = [
   // No emoji: the app's font stack has no colour-emoji fallback in the
   // headless/Linux render path, so this shipped as a tofu box (□) sitting in
   // the very first line a new user reads. Verified in a browser screenshot.
-  'Pick a starting point — everything here is editable later',
+  "Let's start by selecting project template.",
   'Give it a name — the preview updates as you type',
   'Fine-tune the workflow — changes preview instantly',
 ]
@@ -521,7 +520,7 @@ function cancel() {
 .cp-row--selected,
 .cp-row--selected:hover {
   background: var(--accent-soft);
-  box-shadow: 0 0 0 1px var(--accent), var(--surface-shadow-sm);
+  box-shadow: 0 0 0 1.5px var(--accent), var(--surface-shadow-sm);
 }
 .cp-row-check { animation: row-check-in 200ms var(--ease-smooth); }
 .cp-row-dot {

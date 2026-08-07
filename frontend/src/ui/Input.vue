@@ -92,7 +92,7 @@ const wrapperCls = computed(() => cn(
 ))
 
 const inputCls = computed(() => cn(
-  'flex-1 min-w-0 h-full bg-transparent outline-none px-3 rounded-[inherit]',
+  'flex-1 min-w-0 h-full bg-white outline-none px-3 rounded-[inherit]',
   'placeholder:text-[var(--field-placeholder)] text-foreground',
   FONT[props.size] ?? FONT.md,
   props.isReadOnly && 'cursor-default select-all',

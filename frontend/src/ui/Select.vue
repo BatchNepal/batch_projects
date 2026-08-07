@@ -48,7 +48,7 @@
           role="listbox"
           :aria-label="label || 'Options'"
           :style="pos"
-          class="bp-overlay fixed z-dropdown bg-overlay rounded-lg shadow-overlay p-1 outline-none overflow-y-auto"
+          class="bp-overlay fixed z-dropdown bg-white rounded-lg shadow-overlay p-1 outline-none overflow-y-auto"
           style="max-height: 280px; max-width: min(360px, calc(100vw - 16px))"
           tabindex="-1"
           @keydown="onListKey"

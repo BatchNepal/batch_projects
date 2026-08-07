@@ -411,7 +411,7 @@ section[aria-label^="Notifications"] [data-sonner-toast] {
    doubled with a 1px ring for a 2px read. ONE recipe for Input, Select
    trigger, Textarea, and raw inputs. */
 .hui-field {
-  background-color: var(--field-background);
+  background-color: #fff;
   border-width: 1px;
   border-style: solid;
   border-color: #e5e9f2;
