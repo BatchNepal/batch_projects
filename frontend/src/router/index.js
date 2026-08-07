@@ -127,6 +127,27 @@ const routes = [
     path: "/workspace/dashboard",
     redirect: "/workspace/reports/dashboard",
   },
+  // ── Dashboards: Wrike-style live/glance boards — separate from Reports
+  // above (scheduled/exportable, BP Report). See BP Dashboard. ──
+  {
+    path: "/workspace/dashboards",
+    redirect: "/workspace/dashboards/dashboard",
+  },
+  {
+    path: "/workspace/dashboards/dashboard",
+    name: "Dashboards",
+    component: () => import("@/pages/Dashboards.vue"),
+  },
+  {
+    path: "/workspace/dashboards/:dashboardId",
+    name: "DashboardView",
+    component: () => import("@/pages/DashboardView.vue"),
+  },
+  {
+    path: "/workspace/dashboards/:dashboardId/widget/:widgetId",
+    name: "WidgetPage",
+    component: () => import("@/pages/WidgetPage.vue"),
+  },
   {
     path: "/workspace/workload",
     name: "Workload",
@@ -136,6 +157,11 @@ const routes = [
     path: "/workspace/margin",
     name: "MarginReport",
     component: () => import("@/pages/MarginReport.vue"),
+  },
+  {
+    path: "/workspace/batch-invoicing",
+    name: "BatchInvoicing",
+    component: () => import("@/pages/BatchInvoicing.vue"),
   },
   {
     path: "/workspace/utilization",
@@ -247,20 +273,6 @@ const routes = [
     redirect: (to) => ({ path: `/workspace/team/${to.params.key}`, query: { tab: "settings" } }),
   },
 ];
-
-// DesignLab is an internal component gallery,
-// not a product surface — it must never be reachable by any
-// client on a production install. import.meta.env.DEV is replaced at build
-// time (Vite), so this route (and the dynamic import that pulls in
-// DesignLab.vue's code) is entirely absent from a production bundle rather
-// than merely hidden from navigation.
-if (import.meta.env.DEV) {
-  routes.push({
-    path: "/workspace/design-lab",
-    name: "DesignLab",
-    component: () => import("@/pages/DesignLab.vue"),
-  });
-}
 
 const router = createRouter({
   history: createWebHistory(),
