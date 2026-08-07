@@ -3696,7 +3696,7 @@ def create_project(
     frappe.db.sql(
         """INSERT INTO `tabBP Project Member`
                (name, parent, parenttype, parentfield, idx, user, role, creation, modified, owner, modified_by)
-           VALUES (%s, %s, 'BP Project', 'members', 1, %s, 'BP Admin', NOW(), NOW(), %s, %s)""",
+           VALUES (%s, %s, 'BP Project', 'members', 1, %s, 'Admin', NOW(), NOW(), %s, %s)""",
         (frappe.generate_hash(length=10), doc.name, creator, creator, creator),
     )
     frappe.db.commit()
@@ -4599,7 +4599,9 @@ def get_sla_breaches(task=None, project=None):
 
 @frappe.whitelist()
 def get_project_tree():
-    """Return all projects in a tree structure based on parent_project."""
+    """Return all projects in a tree structure based on parent_project, with
+    real delivery signal per node (task progress, lead, due date) — a WBS
+    tree is meant to show organizational/delivery structure, not just names."""
     _require_system_user()
     # Access filter — otherwise a private/team project's name and
     # position in the WBS leaks to anyone with no access to it.
@@ -4610,8 +4612,33 @@ def get_project_tree():
     projects = frappe.get_all("BP Project",
         filters=proj_filters,
         fields=["name", "project_name", "key", "parent_project",
-                "status", "project_color", "theme"],
+                "status", "project_color", "theme", "lead", "target_end_date",
+                "workflow_states"],
         order_by="name asc")
+
+    # Same grouped-count pattern as get_projects() — one query for every
+    # project's task totals instead of 2N queries.
+    status_counts_by_project = {}
+    if projects:
+        rows = frappe.db.sql(
+            """
+            SELECT project, status, COUNT(*) AS cnt
+            FROM `tabBP Task`
+            WHERE project IN %(projects)s
+            GROUP BY project, status
+            """,
+            {"projects": [p["name"] for p in projects]},
+            as_dict=True,
+        )
+        for r in rows:
+            status_counts_by_project.setdefault(r["project"], {})[r["status"]] = r["cnt"]
+
+    leads = {p["lead"] for p in projects if p.get("lead")}
+    lead_names = {}
+    if leads:
+        for u in frappe.get_all("User", filters={"name": ["in", list(leads)]}, fields=["name", "full_name"]):
+            lead_names[u["name"]] = u["full_name"] or u["name"]
+
     # Build tree
     children = {}
     for p in projects:
@@ -4620,8 +4647,17 @@ def get_project_tree():
     def _build(node_key):
         out = []
         for p in children.get(node_key, []):
-            row = {"name": p.name, "project_name": p.project_name, "key": p.key,
-                   "status": p.status, "color": p.project_color, "theme": p.theme}
+            by_status = status_counts_by_project.get(p["name"], {})
+            completed = set(_get_completed_statuses(p))
+            total = sum(by_status.values())
+            done = sum(cnt for status, cnt in by_status.items() if status in completed)
+            row = {
+                "name": p.name, "project_name": p.project_name, "key": p.key,
+                "status": p.status, "color": p.project_color, "theme": p.theme,
+                "task_count": total, "done_count": done,
+                "lead": p.lead or None, "lead_name": lead_names.get(p.lead) if p.lead else None,
+                "target_end_date": str(p.target_end_date) if p.target_end_date else None,
+            }
             subs = _build(p.name)
             if subs:
                 row["children"] = subs

@@ -230,13 +230,6 @@
             }}</span>
           </NavItem>
           <NavItem
-            :active="exactActive('/workspace/triage')"
-            @click="go('/workspace/triage')"
-          >
-            <template #icon><ListTodo :size="15" :stroke-width="1.5" /></template>
-            Triage
-          </NavItem>
-          <NavItem
             v-if="entitlements.canWorkspace('timesheets')"
             :active="exactActive('/workspace/timesheets')"
             @click="go('/workspace/timesheets')"
@@ -244,6 +237,64 @@
             <template #icon><Timer :size="15" :stroke-width="1.5" /></template>
             Timesheets
           </NavItem>
+
+          <!-- "More" — overflow menu for less-frequently-used surfaces
+               (Wrike keeps only a few items always visible, tucks the rest
+               behind one "More" popover instead of a long flat list). -->
+          <div class="relative">
+            <NavItem :active="moreMenuActive" data-more-menu @click="moreMenuOpen = !moreMenuOpen">
+              <template #icon><MoreHorizontal :size="15" :stroke-width="1.5" /></template>
+              More
+            </NavItem>
+            <Transition name="sb-dd">
+              <div v-if="moreMenuOpen" class="absolute left-0 top-[calc(100%+4px)] w-48 z-[60] sb-pop sb-pop--down" data-more-menu>
+                <div class="p-1">
+                  <!-- Dashboards is gated on the "dashboards" feature itself
+                       (the paid differentiator), not a workspace on/off
+                       toggle like Reports — hidden entirely below tier. -->
+                  <button v-if="entitlements.can('dashboards')" class="sb-menu-item" @click="moreMenuOpen = false; go('/workspace/dashboards/dashboard')">
+                    <LayoutDashboard :size="13" :stroke-width="1.5" class="text-muted" />
+                    Dashboards
+                  </button>
+                  <button class="sb-menu-item" @click="moreMenuOpen = false; go('/workspace/triage')">
+                    <ListTodo :size="13" :stroke-width="1.5" class="text-muted" />
+                    Triage
+                  </button>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
+          <!-- Pinned dashboards — land at the top level like a starred
+               project/report would, not nested under a "Dashboards"
+               section (the hub for ALL dashboards, pinned or not, already
+               lives in the More popover above as "Dashboards" — no need
+               for a second, redundant entry point here). -->
+          <template v-if="entitlements.can('dashboards')">
+            <button
+              v-for="d in pinnedDashboards"
+              :key="'dash-' + d.id"
+              class="group/dash relative w-full flex items-center gap-2.5 rounded-md cursor-pointer transition-colors h-[31px] pl-2.5 pr-2 mb-px text-left text-[var(--sidebar-text)] hover:bg-white/[0.06] hover:text-white"
+              :class="route.path === `/workspace/dashboards/${d.id}` ? 'bg-[var(--sidebar-active-bg)] text-white' : ''"
+              @click="go(`/workspace/dashboards/${d.id}`)"
+            >
+              <span class="shrink-0 size-[18px] rounded-[5px] grid place-items-center"
+                :style="{ background: `color-mix(in oklab, ${d.color || 'var(--accent)'} 20%, transparent)`, color: d.color || 'var(--accent)' }">
+                <component :is="iconFor(d.icon)" :size="11" :stroke-width="2" />
+              </span>
+              <span class="flex-1 text-[13px] truncate">{{ d.name }}</span>
+              <span
+                role="button"
+                tabindex="0"
+                class="w-5 h-5 flex items-center justify-center rounded text-[var(--sidebar-text)] opacity-0 group-hover/dash:opacity-100 hover:bg-white/[0.12] hover:text-white transition-[background-color,color,opacity] cursor-pointer shrink-0"
+                title="Unpin from sidebar"
+                @click.stop="dashboardsStore.togglePinned(d.id)"
+                @keydown.enter.stop.prevent="dashboardsStore.togglePinned(d.id)"
+              >
+                <PinOff :size="11" :stroke-width="2" />
+              </span>
+            </button>
+          </template>
 
           <!-- ── PROJECTS ───────────────────────────────────────── -->
           <div class="flex items-center px-2 mt-5 mb-1.5">
@@ -360,12 +411,13 @@
             Create first project
           </button>
 
+
           <!-- ── REPORTS (hidden when a workspace admin switched it off) ── -->
           <template v-if="entitlements.canWorkspace('reports')">
           <div class="px-2 mt-5 mb-1.5">
             <span
               class="text-[10.5px] font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
-              >Dashboards</span
+              >Reports</span
             >
           </div>
           <NavItem
@@ -375,7 +427,7 @@
             <template #icon
               ><FileBarChart2 :size="15" :stroke-width="1.5"
             /></template>
-            Dashboards
+            Report Builder
           </NavItem>
 
           <!-- Pinned (featured) reports -->
@@ -457,6 +509,16 @@
               ><TrendingUp :size="15" :stroke-width="1.5"
             /></template>
             Margin Report
+          </NavItem>
+          <NavItem
+            v-if="entitlements.viewMoneyAnywhere"
+            :active="exactActive('/workspace/batch-invoicing')"
+            @click="go('/workspace/batch-invoicing')"
+          >
+            <template #icon
+              ><ReceiptText :size="15" :stroke-width="1.5"
+            /></template>
+            Batch Invoicing
           </NavItem>
           <NavItem
             :active="exactActive('/workspace/utilization')"
@@ -780,9 +842,13 @@ import { ref, computed, h, defineComponent, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 import { useReportsStore } from '@/stores/reports'
+import { useDashboardsStore } from '@/stores/dashboards'
 import { useEntitlementsStore } from '@/stores/entitlements'
 import { reportIcon } from '@/utils/reportIcons'
 import { getNotificationCount, bridgeLogout } from '@/utils/api'
+import { onRealtimeEvent } from '@/utils/realtime'
+import { toast } from 'vue-sonner'
+import { playNotificationPing } from '@/composables/useNotificationSound'
 import {
   Building2,
   ChevronsUpDown,
@@ -796,6 +862,7 @@ import {
   X,
   BarChart3,
   TrendingUp,
+  ReceiptText,
   PieChart,
   LayoutGrid,
   LayoutDashboard,
@@ -828,12 +895,15 @@ import { ProjectAvatar } from '@/ui'
 
 const store = useProjectStore()
 const reportsStore = useReportsStore()
+const dashboardsStore = useDashboardsStore()
 const entitlements = useEntitlementsStore()
 const route = useRoute()
 const router = useRouter()
 
 // Featured reports pinned to the sidebar.
 const pinnedReports = computed(() => reportsStore.reports.filter(r => r.pinned))
+// Featured dashboards pinned to the sidebar — see the DASHBOARDS section below.
+const pinnedDashboards = computed(() => dashboardsStore.dashboards.filter(d => d.pinned))
 function iconFor(name) { return reportIcon(name) }
 
 // "Reports Dashboard" is active on the dashboard/list, or on a report that
@@ -846,6 +916,30 @@ const reportsActive = computed(() => {
   if (id && pinnedReports.value.some(r => r.id === id)) return false
   return true
 })
+
+// Dashboards moved into the "More" popover (see moreMenuOpen) — no pinned
+// sub-items inline in the sidebar, matching the flat single-click reference
+// (Wrike's own "More" menu has no nested items either).
+// Lights up the "More" trigger while any dashboard route is open (the
+// listing itself lives inside that popover — see "Dashboards" button
+// above — and pinned dashboards get their own top-level row instead, see
+// pinnedDashboards below, so this is only used for the More trigger now).
+//
+// Missing the same exclusion reportsActive (above) already has for pinned
+// reports: opening a PINNED dashboard also matches this startsWith check,
+// so its own sidebar row AND the More trigger both lit up active at once —
+// two "you are here" indicators for one location. Mirrors reportsActive's
+// pattern exactly: a dashboard route only counts toward More once it's
+// confirmed NOT one of the pinned rows already claiming it.
+const dashboardsActive = computed(() => {
+  const p = route.path
+  if (!p.startsWith('/workspace/dashboards')) return false
+  const id = route.params.dashboardId
+  if (id && pinnedDashboards.value.some(d => d.id === id)) return false
+  return true
+})
+const triageActive = computed(() => exactActive('/workspace/triage'))
+const moreMenuActive = computed(() => dashboardsActive.value || triageActive.value)
 
 // ── State ─────────────────────────────────────────────────────────────
 const collapsed = ref(false)
@@ -895,6 +989,7 @@ const userMenuRef = ref(null)
 const showAll = ref(false)
 const projectMenuOpen = ref(null)
 const teamMenuOpen    = ref(null)
+const moreMenuOpen    = ref(false)
 
 const MAX_VISIBLE = 6
 
@@ -903,6 +998,8 @@ defineExpose({ collapsed })
 
 // ── Notification badge ────────────────────────────────────────────────
 const unreadCount = computed(() => store.notificationCount || 0)
+const sessionUser = window?.frappe?.session?.user || ''
+let stopNotifRealtime = null
 
 // ── Workspace name ────────────────────────────────────────────────────
 const workspaceName = computed(
@@ -1022,11 +1119,17 @@ function onDocTeamMenu (e) {
   if (!e.target.closest('[data-team-menu]')) teamMenuOpen.value = null
 }
 
+// ── "More" overflow menu ────────────────────────────────────────────────
+function onDocMoreMenu (e) {
+  if (!e.target.closest('[data-more-menu]')) moreMenuOpen.value = false
+}
+
 // ── Actions ───────────────────────────────────────────────────────────
 function go (path) {
   router.push(path)
   mobileDrawerOpen.value = false
   projectMenuOpen.value = null
+  moreMenuOpen.value = false
 }
 async function logout () {
   userMenuOpen.value = false
@@ -1044,21 +1147,35 @@ onMounted(async () => {
   document.addEventListener('mousedown', onOutsideUserMenu)
   document.addEventListener('mousedown', onDocProjectMenu)
   document.addEventListener('mousedown', onDocTeamMenu)
+  document.addEventListener('mousedown', onDocMoreMenu)
   reportsStore.load().catch(() => {})
+  dashboardsStore.load().catch(() => {})
   try {
     const res = await getNotificationCount()
     store.notificationCount = res?.unread_count ?? 0
   } catch {}
-  if (window.frappe?.realtime) {
-    window.frappe.realtime.on('bp_notification_count', data => {
-      store.notificationCount = data?.unread_count ?? store.notificationCount
-    })
-  }
+  // Was window.frappe.realtime.on('bp_notification_count', ...) — dead on
+  // arrival, this SPA has no socket.io connection (window.frappe.realtime
+  // never exists here), only bp-gateway's own SSE plane. Replaced with the
+  // same connection every other live feature (board, drawings) uses;
+  // events.py's _push_notification_badge now publishes through it too.
+  stopNotifRealtime = onRealtimeEvent((payload) => {
+    if (payload?.event === 'notification.badge' && payload.recipient === sessionUser) {
+      store.notificationCount = payload.unread_count ?? store.notificationCount
+    } else if (payload?.event === 'task.assigned' && payload.assignee === sessionUser && payload.user !== sessionUser) {
+      playNotificationPing()
+      toast(`${payload.actor_name || 'Someone'} assigned you to ${payload.task_key || 'a task'}`, {
+        description: payload.title || undefined,
+      })
+    }
+  })
 })
 onUnmounted(() => {
   document.removeEventListener('mousedown', onOutsideUserMenu)
   document.removeEventListener('mousedown', onDocProjectMenu)
   document.removeEventListener('mousedown', onDocTeamMenu)
+  document.removeEventListener('mousedown', onDocMoreMenu)
+  stopNotifRealtime?.()
 })
 
 // ── Sub-components ────────────────────────────────────────────────────
