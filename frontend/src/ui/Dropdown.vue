@@ -85,7 +85,7 @@ watch(open, (v)   => {
 </script>
 
 <style scoped>
-.drop-enter-active { transition: opacity 130ms var(--ease-out), transform 130ms var(--ease-smooth); }
+.drop-enter-active { transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-smooth); }
 .drop-leave-active { transition: opacity var(--duration-fast) var(--ease-in), transform var(--duration-fast) var(--ease-in); }
 .drop-enter-from   { opacity: 0; transform: translateY(-4px) scale(0.97); }
 .drop-leave-to     { opacity: 0; transform: scale(0.97); }

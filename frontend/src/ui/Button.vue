@@ -49,6 +49,7 @@ const extraAttrs = computed(() => {
 })
 
 const SIZE = {
+  xs: { base: 'h-6 text-xs', normal: 'px-2.5 gap-1',     icon: 'w-5' },
   sm: { base: 'h-7 text-xs', normal: 'px-2.5 gap-1.5', icon: 'w-7' },
   md: { base: 'h-8 text-sm', normal: 'px-3 gap-1.5',   icon: 'w-8' },
   lg: { base: 'h-9 text-sm', normal: 'px-4 gap-2',     icon: 'w-9' },
@@ -121,10 +122,10 @@ const classes = computed(() => cn(
     border-color     var(--duration-fast) var(--ease-out),
     color            var(--duration-fast) var(--ease-out),
     box-shadow       var(--duration-fast) var(--ease-out),
-    transform        200ms var(--ease-smooth);
+    transform        var(--duration-base) var(--ease-smooth);
 }
 .btn:active {
-  transition: transform 40ms ease-out;
+  transition: transform var(--duration-instant) ease-out;
 }
 .btn-icon {
   display: contents;

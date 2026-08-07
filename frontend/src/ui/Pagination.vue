@@ -71,5 +71,5 @@ const pages = computed(() => {
 
 const SIZE_H = { sm: 'h-7 min-w-7 text-xs', md: 'h-8 min-w-8 text-sm', lg: 'h-9 min-w-9 text-sm' }
 const ICON   = { sm: 12, md: 13, lg: 14 }
-const itemCls = computed(() => cn('inline-flex items-center justify-center rounded-md font-medium select-none outline-none transition-colors duration-90 focus-visible:shadow-focus', SIZE_H[props.size] ?? SIZE_H.md))
+const itemCls = computed(() => cn('inline-flex items-center justify-center rounded-md font-medium select-none outline-none transition-colors duration-fast focus-visible:shadow-focus', SIZE_H[props.size] ?? SIZE_H.md))
 </script>

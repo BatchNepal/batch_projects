@@ -149,14 +149,21 @@ export default {
         16:   "64px",
       },
 
+      /* Every entry resolves through tokens.css so Tailwind's `shadow-*` and
+         raw `var(--shadow-*)` can never drift apart again — they were hard-
+         coded here as flat black with no dark-theme equivalent, while the
+         token layer had a tuned, theme-aware ladder. See the SHADOW SCALE
+         comment in tokens.css. */
       boxShadow: {
         none:          "none",
-        xs:            "0 1px 2px oklch(0 0 0 / 0.07)",
-        sm:            "0 1px 4px oklch(0 0 0 / 0.08), 0 1px 2px oklch(0 0 0 / 0.06)",
-        md:            "0 4px 8px oklch(0 0 0 / 0.08), 0 2px 4px oklch(0 0 0 / 0.06)",
-        lg:            "0 8px 24px oklch(0 0 0 / 0.10), 0 2px 8px oklch(0 0 0 / 0.06)",
-        xl:            "0 16px 40px oklch(0 0 0 / 0.12), 0 4px 12px oklch(0 0 0 / 0.08)",
+        xs:            "var(--shadow-xs)",
+        sm:            "var(--shadow-sm)",
+        md:            "var(--shadow-md)",
+        lg:            "var(--shadow-lg)",
+        xl:            "var(--shadow-xl)",
         surface:       "var(--surface-shadow)",
+        "surface-sm":  "var(--surface-shadow-sm)",
+        "surface-hover":"var(--surface-shadow-hover)",
         overlay:       "var(--overlay-shadow)",
         field:         "var(--field-shadow)",
         focus:         "var(--shadow-focus)",
@@ -222,20 +229,34 @@ export default {
         "toast-out":       "toast-out 0.16s cubic-bezier(0.4, 0, 1, 1) forwards",
       },
 
+      /* Mirrors the motion scale in tokens.css — same values, so `duration-fast`
+         and `var(--duration-fast)` are interchangeable. Retune in ONE place
+         (tokens.css) and update here to match. */
       transitionDuration: {
-        instant: "50ms",
-        fast:    "90ms",
-        base:    "140ms",
-        slow:    "220ms",
-        modal:   "180ms",
+        instant: "var(--duration-instant)",
+        fast:    "var(--duration-fast)",
+        base:    "var(--duration-base)",
+        slow:    "var(--duration-slow)",
+        slower:  "var(--duration-slower)",
+        modal:   "var(--duration-modal)",
+        enter:   "var(--duration-enter)",
+        exit:    "var(--duration-exit)",
       },
 
+      /* out/in/in-out deliberately OVERRIDE Tailwind's defaults so the utility
+         `ease-out` and the token `var(--ease-out)` are the same curve — the kit
+         mixed raw `ease-out` (Tailwind's cubic-bezier(0,0,.2,1) is close but
+         `ease-in-out`/`linear` were not) with token easings on sibling
+         elements. Enter decelerates, exit accelerates. */
       transitionTimingFunction: {
-        smooth:      "cubic-bezier(0.32, 0.72, 0, 1)",
-        "out-fluid": "cubic-bezier(0.32, 0.72, 0, 1)",
-        "out-quart": "cubic-bezier(0.165, 0.84, 0.44, 1)",
-        "out-expo":  "cubic-bezier(0.19, 1, 0.22, 1)",
-        spring:      "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        out:         "var(--ease-out)",
+        in:          "var(--ease-in)",
+        "in-out":    "var(--ease-in-out)",
+        smooth:      "var(--ease-smooth)",
+        "out-fluid": "var(--ease-out-fluid)",
+        "out-quart": "var(--ease-out-quart)",
+        "out-expo":  "var(--ease-out-expo)",
+        spring:      "var(--ease-spring)",
       },
 
       /* Layering law: content < sticky < overlay/drawer < modal < dropdown/

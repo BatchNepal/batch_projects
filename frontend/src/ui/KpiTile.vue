@@ -26,7 +26,7 @@
 
         <div v-if="progress !== null && progress !== undefined" class="mt-3 h-1 rounded-full bg-default overflow-hidden">
           <div
-            class="h-full rounded-full transition-[width] duration-400 ease-out"
+            class="h-full rounded-full transition-[width] duration-slower ease-out"
             :class="progress >= 90 ? 'bg-warning' : 'bg-accent'"
             :style="{ width: Math.min(progress, 100) + '%' }"
           />
@@ -69,7 +69,7 @@ const emit = defineEmits(['click'])
 .kpi-tile {
   box-shadow: var(--shadow-xs);
   transition:
-    transform 200ms var(--ease-smooth),
+    transform var(--duration-base) var(--ease-smooth),
     border-color var(--duration-base) var(--ease-out),
     box-shadow var(--duration-base) var(--ease-out);
 }
@@ -79,6 +79,6 @@ const emit = defineEmits(['click'])
 }
 .kpi-tile:active {
   transform: scale(0.97);
-  transition: transform 40ms ease-out;
+  transition: transform var(--duration-instant) ease-out;
 }
 </style>

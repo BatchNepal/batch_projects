@@ -100,7 +100,7 @@ onBeforeUnmount(() => {
   display: inline-flex; align-items: center; gap: 7px;
   background: var(--accent); color: var(--accent-foreground);
   border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600;
-  transition: background-color 120ms var(--ease-out), transform 200ms var(--ease-smooth);
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-base) var(--ease-smooth);
   -webkit-tap-highlight-color: transparent; outline: none;
 }
 .smb-main  { padding: 0 16px 0 18px; border-radius: 999px 0 0 999px; }
@@ -114,7 +114,7 @@ onBeforeUnmount(() => {
 }
 .smb-main:active  { transform: scale(0.97); }
 .smb-caret:active { transform: scale(0.95); }
-.smb-caret svg { transition: transform 180ms var(--ease-smooth); }
+.smb-caret svg { transition: transform var(--duration-base) var(--ease-smooth); }
 .smb-caret.open svg { transform: rotate(180deg); }
 .smb-main:disabled, .smb-caret:disabled { opacity: 0.5; pointer-events: none; }
 .smb-main:focus-visible, .smb-caret:focus-visible {
@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
 .smb-opt-label { font-size: 13px; font-weight: 500; color: var(--foreground); }
 .smb-opt-desc  { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
 
-.smb-pop-enter-active { transition: opacity 130ms var(--ease-out), transform 130ms var(--ease-smooth); transform-origin: top right; }
+.smb-pop-enter-active { transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-smooth); transform-origin: top right; }
 .smb-pop-leave-active { transition: opacity var(--duration-fast) var(--ease-in), transform var(--duration-fast) var(--ease-in); }
 .smb-pop-enter-from, .smb-pop-leave-to { opacity: 0; transform: scale(0.95) translateY(-4px); }
 </style>

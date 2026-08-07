@@ -19,13 +19,20 @@
 <script setup>
 import { computed } from 'vue'
 
+// The six status-category colours, routed through the semantic token layer
+// rather than raw Tailwind hex. As hard-coded hex these never shifted with the
+// theme — #a1a1aa/#e4e4e7 read fine on white and glare on a near-black
+// surface — and they sat a visible step off the oklch palette every other
+// chip and badge in the app draws from.
+// `hexColor` below is untouched: a workflow state's own colour is user DATA,
+// and data is exactly where raw colour belongs.
 const NAMED = {
-  gray:   '#a1a1aa',
-  blue:   '#60a5fa',
-  green:  '#22c55e',
-  red:    '#ef4444',
-  orange: '#f97316',
-  purple: '#a855f7',
+  gray:   'var(--muted-tertiary)',
+  blue:   'var(--accent)',
+  green:  'var(--success)',
+  red:    'var(--danger)',
+  orange: 'var(--warning)',
+  purple: 'var(--info)',
 }
 
 const props = defineProps({

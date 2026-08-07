@@ -3,11 +3,19 @@
     type="button"
     role="switch"
     :aria-checked="checked"
+    :aria-label="ariaLabel || undefined"
     :disabled="isDisabled"
-    :class="cn('sw relative inline-flex shrink-0 items-center rounded-full outline-none focus-visible:shadow-focus', checked ? 'bg-accent' : 'bg-default', isDisabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer')"
+    :data-size="size"
+    :data-color="color"
+    :class="cn(
+      'sw relative inline-flex shrink-0 items-center rounded-full',
+      checked ? 'sw-on' : 'sw-off',
+      isDisabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer',
+      $attrs.class,
+    )"
     @click="onClick"
   >
-    <span :class="cn('sw-thumb block rounded-full bg-white shadow-xs', checked ? (size === 'sm' ? 'translate-x-[13px]' : 'translate-x-[16px]') : 'translate-x-[2px]')" />
+    <span class="sw-thumb block rounded-full" />
   </button>
 </template>
 
@@ -22,7 +30,13 @@ const props = defineProps({
   isSelected: { type: Boolean, default: undefined },
   modelValue: { type: Boolean, default: undefined },
   isDisabled: { type: Boolean, default: false },
-  size:       { type: String,  default: 'md' }, // sm | md
+  // `md` stays the default and keeps the exact 34x18 track the app already
+  // ships, so no existing screen shifts. `size` previously changed ONLY the
+  // thumb's travel distance — the track stayed 34x18 at every size, so
+  // size="sm" rendered a full-width track with a thumb that stopped short.
+  size:       { type: String,  default: 'md' },      // sm | md | lg
+  color:      { type: String,  default: 'primary' }, // primary | success | warning | danger
+  ariaLabel:  { type: String,  default: '' },
 })
 const emit = defineEmits(['update:isSelected', 'update:modelValue'])
 
@@ -37,14 +51,57 @@ function onClick() {
 </script>
 
 <style scoped>
+/* Track/thumb geometry comes from vars so the ON translate is DERIVED
+   (track - thumb - 2x inset) instead of the hardcoded translate-x-[13px] /
+   [16px] magic numbers it used before — those had to be hand-corrected for
+   every new size, which is why `lg` never existed. */
 .sw {
-  width:  34px;
-  height: 18px;
+  --sw-w: 34px;
+  --sw-h: 18px;
+  --sw-thumb: 14px;
+  --sw-inset: 2px;
+  --sw-accent: var(--accent);
+
+  width: var(--sw-w);
+  height: var(--sw-h);
   transition: background-color var(--duration-fast) var(--ease-out);
 }
+
+.sw[data-size='sm'] { --sw-w: 30px; --sw-h: 16px; --sw-thumb: 12px; }
+.sw[data-size='lg'] { --sw-w: 44px; --sw-h: 24px; --sw-thumb: 20px; }
+
+.sw[data-color='success'] { --sw-accent: var(--success); }
+.sw[data-color='warning'] { --sw-accent: var(--warning); }
+.sw[data-color='danger']  { --sw-accent: var(--danger); }
+
+.sw-off { background: var(--default); }
+.sw-on  { background: var(--sw-accent); }
+
+@media (hover: hover) {
+  .sw-off:not(:disabled):hover { background: var(--surface-hover); }
+}
+
 .sw-thumb {
-  width:  14px;
-  height: 14px;
-  transition: transform 160ms var(--ease-smooth);
+  width: var(--sw-thumb);
+  height: var(--sw-thumb);
+  /* was bg-white — correct by luck on a coloured track, wrong on the grey OFF
+     track in dark mode, where pure white is the brightest thing on screen. */
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  transform: translateX(var(--sw-inset));
+  transition: transform var(--duration-base) var(--ease-smooth);
+}
+
+.sw-on .sw-thumb {
+  transform: translateX(calc(var(--sw-w) - var(--sw-thumb) - var(--sw-inset)));
+}
+
+.sw:focus-visible {
+  outline: 2px solid var(--sw-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sw, .sw-thumb { transition: none; }
 }
 </style>

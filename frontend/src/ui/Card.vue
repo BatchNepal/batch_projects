@@ -56,7 +56,7 @@ const VARIANT = {
 
 <style scoped>
 .card {
-  transition: transform 200ms var(--ease-smooth), box-shadow var(--duration-base) var(--ease-out);
+  transition: transform var(--duration-base) var(--ease-smooth), box-shadow var(--duration-base) var(--ease-out);
 }
-button.card:active { transition: transform 40ms ease-out; }
+button.card:active { transition: transform var(--duration-instant) ease-out; }
 </style>

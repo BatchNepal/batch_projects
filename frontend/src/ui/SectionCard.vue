@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-overlay border border-border rounded-lg transition-shadow duration-150 hover:shadow-sm">
+  <div class="bg-overlay border border-border rounded-lg transition-shadow duration-base hover:shadow-sm">
     <div v-if="title || $slots.trailing" class="flex items-start justify-between px-4 py-3 border-b border-separator">
       <div class="min-w-0">
         <h3 v-if="title" class="text-sm font-semibold text-foreground leading-snug">{{ title }}</h3>

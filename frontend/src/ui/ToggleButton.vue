@@ -5,7 +5,7 @@
     :disabled="isDisabled"
     :class="cn(
       'inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium',
-      'transition-colors duration-90 select-none outline-none',
+      'transition-colors duration-fast select-none outline-none',
       'disabled:opacity-45 disabled:pointer-events-none focus-visible:shadow-focus',
       isSelected ? 'bg-accent-soft text-accent-soft-foreground' : 'text-muted hover:text-foreground hover:bg-default',
       $attrs.class,

@@ -101,10 +101,19 @@
    Accent: oklch(0.62 0.195 254) — vivid indigo-blue (as specified)
    ========================================================================== */
 
+/* The [data-theme] selectors are scoped to :root deliberately. Unscoped, they
+   matched ANY nested element carrying the attribute — and vue-sonner stamps
+   `data-theme="light"` on its toaster and on every single toast (its `theme`
+   prop defaults to "light"). Each toast therefore re-declared this whole
+   palette inside itself and rendered as a white slab no matter what theme the
+   app was in; verified in a dark-mode screenshot. Any third-party component
+   that writes data-theme would have done the same.
+   The .light/.dark CLASS selectors stay unscoped, so deliberately theming a
+   subtree by class still works — that's the supported escape hatch. */
 :root,
 .light,
-[data-theme="light"],
-[data-theme="default"] {
+:root[data-theme="light"],
+:root[data-theme="default"] {
   color-scheme: light;
 
   /* Primitives */
@@ -285,7 +294,7 @@
    ========================================================================== */
 
 .dark,
-[data-theme="dark"] {
+:root[data-theme="dark"] {
   color-scheme: dark;
 
   /* Primitives (same) */
@@ -424,15 +433,33 @@
    SHADOW SCALE
    ========================================================================== */
 
+/* The kit had TWO competing shadow families and used both interchangeably:
+     A. --surface-shadow{,-sm,-hover} / --overlay-shadow — Brex-tuned, layered
+        navy-grey rgba(16,24,40) with a hairline ring, and redefined for the
+        dark theme.
+     B. --shadow-xs/sm/md/lg/xl + --shadow-popover — flat pure-black oklch,
+        with NO dark-theme override at all.
+   So `shadow-lg` and `shadow-overlay` were different shadow languages on
+   adjacent surfaces, and every family-B consumer kept a black shadow in dark
+   mode, where black on near-black is invisible.
+
+   Family A wins — it's the tuned, theme-aware one, and its layered
+   contact + ambient + hairline structure is the Jira/Monday/Wrike register.
+   Family B is kept as ALIASES so the ~20 existing `shadow-md`/`shadow-lg`/
+   `shadow-popover` call sites keep working and instantly become theme-aware,
+   with no component edits. One ladder, two vocabularies pointing at it. */
 :root {
-  --shadow-xs: 0 1px 2px oklch(0 0 0 / 0.07);
-  --shadow-sm: 0 1px 4px oklch(0 0 0 / 0.08), 0 1px 2px oklch(0 0 0 / 0.06);
-  --shadow-md: 0 4px 8px oklch(0 0 0 / 0.08), 0 2px 4px oklch(0 0 0 / 0.06);
-  --shadow-lg: 0 8px 24px oklch(0 0 0 / 0.10), 0 2px 8px oklch(0 0 0 / 0.06);
-  --shadow-xl: 0 16px 40px oklch(0 0 0 / 0.12), 0 4px 12px oklch(0 0 0 / 0.08);
+  --shadow-xs: var(--surface-shadow-sm);
+  --shadow-sm: var(--surface-shadow-sm);
+  --shadow-md: var(--surface-shadow);
+  --shadow-lg: var(--overlay-shadow);
+  --shadow-xl: var(--overlay-shadow);
+  --shadow-popover: var(--overlay-shadow);
+
+  /* Focus is an elevation of its own — a soft accent halo, not a drop shadow.
+     Paired with the 2px outline the global :focus-visible rule draws. */
   --shadow-focus:        0 0 0 3px var(--accent-soft);
   --shadow-focus-danger: 0 0 0 3px var(--danger-soft);
-  --shadow-popover:      0 12px 32px oklch(0 0 0 / 0.10), 0 0 0 1px oklch(0 0 0 / 0.06);
 }
 
 /* ==========================================================================
@@ -454,13 +481,37 @@
    DURATIONS
    ========================================================================== */
 
+/* ONE motion scale. Pick by the SIZE OF THE THING MOVING, not by feel:
+   the further an element travels and the more of the screen it covers, the
+   longer it takes — this is the Atlassian/Monday rule and it's what makes
+   motion read as one system rather than per-component taste.
+
+   Retuned because the kit had 17 different ad-hoc durations (130ms ×14,
+   200ms ×8, 40ms ×5, 180ms ×3, duration-90 ×9, duration-400 ×3, plus 120,
+   140, 160, 250, 300) living alongside this scale, which only 20 of 72
+   components ever referenced. The old values were also incoherent on their
+   own terms: --duration-modal (180ms) was FASTER than --duration-slow
+   (220ms), so a full-screen modal animated quicker than a dropdown.
+
+   Values sit in the Jira/Monday band — fast enough to feel instant on
+   micro-feedback, slow enough that large surfaces don't snap. */
 :root {
-  --duration-instant: 50ms;
-  --duration-fast:    90ms;
-  --duration-base:    140ms;
-  --duration-slow:    220ms;
-  --duration-modal:   180ms;
-  --duration-toast:   260ms;
+  --duration-instant: 70ms;   /* press/active — must feel like contact, not animation */
+  --duration-fast:    120ms;  /* hover, colour, border — micro-feedback */
+  --duration-base:    180ms;  /* dropdown, popover, tooltip, small transforms */
+  --duration-slow:    260ms;  /* modal, drawer, sheet — large travelling surfaces */
+  --duration-slower:  380ms;  /* step/page transitions, the largest moves */
+
+  /* Semantic aliases — components should prefer these where the intent is
+     specific, so a future retune of "how modals feel" is one line. */
+  --duration-modal:   var(--duration-slow);
+  --duration-toast:   var(--duration-slow);
+
+  /* Enter vs exit are NOT symmetric: things arrive decelerating (ease-out) and
+     leave accelerating (ease-in), and exits run shorter because a user who
+     dismissed something is already done with it. */
+  --duration-enter:   var(--duration-base);
+  --duration-exit:    var(--duration-fast);
 }
 
 /* ==========================================================================
@@ -499,11 +550,20 @@
   /* Dropdown/popover sit ABOVE modal — a Select/Combobox opened from inside
      a Drawer/Modal/AlertDialog must float above it, not behind it. Below
      toast/tooltip, which are global overlays that should never be occluded
-     by an open dropdown. */
-  --z-dropdown: 410;
-  --z-popover:  420;
-  --z-toast:    500;
-  --z-tooltip:  600;
+     by an open dropdown.
+     ── The four values below were 410/420/500/600 and disagreed with
+     tailwind.config.js's zIndex scale (1100/1110/1200/1300), which is the
+     ladder DESIGN_PATTERNS.md documents and which most components consume as
+     Tailwind classes (z-dropdown, z-toast, …). Anything reading the CSS var
+     therefore rendered a whole layer too low and lost to its Tailwind-class
+     equivalents: ListView's popover (var, 420) sat under any dropdown using
+     the class (1100), and SplitMenuButton literally wrote
+     `var(--z-popover, 1110)` — its author assumed the higher number the var
+     didn't actually hold. Raised to match the config. There is one ladder. */
+  --z-dropdown: 1100;
+  --z-popover:  1110;
+  --z-toast:    1200;
+  --z-tooltip:  1300;
 }
 
 /* ==========================================================================

@@ -13,6 +13,13 @@ import { computed } from 'vue'
 const props = defineProps({
   date:     { default: null },  // ISO string or Date
   relative: { type: Boolean, default: true },
+  // Table/column contexts (My Tasks' "Due date" column) need the actual
+  // value visible in the cell, not just a relative label — "13d overdue"
+  // with no date anywhere tells you nothing until you do the math against
+  // today, and a dedicated column exists precisely so you don't have to.
+  // Compact contexts (kanban cards, TaskRow, ProjectTree) keep the relative
+  // label unchanged; this is opt-in per call site, default off.
+  absolute: { type: Boolean, default: false },
 })
 
 const now = new Date()
@@ -34,14 +41,19 @@ const overdue = computed(() => diffDays.value !== null && diffDays.value < 0)
 const today   = computed(() => diffDays.value === 0)
 const soon    = computed(() => diffDays.value !== null && diffDays.value > 0 && diffDays.value <= 3)
 
+const absoluteLabel = computed(() =>
+  parsed.value ? parsed.value.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
+)
+
 const label = computed(() => {
   if (!parsed.value) return ''
+  if (props.absolute) return absoluteLabel.value
   const d = diffDays.value
   if (d < 0)  return `${Math.abs(d)}d overdue`
   if (d === 0) return 'Today'
   if (d === 1) return 'Tomorrow'
   if (props.relative && d <= 14) return `${d}d`
-  return parsed.value.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return absoluteLabel.value
 })
 
 const cls = computed(() => {

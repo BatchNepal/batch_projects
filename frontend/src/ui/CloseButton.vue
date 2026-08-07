@@ -3,7 +3,7 @@
     type="button"
     :disabled="isDisabled"
     :aria-label="ariaLabel"
-    :class="cn('inline-flex items-center justify-center rounded-md text-muted hover:bg-default hover:text-foreground transition-colors duration-90 outline-none focus-visible:shadow-focus disabled:opacity-45 disabled:pointer-events-none', SIZE[size] ?? SIZE.md, $attrs.class)"
+    :class="cn('inline-flex items-center justify-center rounded-md text-muted hover:bg-default hover:text-foreground transition-colors duration-fast outline-none focus-visible:shadow-focus disabled:opacity-45 disabled:pointer-events-none', SIZE[size] ?? SIZE.md, $attrs.class)"
     v-bind="{ ...$attrs, class: undefined }"
     @click="emit('click', $event)"
   >

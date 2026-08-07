@@ -40,56 +40,72 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(40%);
 }
 
-/* ─── COMPONENT CLASSES ─────────────────────────────────────────────────────
-   Kept from original — may be used in existing components.
-────────────────────────────────────────────────────────────────────────────── */
-@layer components {
-  .btn-primary {
-    @apply bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors;
-  }
+/* ─── GLOBAL FOCUS RING ──────────────────────────────────────────────────────
+   This slot used to hold `*:focus-visible { outline: none !important;
+   box-shadow: none !important; }`, which did exactly what it says: it stripped
+   the focus indicator off EVERY element in the app, and the !important meant
+   the 37 components that define their own focus-visible styles were overridden
+   too. Verified by tabbing the live workspace — six consecutive tab stops all
+   reported `outline: none / box-shadow: none`. Keyboard users had no visible
+   focus anywhere.
 
-  .btn-secondary {
-    @apply bg-white text-gray-700 px-4 py-2 rounded-md text-sm font-medium border border-gray-300 hover:bg-gray-50 transition-colors;
-  }
-
-  .notion-select {
-    @apply w-full appearance-none bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-300 transition-colors cursor-pointer pr-8;
-  }
-
-  .notion-input {
-    @apply w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-transparent hover:border-gray-300 transition-colors placeholder-gray-400;
-  }
-
-  .kbd {
-    @apply font-mono bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded;
-  }
+   Replaced with a real default ring, deliberately WITHOUT !important so any
+   component that styles its own focus still wins and we don't double-ring.
+   :focus-visible (not :focus) keeps it off mouse clicks — which is the
+   legitimate itch the blanket reset was scratching. */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: inherit;
 }
 
-*:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
+/* Never draw the ring on the page shell itself — scroll containers and
+   programmatically focused panels would otherwise flash a full-width ring. */
+body:focus-visible,
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+/* .hui-field (Input/Select/Combobox's composite icon+field+button wrapper)
+   already draws its OWN focus ring via :focus-within (border-color + a 1px
+   box-shadow around the whole row — see the .hui-field block below). The
+   global rule above ALSO fires on the bare <input> living inside it, which
+   only wraps the input's own box — starting to the right of the leading
+   icon, since the icon is a sibling <span>, not part of the input. Focusing
+   a field with a #startContent icon (e.g. Money tab's "Search ERPNext
+   Projects…") therefore drew two competing borders: the correct one around
+   icon+input+button, and a second, offset one that visibly excluded the
+   icon. The wrapper's ring is the only one that should ever show. */
+.hui-field :focus-visible {
+  outline: none;
 }
 
 /* ─── SHARED FIELD CLASSES ───────────────────────────────────────────────────
-   Used in IssueDetail and other form components.
+   .field-meta is the borderless inline editor used in task/issue detail
+   panes. Its three siblings (.field-title, .field-body, .field-meta-select)
+   were removed — grep put them at zero usages, and they carried raw Tailwind
+   neutrals (placeholder:text-neutral-300, focus:border-neutral-200) that the
+   token layer replaced long ago.
 ────────────────────────────────────────────────────────────────────────────── */
-.field-title {
-  @apply w-full bg-transparent border border-transparent rounded-md px-0 py-1 text-base font-semibold placeholder:text-neutral-300 leading-snug resize-none transition-colors focus:outline-none focus:border-neutral-200;
-  color: var(--foreground);
-}
-
-.field-body {
-  @apply w-full bg-transparent border border-transparent rounded-md px-0 py-1 text-sm placeholder:text-neutral-300 leading-relaxed resize-none transition-colors focus:outline-none focus:border-neutral-200;
-  color: var(--muted);
-}
-
 .field-meta {
-  @apply w-full bg-transparent border border-transparent rounded-md px-2 py-1.5 text-sm placeholder:text-neutral-300 hover:bg-neutral-100 focus:bg-white focus:outline-none transition-all;
+  @apply w-full bg-transparent border border-transparent rounded-md px-2 py-1.5 text-sm;
   color: var(--foreground);
+  /* was `transition-all` — banned, and it animated layout properties too */
+  transition: background-color 140ms var(--ease-out), border-color 140ms var(--ease-out);
 }
 
-.field-meta-select {
-  @apply field-meta appearance-none cursor-pointer pr-6;
+.field-meta::placeholder {
+  color: var(--field-placeholder);
+}
+
+.field-meta:hover {
+  background: var(--surface-hover);
+}
+
+.field-meta:focus {
+  background: var(--field-focus);
+  border-color: var(--field-border-focus);
+  outline: none;
 }
 
 /* ─── INTERFACE DENSITY ──────────────────────────────────────────────────────
@@ -142,92 +158,96 @@ html { zoom: var(--ui-zoom); }
   background: var(--muted);
 }
 
-/* ─── TOAST (vue-sonner) ─────────────────────────────────────────────────────*/
-:root {
-  --toast-normal-bg: #ffffff;
-  --toast-normal-border: #e4e4e7;
-  --toast-normal-text: #18181b;
-  --toast-success-bg: #f0fdf4;
-  --toast-success-border: #bbf7d0;
-  --toast-success-text: #15803d;
-  --toast-error-bg: #fef2f2;
-  --toast-error-border: #fecaca;
-  --toast-error-text: #dc2626;
-  --toast-warning-bg: #fffbeb;
-  --toast-warning-border: #fde68a;
-  --toast-warning-text: #d97706;
-  --toast-info-bg: #eff6ff;
-  --toast-info-border: #bfdbfe;
-  --toast-info-text: #2563eb;
-}
+/* ─── TOAST (vue-sonner) ─────────────────────────────────────────────────────
+   ONE recipe behind all ~190 toast call sites in the app.
 
-section[aria-label="Notifications alt+T"] {
+   What this replaces: every type rendered as the same translucent white slab,
+   separated only by the tint of a 16px icon — so a toast.error (121 call
+   sites) and a toast.success (67) were indistinguishable at a glance, which is
+   the entire job of a toast. The background was hard-coded
+   rgba(255,255,255,0.92), so every toast was a white slab in dark mode. And
+   the block opened with 15 dead --toast-*-bg/border/text hex vars (Tailwind
+   palette greens, ambers, reds) that no rule below ever referenced and that
+   predate the oklch token layer entirely.
+
+   Type now reads from a 3px left rail plus the icon, both driven by the single
+   --toast-accent var each [data-type] block sets — add a type, set one var.
+   Deliberately restrained: per the design law, status colour is a signal on
+   chrome, never a full-bleed fill, so the surface itself stays neutral and
+   identical across types. Uniform shell, unmistakable status.
+
+   The !importants are load-bearing — sonner writes its own inline styles onto
+   these same elements — but every VALUE is now a token, so themes and future
+   retunes flow through. */
+
+/* Sonner's own viewport wrapper. Matched two ways on purpose: :has() is the
+   structural, locale-proof selector, and the aria-label match is the fallback
+   for engines without :has support. Both resolve to the same element. */
+section:has(> [data-sonner-toaster]),
+section[aria-label^="Notifications"] {
   position: fixed !important;
-  bottom: 24px !important;
-  right: 24px !important;
+  inset: auto 24px 24px auto !important;
   width: auto !important;
   height: auto !important;
   max-height: none !important;
   background: transparent !important;
-  z-index: 9999 !important;
+  z-index: var(--z-toast) !important;
+  /* The wrapper spans dead space; only the toasts themselves take clicks. */
   pointer-events: none !important;
 }
 
-section[aria-label="Notifications alt+T"] * {
-  pointer-events: all !important;
+section:has(> [data-sonner-toaster]) [data-sonner-toast],
+section[aria-label^="Notifications"] [data-sonner-toast] {
+  pointer-events: auto !important;
 }
 
 [data-sonner-toaster] {
   position: relative !important;
-  width: 320px !important;
+  width: 360px !important;
+  max-width: calc(100vw - 32px) !important;
   height: auto !important;
   background: transparent !important;
-  margin-bottom: 24px !important;
   font-family: var(--font-sans) !important;
 }
 
 [data-sonner-toast] {
+  --toast-accent: var(--border-tertiary); /* neutral default; types override */
+
+  position: relative !important;
   display: flex !important;
   align-items: flex-start !important;
   gap: 10px !important;
-  padding: 13px 14px !important;
-  border-radius: var(--radius-md) !important;
-  margin-bottom: 12px !important;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
-  box-shadow: var(--shadow-lg) !important;
-  min-width: 280px !important;
-  max-width: 320px !important;
-  background: rgba(255, 255, 255, 0.92) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
+  /* Extra left padding makes room for the rail; extra right keeps the close
+     button from colliding with a long title. */
+  padding: 12px 34px 12px 13px !important;
+  border-radius: var(--radius-lg) !important;
+  margin-bottom: 10px !important;
+  border: 1px solid var(--border) !important;
+  border-left: 3px solid var(--toast-accent) !important;
+  box-shadow: var(--overlay-shadow) !important;
+  width: 100% !important;
+  /* Opaque, theme-aware: --overlay is white in light, near-black in dark.
+     The old translucent white ignored the dark theme completely. */
+  background: var(--overlay) !important;
   color: var(--foreground) !important;
-  animation: toast-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  animation: toast-in 0.26s cubic-bezier(0.34, 1.4, 0.64, 1) !important;
 }
 
 [data-sonner-toast][data-removed="true"] {
-  animation: toast-out 0.22s cubic-bezier(0.4, 0, 1, 1) forwards !important;
+  animation: toast-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards !important;
 }
+
+/* One var per type drives both the rail and the icon. */
+[data-sonner-toast][data-type="success"] { --toast-accent: var(--success); }
+[data-sonner-toast][data-type="error"]   { --toast-accent: var(--danger); }
+[data-sonner-toast][data-type="warning"] { --toast-accent: var(--warning); }
+[data-sonner-toast][data-type="info"]    { --toast-accent: var(--accent); }
+[data-sonner-toast][data-type="loading"] { --toast-accent: var(--muted-tertiary); }
 
 [data-sonner-toast] [data-icon] {
   margin-top: 1px !important;
   flex-shrink: 0 !important;
-  opacity: 0.85 !important;
-}
-
-[data-sonner-toast][data-type="success"] [data-icon] {
-  color: var(--success) !important;
-}
-
-[data-sonner-toast][data-type="error"] [data-icon] {
-  color: var(--danger) !important;
-}
-
-[data-sonner-toast][data-type="warning"] [data-icon] {
-  color: var(--warning) !important;
-}
-
-[data-sonner-toast][data-type="info"] [data-icon] {
-  color: var(--accent) !important;
+  color: var(--toast-accent) !important;
 }
 
 [data-sonner-toast] [data-content] {
@@ -237,8 +257,8 @@ section[aria-label="Notifications alt+T"] * {
 
 [data-sonner-toast] [data-title] {
   font-size: var(--text-sm) !important;
-  font-weight: var(--font-semibold) !important;
-  line-height: 1.4 !important;
+  font-weight: var(--font-medium) !important;
+  line-height: 1.45 !important;
   color: var(--foreground) !important;
   letter-spacing: var(--tracking-snug) !important;
 }
@@ -246,64 +266,98 @@ section[aria-label="Notifications alt+T"] * {
 [data-sonner-toast] [data-description] {
   font-size: var(--text-xs) !important;
   color: var(--muted) !important;
-  margin-top: 2px !important;
-  line-height: 1.4 !important;
+  margin-top: 3px !important;
+  line-height: 1.5 !important;
+  /* Backend errors get surfaced verbatim (they're written to be actionable);
+     keep them readable instead of letting one run to twenty lines. */
+  overflow-wrap: anywhere !important;
+}
+
+/* Action / cancel buttons (toast.success(..., { action: … })). Ghost by
+   default — one filled primary per view, and a toast is never it. */
+[data-sonner-toast] [data-button] {
+  flex-shrink: 0 !important;
+  align-self: center !important;
+  height: 26px !important;
+  padding: 0 9px !important;
+  border-radius: var(--radius-sm) !important;
+  border: 1px solid var(--border-secondary) !important;
+  background: transparent !important;
+  color: var(--foreground) !important;
+  font-size: var(--text-xs) !important;
+  font-weight: var(--font-medium) !important;
+  cursor: pointer !important;
+  transition: background-color 140ms var(--ease-out), border-color 140ms var(--ease-out) !important;
+}
+
+[data-sonner-toast] [data-button]:hover {
+  background: var(--surface-hover) !important;
+}
+
+[data-sonner-toast] [data-button]:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 1px !important;
+}
+
+[data-sonner-toast] [data-cancel] {
+  border-color: transparent !important;
+  color: var(--muted) !important;
 }
 
 [data-sonner-toast] [data-close-button] {
   position: absolute !important;
-  top: 10px !important;
-  right: 10px !important;
+  top: 9px !important;
+  right: 9px !important;
+  left: auto !important;
   width: 18px !important;
   height: 18px !important;
-  border-radius: 50% !important;
-  background: var(--surface-secondary) !important;
+  transform: none !important;
+  border-radius: var(--radius-full) !important;
+  background: transparent !important;
   border: none !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   cursor: pointer !important;
-  opacity: 0 !important;
-  transition: opacity 0.15s ease !important;
-  color: var(--muted) !important;
-  font-size: 10px !important;
-  padding: 0 !important;
+  /* Hidden until hover on pointer devices (below); always visible on touch,
+     where there is no hover to reveal it. */
+  opacity: 1 !important;
+  transition: opacity 140ms var(--ease-out), background-color 140ms var(--ease-out) !important;
+  color: var(--muted-tertiary) !important;
 }
 
-[data-sonner-toast]:hover [data-close-button] {
-  opacity: 1 !important;
+@media (hover: hover) {
+  [data-sonner-toast] [data-close-button] { opacity: 0 !important; }
+  [data-sonner-toast]:hover [data-close-button],
+  [data-sonner-toast]:focus-within [data-close-button] { opacity: 1 !important; }
 }
 
 [data-sonner-toast] [data-close-button]:hover {
-  background: var(--border) !important;
+  background: var(--surface-secondary) !important;
   color: var(--foreground) !important;
 }
 
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateX(20px) scale(0.96);
-  }
+[data-sonner-toast] [data-close-button]:focus-visible {
+  opacity: 1 !important;
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 1px !important;
+}
 
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
 }
 
 @keyframes toast-out {
-  from {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-    max-height: 100px;
-    margin-bottom: 8px;
-  }
+  from { opacity: 1; transform: translateX(0) scale(1); max-height: 120px; margin-bottom: 10px; }
+  to   { opacity: 0; transform: translateX(20px) scale(0.96); max-height: 0; margin-bottom: 0; }
+}
 
-  to {
-    opacity: 0;
-    transform: translateX(24px) scale(0.95);
-    max-height: 0;
-    margin-bottom: 0;
+/* Respect reduced-motion: still fade, never slide/scale. */
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast],
+  [data-sonner-toast][data-removed="true"] {
+    animation-duration: 0.01ms !important;
   }
 }
 
@@ -326,7 +380,7 @@ section[aria-label="Notifications alt+T"] * {
   background-color: var(--field-background);
   border-width: 1px;
   border-style: solid;
-  border-color: #ebebebfe;
+  border-color: #e5e9f2;
   border-radius: var(--field-radius);
   outline: none;
   transition:

@@ -62,7 +62,7 @@ onBeforeUnmount(()  => { clearTimeout(showTimer); clearTimeout(hideTimer) })
 </script>
 
 <style scoped>
-.tt-enter-active { transition: opacity 130ms var(--ease-out), transform 130ms var(--ease-smooth); }
+.tt-enter-active { transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-smooth); }
 .tt-leave-active { transition: opacity var(--duration-fast) var(--ease-in); }
 .tt-enter-from   { opacity: 0; transform: translateY(3px); }
 .tt-leave-to     { opacity: 0; }

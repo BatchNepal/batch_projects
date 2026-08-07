@@ -5,7 +5,7 @@
     :aria-disabled="isDisabled || undefined"
     :tabindex="isDisabled ? -1 : 0"
     :class="cn(
-      'sel-item relative flex items-center gap-2 px-2.5 rounded-[5px] cursor-pointer select-none',
+      'sel-item relative flex items-center gap-2 px-2.5 rounded-sm cursor-pointer select-none',
       'text-foreground outline-none',
       'hover:bg-default focus-visible:bg-default',
       isSelected && 'font-medium',
@@ -69,7 +69,7 @@ function handleSelect() {
 
 <style scoped>
 .sel-item {
-  transition: background-color var(--duration-fast) var(--ease-out), transform 250ms var(--ease-smooth);
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-slow) var(--ease-smooth);
 }
-.sel-item:active { transform: scale(0.98); transition: transform 40ms ease-out; }
+.sel-item:active { transform: scale(0.98); transition: transform var(--duration-instant) ease-out; }
 </style>

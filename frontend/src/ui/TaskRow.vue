@@ -29,7 +29,7 @@
 
     <!-- Hover actions -->
     <div class="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-      <button type="button" title="Mark done" class="p-1 rounded text-muted hover:text-green-500 transition-colors"
+      <button type="button" title="Mark done" class="p-1 rounded-sm text-muted hover:text-success transition-colors duration-fast"
         @click.stop="emit('done', task)">
         <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>

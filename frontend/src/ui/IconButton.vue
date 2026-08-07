@@ -71,7 +71,7 @@ const STYLES = {
   transition:
     background-color var(--duration-fast) var(--ease-out),
     color            var(--duration-fast) var(--ease-out),
-    transform        200ms var(--ease-smooth);
+    transform        var(--duration-base) var(--ease-smooth);
 }
-.icon-btn:active { transition: transform 40ms ease-out; }
+.icon-btn:active { transition: transform var(--duration-instant) ease-out; }
 </style>

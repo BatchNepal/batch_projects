@@ -3,7 +3,7 @@
     :is="to ? RouterLink : 'a'"
     v-bind="linkProps"
     :class="cn(
-      'inline-flex items-center gap-1 transition-colors duration-90 rounded-sm',
+      'inline-flex items-center gap-1 transition-colors duration-fast rounded-sm',
       'focus-visible:outline-none focus-visible:shadow-focus',
       SIZE[size],
       COLOR[color] ?? COLOR.accent,

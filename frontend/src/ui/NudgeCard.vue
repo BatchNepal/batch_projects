@@ -1,13 +1,18 @@
 <template>
   <Teleport to="body">
+    <!-- z-popover, not z-toast: this nudge and the toaster both live in the
+         bottom-right corner, and sharing a layer left the winner to DOM order
+         — a persistent tip was covering transient toasts (seen in a
+         screenshot: the shortcuts nudge sat on top of a success toast).
+         A passive tip must never occlude a transient confirmation. -->
     <Transition name="nudge">
       <div
         v-if="modelValue"
-        class="bp-overlay fixed bottom-4 right-4 z-toast w-[340px] max-w-[calc(100vw-2rem)] bg-overlay border border-border rounded-[12px] shadow-overlay p-4"
+        class="bp-overlay fixed bottom-4 right-4 z-popover w-[340px] max-w-[calc(100vw-2rem)] bg-overlay border border-border rounded-[12px] shadow-overlay p-4"
         role="status"
       >
         <div class="flex items-start gap-3">
-          <div v-if="$slots.icon || icon" class="shrink-0 size-8 rounded-[8px] bg-accent-soft flex items-center justify-center text-accent">
+          <div v-if="$slots.icon || icon" class="shrink-0 size-8 rounded-lg bg-accent-soft flex items-center justify-center text-accent">
             <slot name="icon"><component :is="icon" :size="16" :stroke-width="1.75" /></slot>
           </div>
           <div class="flex-1 min-w-0">

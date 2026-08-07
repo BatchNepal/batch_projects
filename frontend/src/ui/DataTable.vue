@@ -32,7 +32,7 @@
           <tr
             v-for="(row, i) in rows"
             :key="row.id ?? row.name ?? i"
-            class="border-b border-separator last:border-b-0 hover:bg-background-secondary transition-colors duration-90"
+            class="border-b border-separator last:border-b-0 hover:bg-background-secondary transition-colors duration-fast"
             :class="onRowClick && 'cursor-pointer'"
             @click="onRowClick?.(row)"
           >

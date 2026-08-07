@@ -15,7 +15,7 @@
       style="background-color: var(--default);"
     >
       <div
-        :class="cn('h-full rounded-full transition-[width] duration-400 ease-out', COLOR[color] ?? COLOR.accent, isIndeterminate && 'indeterminate')"
+        :class="cn('h-full rounded-full transition-[width] duration-slower ease-out', COLOR[color] ?? COLOR.accent, isIndeterminate && 'indeterminate')"
         :style="isIndeterminate ? {} : { width: clamped + '%' }"
       />
     </div>

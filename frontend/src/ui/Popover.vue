@@ -117,7 +117,7 @@ watch(isOpen, (v) => {
 </script>
 
 <style scoped>
-.pop-enter-active { transition: opacity 130ms var(--ease-out), transform 130ms var(--ease-smooth); }
+.pop-enter-active { transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-smooth); }
 .pop-leave-active { transition: opacity var(--duration-fast) var(--ease-in), transform var(--duration-fast) var(--ease-in); }
 .pop-enter-from   { opacity: 0; transform: scale(0.95) translateY(-2px); }
 .pop-leave-to     { opacity: 0; transform: scale(0.97); }

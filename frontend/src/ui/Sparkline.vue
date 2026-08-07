@@ -4,7 +4,7 @@
       v-if="points"
       :points="points"
       fill="none"
-      :stroke="lineColor"
+      :style="{ stroke: lineColor }"
       :stroke-width="strokeWidth"
       stroke-linejoin="round"
       stroke-linecap="round"
@@ -14,7 +14,7 @@
       :cx="lastX"
       :cy="lastY"
       :r="dotR"
-      :fill="dotColor"
+      :style="{ fill: dotColor }"
     />
   </svg>
 </template>

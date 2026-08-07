@@ -4,7 +4,7 @@
     :class="cn(
       'flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm text-left',
       'select-none cursor-pointer outline-none',
-      'transition-colors duration-90',
+      'transition-colors duration-fast',
       'disabled:opacity-40 disabled:pointer-events-none',
       color === 'danger'
         ? 'text-danger hover:bg-danger-soft active:bg-danger-soft-hover focus-visible:bg-danger-soft'

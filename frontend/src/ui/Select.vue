@@ -32,7 +32,7 @@
         :class="selectedLabel ? 'text-foreground' : 'text-[var(--field-placeholder)]'"
       >{{ selectedLabel || placeholder }}</span>
       <svg
-        class="shrink-0 text-[var(--field-placeholder)] transition-transform duration-150"
+        class="shrink-0 text-[var(--field-placeholder)] transition-transform duration-base"
         :class="[isOpen && 'rotate-180', size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4']"
         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round"
@@ -176,7 +176,7 @@ provide('select-ctx', {
 
 <style scoped>
 .sel-trigger { font-family: inherit; }
-.sel-pop-enter-active { transition: opacity 130ms var(--ease-out), transform 130ms var(--ease-smooth); }
+.sel-pop-enter-active { transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-smooth); }
 .sel-pop-leave-active { transition: opacity var(--duration-fast) var(--ease-in), transform var(--duration-fast) var(--ease-in); }
 .sel-pop-enter-from  { opacity: 0; transform: scale(0.96) translateY(-3px); }
 .sel-pop-leave-to    { opacity: 0; transform: scale(0.97); }

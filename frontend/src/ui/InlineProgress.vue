@@ -2,7 +2,7 @@
   <div class="flex items-center gap-2 w-full">
     <div class="flex-1 rounded-full overflow-hidden" :class="trackH">
       <div
-        class="h-full rounded-full transition-[width,background-color] duration-400 ease-out"
+        class="h-full rounded-full transition-[width,background-color] duration-slower ease-out"
         :class="fillColor"
         :style="{ width: clamped + '%' }"
       ></div>
