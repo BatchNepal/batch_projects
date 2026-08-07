@@ -8,8 +8,19 @@
   <!-- TEXT / NOTE annotation widget -->
   <TextWidget v-else-if="widget.type === 'text'" :widget="widget" @text-change="$emit('text-change', $event)" />
 
+  <!-- HEADER / TITLE — plain section divider, no data -->
+  <HeaderWidget v-else-if="widget.type === 'header'" :widget="widget" />
+
   <!-- PRESET report template (handles its own loading/empty) -->
   <PresetWidget v-else-if="widget.type === 'preset'" :widget="widget" :height="height" :fmt="fmt" />
+
+  <!-- COLUMN — one glance/monitoring column (self-loading); templates
+       compose N of these side by side into a full board -->
+  <ColumnWidget v-else-if="widget.type === 'column'" :widget="widget" :scope-label="scopeLabel" :report-scope="reportScope" :refresh-key="refreshKey" @configure="$emit('configure')" />
+
+  <!-- KANBAN — a full multi-column board (self-loading), any widget-source
+       doctype. Looks/behaves like the real per-project Board.vue for BP Task. -->
+  <KanbanWidget v-else-if="widget.type === 'kanban'" :widget="widget" :report-scope="reportScope" :refresh-key="refreshKey" />
 
   <!-- Loading skeleton -->
   <div v-else-if="widget.loading && !widget.data" class="h-full flex flex-col gap-3 p-1">
@@ -75,6 +86,9 @@ import TableWidget from './TableWidget.vue'
 import PresetWidget from './PresetWidget.vue'
 import QueryWidget from './QueryWidget.vue'
 import TextWidget from './TextWidget.vue'
+import HeaderWidget from './HeaderWidget.vue'
+import ColumnWidget from './ColumnWidget.vue'
+import KanbanWidget from './KanbanWidget.vue'
 
 const props = defineProps({
   widget: { type: Object, required: true },
@@ -86,7 +100,7 @@ const props = defineProps({
   refreshKey: { type: Number, default: 0 },
 })
 
-defineEmits(['bql-change', 'text-change'])
+defineEmits(['bql-change', 'text-change', 'configure'])
 
 const METRIC_L = { count: 'Task count', story_points: 'Story points', estimated_hours: 'Estimated hours', actual_hours: 'Logged hours' }
 const GROUP_L = { status: 'status', assignee: 'assignee', priority: 'priority', task_type: 'type', epic: 'epic', project: 'project' }
