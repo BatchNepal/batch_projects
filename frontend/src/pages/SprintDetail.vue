@@ -394,21 +394,16 @@ watch(() => route.params.key, refresh);
 }
 
 .stat-card {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-edge, #e5e7eb);
-  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
-}
-
-:global(.dark) .stat-card {
-  background: rgba(255,255,255,0.04);
-  border-color: rgba(255,255,255,0.08);
 }
 
 .stat-label {
   font-size: 11px;
   font-weight: 500;
-  color: var(--color-fg-muted, #6b7280);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -417,7 +412,7 @@ watch(() => route.params.key, refresh);
   display: block;
   font-size: 22px;
   font-weight: 700;
-  color: var(--color-fg, #111827);
+  color: var(--foreground);
   line-height: 1.1;
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
@@ -425,20 +420,20 @@ watch(() => route.params.key, refresh);
 
 .stat-bar {
   height: 4px;
-  background: var(--color-edge, #e5e7eb);
+  background: var(--border);
   border-radius: 2px;
   overflow: hidden;
 }
 .stat-fill {
   height: 100%;
-  background: #3b82f6;
+  background: var(--accent);
   border-radius: 2px;
   transition: width 0.5s ease;
 }
 
 .chart-card {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-edge, #e5e7eb);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 18px 20px 12px;
 }
@@ -451,28 +446,34 @@ watch(() => route.params.key, refresh);
 .chart-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-fg, #111827);
+  color: var(--foreground);
   display: flex;
   align-items: center;
   gap: 6px;
   margin-bottom: 4px;
 }
 
+/* --color-edge/--color-surface/--color-fg/--color-hoverbg never existed in
+   tokens.css, so every one of these resolved to its hardcoded Tailwind-gray
+   fallback — a white/#e5e7eb/#111827 button that ignored the theme entirely
+   and went unreadable in dark mode. Retoken; 6px radius per the control band. */
 .btn-secondary {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--color-edge, #e5e7eb);
-  background: var(--color-surface, #fff);
-  color: var(--color-fg, #111827);
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+  background: var(--surface);
+  color: var(--foreground);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background-color 140ms var(--ease-out), border-color 140ms var(--ease-out);
 }
 .btn-secondary:hover {
-  background: var(--color-hoverbg, #f3f4f6);
+  background: var(--surface-hover);
+  border-color: var(--border-tertiary);
 }
 </style>

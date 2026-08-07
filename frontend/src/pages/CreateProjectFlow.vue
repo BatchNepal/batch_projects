@@ -96,7 +96,12 @@
                     >
                       <Check :size="11" :stroke-width="3" />
                     </span>
-                    <ChevronRight v-else :size="15" :stroke-width="2" class="text-muted shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" />
+                    <!-- Was a ChevronRight, which promises navigation — these
+                         rows pick one of a set, they don't drill in. An empty
+                         ring opposite the filled check reads as the radio
+                         group this actually is, and gives every row the same
+                         affordance instead of two different ones. -->
+                    <span v-else class="cp-row-dot w-5 h-5 rounded-full shrink-0" />
                   </button>
                 </div>
               </div>
@@ -295,7 +300,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ArrowLeft, ArrowRight, Check, ChevronRight, X, Lock } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Check, X, Lock } from 'lucide-vue-next'
 import { resolveProjectIcon } from '@/constants/project-icons'
 import { Button, Input, Select, SelectItem, Chip, ProjectAvatar } from '@/ui'
 import ThemePicker from '@/components/create-project/ThemePicker.vue'
@@ -314,7 +319,10 @@ import { useEntitlementsStore } from '@/stores/entitlements'
 const router = useRouter()
 const TOTAL_STEPS = 3
 const STEP_SUBTITLES = [
-  "Let's start from selecting a template for you 🚀",
+  // No emoji: the app's font stack has no colour-emoji fallback in the
+  // headless/Linux render path, so this shipped as a tofu box (□) sitting in
+  // the very first line a new user reads. Verified in a browser screenshot.
+  'Pick a starting point — everything here is editable later',
   'Give it a name — the preview updates as you type',
   'Fine-tune the workflow — changes preview instantly',
 ]
@@ -440,7 +448,7 @@ const _typeColorMap = Object.fromEntries(ISSUE_TYPES.map(t => [t.name, t.color])
 function typeColorByName(name) { return _typeColorMap[name] || 'var(--accent)' }
 function typeColor(seed) {
   const types = form.value.issueTypes
-  if (!types.length) return '#0B6BCB'
+  if (!types.length) return 'var(--accent)'
   return typeColorByName(types[seed % types.length])
 }
 
@@ -452,7 +460,12 @@ const canContinue = computed(() => {
 })
 
 const footerHint = computed(() => {
-  if (step.value === 1) return `${selectedTemplate.value.label} template selected — double-click a row to continue`
+  // Was "— double-click a row to continue". Double-click is a hidden
+  // accelerator, not an instruction: it's undiscoverable, unavailable on
+  // touch, and it pointed people away from the primary button sitting six
+  // inches to the right. The shortcut still works; it just isn't the
+  // advertised path any more.
+  if (step.value === 1) return `${selectedTemplate.value.label} template selected`
   if (step.value === 2) return 'Everything stays editable after creation'
   return form.value.key ? `${form.value.key}-1 will be your first task` : ''
 })
@@ -500,11 +513,23 @@ function cancel() {
 .cp-row:focus-visible {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus), var(--surface-shadow-sm);
 }
+/* Selection = tinted surface + a hairline accent edge + the check badge.
+   The previous `0 0 0 1.5px var(--accent)` drew a 1.5px ring around the whole
+   card, which reads as a browser focus outline rather than a chosen item —
+   and it was indistinguishable from the :focus-visible state directly above.
+   Monday/Jira both tint the row instead; the ring drops to 1px so the
+   selected card no longer looks 0.5px larger than its neighbours. */
 .cp-row--selected,
 .cp-row--selected:hover {
-  box-shadow: 0 0 0 1.5px var(--accent), var(--surface-shadow-sm);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent), var(--surface-shadow-sm);
 }
 .cp-row-check { animation: row-check-in 200ms var(--ease-smooth); }
+.cp-row-dot {
+  border: 1.5px solid var(--border-secondary);
+  transition: border-color 140ms var(--ease-out);
+}
+.cp-row:hover .cp-row-dot { border-color: var(--border-tertiary); }
 @keyframes row-check-in {
   from { transform: scale(0.4); opacity: 0; }
   to   { transform: scale(1); opacity: 1; }
