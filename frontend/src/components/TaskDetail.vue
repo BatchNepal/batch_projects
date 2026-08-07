@@ -146,12 +146,13 @@
                 <Check v-if="item.done" class="size-2.5 text-white" :stroke-width="3.5" />
               </button>
               <input
+                :ref="el => setChecklistInputRef(item.id, el)"
                 class="jv-cl-text"
                 :class="{ done: item.done }"
                 :value="item.text"
-                @blur="(e) => updateCheck(item, e.target.value)"
+                @blur="(e) => onChecklistBlur(item, e.target.value)"
                 @keydown.enter="(e) => e.target.blur()"
-                @keydown.delete="(e) => { if (!item.text) removeCheck(item); }"
+                @keydown.delete="(e) => { if (!e.target.value) removeCheck(item); }"
               />
               <button class="jv-cl-del" @click="removeCheck(item)">
                 <X class="size-3" />
@@ -988,6 +989,7 @@ import MentionInput      from '@/components/MentionInput.vue'
 import ReferencePreviewCard from '@/components/ReferencePreviewCard.vue'
 import { useErpDocOpener } from '@/composables/useErpDocOpener.js'
 import { getTaskWord } from '@/constants/project-templates'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 defineEmits(['close'])
 const store = useProjectStore()
@@ -1258,11 +1260,38 @@ function onCommentMentionClick(e) {
 const LINK_TYPES = ['blocks','is blocked by','clones','is cloned by','duplicates','relates to']
 
 // ── Checklist ─────────────────────────────────────────────────────────────────
+// Rewritten after a live audit found four compounding bugs:
+//
+// 1. Response-race: every mutation blindly did `checklistItems.value =
+//    r.items`. The backend's reload-mutate-save (board.py _save_checklist)
+//    guarantees the LAST-ISSUED request's response reflects the fully merged
+//    state — but HTTP responses don't always arrive in request order, so a
+//    slower response to an EARLIER click could land after a faster one and
+//    stomp it, silently reverting a toggle the user had already made.
+//    `checklistSeq` fixes this: only the response to the most-recently-
+//    issued mutation is ever applied.
+// 2. Ghost blank rows: blur always saved whatever text was present,
+//    including empty. "Add item" -> click away without typing left a
+//    permanent invisible row that still counted in the N/total denominator.
+// 3. Backspace-to-delete checked the STALE `item.text` (the last-saved
+//    value) instead of the input's live DOM value, so it only worked on a
+//    row that had never been edited.
+// 4. No optimistic toggle — checking a box waited a full round trip before
+//    flipping, and no focus landed in a freshly-added row, so every "Add
+//    item" click required a second click to start typing.
 const checklistItems = ref([])
+let checklistSeq = 0
+const checklistInputs = new Map() // item.id -> <input> element, for post-add focus
+function setChecklistInputRef(id, el) {
+  if (el) checklistInputs.set(id, el)
+  else checklistInputs.delete(id)
+}
 
 function loadChecklist() {
   if (!issue.value?.name) { checklistItems.value = []; return }
+  const mySeq = ++checklistSeq
   getChecklist(issue.value.name).then(r => {
+    if (mySeq !== checklistSeq) return
     checklistItems.value = r.items || []
   }).catch(() => {})
 }
@@ -1272,25 +1301,50 @@ const checklistPct  = computed(() => checklistItems.value.length ? Math.round(ch
 
 function addCheck() {
   if (!issue.value?.name) return
+  const mySeq = ++checklistSeq
+  const previousIds = new Set(checklistItems.value.map(i => i.id))
   addChecklistItem(issue.value.name, '').then(r => {
+    if (mySeq !== checklistSeq) return
     checklistItems.value = r.items || []
+    // The new row is whichever id wasn't there before — focus it so typing
+    // can start immediately, matching Jira/Monday's "add item" feel.
+    const added = checklistItems.value.find(i => !previousIds.has(i.id))
+    if (added) nextTick(() => checklistInputs.get(added.id)?.focus())
   }).catch(() => {})
 }
 function toggleCheck(item) {
   if (!issue.value?.name) return
+  // Optimistic: flip immediately so the click feels instant, reconcile (or
+  // revert, on error) once the server responds.
+  const prevDone = item.done
+  item.done = !prevDone
+  const mySeq = ++checklistSeq
   toggleChecklistItem(issue.value.name, item.id).then(r => {
+    if (mySeq !== checklistSeq) return
     checklistItems.value = r.items || []
-  }).catch(() => {})
+  }).catch(() => { item.done = prevDone })
+}
+function onChecklistBlur(item, rawText) {
+  const text = (rawText || '').trim()
+  // Empty on blur = discard, never persist a blank row — whether it's a
+  // freshly-added item nobody typed into, or an existing one cleared out.
+  if (!text) { removeCheck(item); return }
+  if (text === item.text) return // unchanged — skip the network round trip
+  updateCheck(item, text)
 }
 function updateCheck(item, text) {
   if (!issue.value?.name) return
+  const mySeq = ++checklistSeq
   updateChecklistItem(issue.value.name, item.id, text).then(r => {
+    if (mySeq !== checklistSeq) return
     checklistItems.value = r.items || []
   }).catch(() => {})
 }
 function removeCheck(item) {
   if (!issue.value?.name) return
+  const mySeq = ++checklistSeq
   removeChecklistItem(issue.value.name, item.id).then(r => {
+    if (mySeq !== checklistSeq) return
     checklistItems.value = r.items || []
   }).catch(() => {})
 }
@@ -1580,7 +1634,7 @@ async function saveEditComment(c) {
 }
 
 async function deleteCommentConfirm(c) {
-  if (!confirm('Delete this comment?')) return
+  if (!await confirmDialog('Delete this comment?', { danger: true })) return
   try {
     await deleteComment(c.name)
     // Remove locally without full refresh
@@ -1632,7 +1686,7 @@ function fmtRel(d){
 }
 function fmtDate(d){return d?new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}
 async function handleDelete(){
-  if(!confirm(`Delete "${issue.value?.title}"? This cannot be undone.`))return
+  if(!await confirmDialog(`Delete "${issue.value?.title}"? This cannot be undone.`, { danger: true }))return
   try{await store.deleteCurrentIssue(issue.value.name)}catch(e){}
 }
 async function doDuplicate(){
