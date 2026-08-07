@@ -40,7 +40,7 @@
         </div>
 
         <div class="mt-6">
-          <p class="md-section-label">{{ isTimesheet ? 'Time logs' : 'Items' }}</p>
+          <p class="md-section-label">{{ isTimesheet ? 'Time logs' : isExpenseClaim ? 'Expense lines' : 'Items' }}</p>
           <DataTable :columns="columns" :rows="children">
             <template #cell-item_name="{ row }">
               <span class="text-[13px]">{{ row.item_name }}</span>
@@ -65,10 +65,18 @@
             <template #cell-rate="{ value }">{{ fmtMoney(value) }}</template>
             <template #cell-amount="{ value }">{{ fmtMoney(value) }}</template>
             <template #cell-billed_amt="{ value }">{{ fmtMoney(value) }}</template>
+            <!-- Expense Claim Detail -->
+            <template #cell-sanctioned_amount="{ value }">{{ fmtMoney(value) }}</template>
+            <template #cell-expense_date="{ value }">{{ fmtDate(value) }}</template>
+            <template #cell-custom_is_billable="{ value }">
+              <Chip size="sm" variant="soft" :color="value ? 'success' : 'default'">{{ value ? 'Yes' : 'No' }}</Chip>
+            </template>
             <template #cell-committed="{ row }">{{ fmtMoney((row.amount || 0) - (row.billed_amt || 0) - (row.rate || 0) * (row.returned_qty || 0)) }}</template>
             <template #empty>
               <p class="text-[12.5px] text-muted text-center py-8">
-                {{ isTimesheet ? 'No time logs on this timesheet.' : 'No line items.' }}
+                {{ isTimesheet ? 'No time logs on this timesheet.'
+                 : isExpenseClaim ? 'No expense lines on this claim.'
+                 : 'No line items.' }}
               </p>
             </template>
           </DataTable>
@@ -113,6 +121,7 @@ import { toast } from 'vue-sonner'
 import { Drawer, DrawerHeader, DrawerBody, DrawerFooter, Chip, Button, Icon, Skeleton, DataTable } from '@/ui'
 import { ExternalLink, FileX, Check, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { getErpDocSummary, submitTimesheet, UpgradeRequiredError } from '@/utils/api'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 const props = defineProps({
   open:    { type: Boolean, default: false },
@@ -171,7 +180,13 @@ function statusColor(status) { return STATUS_COLOR[(status || '').toLowerCase()]
 // the header chip row / rendered as the items-or-time_logs table below.
 // Iteration order follows the backend's own curated field order (erp_link.
 // _DOC_SPECS) — no separate ordering table to keep in sync.
-const SKIP_KEYS = new Set(['doctype', 'name', 'status', 'docstatus', 'items', 'time_logs', 'timesheets'])
+/* 'expenses' was missing here. It's Expense Claim's child_key (erp_link.py
+   _DOC_SPECS), so the child ARRAY fell through to the generic field grid and
+   Vue rendered it as literal JSON — users saw
+   `[ { "expense_type": "Food", "amount": 13750, ... } ]` in the drawer.
+   Every other doctype's child key was already listed; this one was simply
+   never added when Expense Claim was introduced. */
+const SKIP_KEYS = new Set(['doctype', 'name', 'status', 'docstatus', 'items', 'time_logs', 'timesheets', 'expenses'])
 const FIELD_LABELS = {
   posting_date: 'Posting date', due_date: 'Due date', customer: 'Customer',
   supplier: 'Supplier', currency: 'Currency', grand_total: 'Grand total',
@@ -179,8 +194,13 @@ const FIELD_LABELS = {
   delivery_date: 'Delivery date', per_billed: '% Billed', per_delivered: '% Delivered',
   employee: 'Employee', employee_name: 'Employee name', start_date: 'Start date',
   end_date: 'End date', total_hours: 'Total hours', per_received: '% Received',
+  total_sanctioned_amount: 'Total sanctioned',
 }
-const CURRENCY_KEYS = new Set(['grand_total', 'outstanding_amount'])
+// Same class of bug as the missing 'expenses' SKIP_KEY: every _DOC_SPECS
+// header field needs an entry here and in CURRENCY_KEYS if it's money, and
+// Expense Claim's total_sanctioned_amount had neither — it rendered as the
+// literal key "TOTAL_SANCTIONED_AMOUNT" with an unformatted "13750".
+const CURRENCY_KEYS = new Set(['grand_total', 'outstanding_amount', 'total_sanctioned_amount'])
 const PERCENT_KEYS  = new Set(['per_billed', 'per_delivered', 'per_received'])
 const HOURS_KEYS    = new Set(['total_hours'])
 
@@ -219,7 +239,20 @@ function fmtDateTime(v) {
   }
 }
 
-const children = computed(() => summary.value ? (summary.value.items || summary.value.time_logs || []) : [])
+// Date-only counterpart to fmtDateTime — expense_date is a Date field, and
+// running it through fmtDateTime appended a meaningless "12:00 AM".
+function fmtDate(v) {
+  if (!v) return '—'
+  try {
+    return new Date(v).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  } catch (e) {
+    return String(v)
+  }
+}
+
+const isExpenseClaim = computed(() => current.value.doctype === 'Expense Claim')
+const children = computed(() =>
+  summary.value ? (summary.value.items || summary.value.time_logs || summary.value.expenses || []) : [])
 
 // One "Item" column, not two — description only renders (as a second line,
 // see #cell-item_name) when it actually differs from item_name. Every row
@@ -251,9 +284,20 @@ const PO_ITEM_COLUMNS = [
   { key: 'committed',  label: 'Committed' },
 ]
 const isPurchaseOrder = computed(() => current.value.doctype === 'Purchase Order')
+// Mirrors the backend's child_fields for Expense Claim Detail. `bp_task` is
+// deliberately last and renders as the task key, not the raw docname.
+const EXPENSE_COLUMNS = [
+  { key: 'expense_type',      label: 'Type', width: '30%' },
+  { key: 'expense_date',      label: 'Date' },
+  { key: 'amount',            label: 'Claimed' },
+  { key: 'sanctioned_amount', label: 'Sanctioned' },
+  { key: 'custom_is_billable', label: 'Billable' },
+]
+
 const columns = computed(() => {
   if (isTimesheet.value) return TIME_LOG_COLUMNS
   if (isPurchaseOrder.value) return PO_ITEM_COLUMNS
+  if (isExpenseClaim.value) return EXPENSE_COLUMNS
   return ITEM_COLUMNS
 })
 
@@ -266,7 +310,7 @@ async function load() {
     summary.value = await getErpDocSummary(props.project, current.value.doctype, current.value.name)
   } catch (e) {
     error.value = e instanceof UpgradeRequiredError
-      ? 'This requires the Business plan or higher.'
+      ? 'Available on any paid plan.'
       : (e.message || 'Something went wrong loading this document.')
   } finally {
     loading.value = false
@@ -283,7 +327,7 @@ watch(() => [props.open, props.doctype, props.name], ([isOpen]) => {
 
 async function onSubmit() {
   if (submitting.value || !summary.value) return
-  if (!confirm(`Submit ${summary.value.name}? This posts the hours to ERPNext and can't be undone from here.`)) return
+  if (!await confirmDialog(`Submit ${summary.value.name}? This posts the hours to ERPNext and can't be undone from here.`)) return
   submitting.value = true
   try {
     summary.value = await submitTimesheet(props.project, current.value.name)
