@@ -6416,13 +6416,25 @@ _PROJECT_FIELD_DOCTYPES = frozenset({
     "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
     "Delivery Note", "Stock Entry", "Work Order", "Quotation", "Expense Claim",
 })
-# The remainder of ALLOWED_DOCTYPES below (Project, Customer, Supplier, Lead,
-# Opportunity, Payment Entry, Journal Entry) either carry no project
+# The remainder of _ERP_SEARCH_DOCTYPES below (Project, Customer, Supplier,
+# Lead, Opportunity, Payment Entry, Journal Entry) either carry no project
 # dimension at all (Payment Entry/Journal Entry are tagged per accounting
 # line, not on the header) or are genuine cross-project master data by
 # nature (Customer/Supplier/Lead/Opportunity) — same posture already
 # documented at custom_fields.search_field_link_options for this exact
 # allowlist. They stay unscoped, but no longer ungated: see below.
+#
+# Hoisted to module level (was a local var inside search_erp_documents only)
+# so get_erp_document_label can share it — the two are the same allowlist by
+# construction, and the frontend composable's comment already claimed a
+# module-level "_ERP_SEARCH_DOCTYPES" was the source of truth it mirrors,
+# which wasn't true until now.
+_ERP_SEARCH_DOCTYPES = [
+    "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
+    "Project", "Customer", "Supplier", "Lead", "Opportunity",
+    "Expense Claim", "Timesheet", "Delivery Note", "Stock Entry",
+    "Payment Entry", "Journal Entry", "Work Order", "Quotation",
+]
 
 
 @frappe.whitelist()
@@ -6436,13 +6448,7 @@ def search_erp_documents(doctype, query, limit=10, project=None):
     # fix the hole. The checks below ARE the authorization.
     _require_system_user()
 
-    ALLOWED_DOCTYPES = [
-        "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
-        "Project", "Customer", "Supplier", "Lead", "Opportunity",
-        "Expense Claim", "Timesheet", "Delivery Note", "Stock Entry",
-        "Payment Entry", "Journal Entry", "Work Order", "Quotation",
-    ]
-    if doctype not in ALLOWED_DOCTYPES:
+    if doctype not in _ERP_SEARCH_DOCTYPES:
         frappe.throw(f"DocType '{doctype}' is not allowed for references.")
 
     from batch_projects import access
@@ -6508,6 +6514,40 @@ def search_erp_documents(doctype, query, limit=10, project=None):
     ]
 
 
+@frappe.whitelist()
+def get_erp_document_label(doctype, name):
+    """The single-document counterpart to search_erp_documents: given a name
+    the caller already legitimately holds (a saved BP Project.client, an
+    automation rule's stored condition value, ...), resolve its display
+    title. Frontend has called this since the automation-rule Link-field
+    work landed (utils/api.js getErpDocumentLabel, composables/
+    useErpDoctypeFields.js erpDocLabel) — but this function was never
+    actually written. Every caller's `.catch()` silently swallowed the
+    "unknown method" error and fell back to showing the raw docname, so
+    every resolved-label Link field in the app (automation rule review,
+    and now Project Settings > Billing > Client) has been showing document
+    IDs instead of names since it shipped.
+
+    Same allowlist and `get_all`-not-`get_list` reasoning as
+    search_erp_documents (System Users hold zero native doc-permissions on
+    these doctypes by design) — this is a read-only label lookup for values
+    the caller already holds, not a new authorization surface, so it
+    deliberately does not add project-tenancy scoping that no existing
+    caller passes a project for either."""
+    _require_system_user()
+
+    if doctype not in _ERP_SEARCH_DOCTYPES:
+        frappe.throw(f"DocType '{doctype}' is not allowed for references.")
+    if not name:
+        return {"name": name, "label": "", "doctype": doctype}
+
+    title_field = frappe.db.get_value("DocType", doctype, "title_field") or "name"
+    fields = ["name"] if title_field == "name" else ["name", title_field]
+    row = frappe.db.get_value(doctype, name, fields, as_dict=True)
+    if not row:
+        return {"name": name, "label": name, "doctype": doctype}
+
+    return {"name": row["name"], "label": row.get(title_field) or row["name"], "doctype": doctype}
 
 
 @frappe.whitelist()
