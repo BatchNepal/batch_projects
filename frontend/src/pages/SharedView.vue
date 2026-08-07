@@ -3,7 +3,7 @@
 
     <!-- Top bar -->
     <header class="shrink-0 bg-surface border-b border-border">
-      <div class="max-w-[1400px] mx-auto w-full px-5 h-14 flex items-center justify-between gap-4">
+      <div class="max-w-[1600px] mx-auto w-full px-5 h-14 flex items-center justify-between gap-4">
         <div class="flex items-center gap-2.5 min-w-0">
           <ProjectAvatar v-if="data?.project" :theme="data.project.theme" :seed="data.project.key" size="md" />
           <div class="min-w-0">
@@ -44,7 +44,7 @@
 
     <!-- Content -->
     <main v-else class="flex-1 overflow-auto">
-      <div class="max-w-[1400px] mx-auto w-full p-5">
+      <div class="max-w-[1600px] mx-auto w-full p-5">
 
         <!-- BOARD / PROJECT scope → read-only kanban -->
         <template v-if="data.scope !== 'task'">

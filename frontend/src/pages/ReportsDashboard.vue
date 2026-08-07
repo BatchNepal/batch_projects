@@ -2,7 +2,7 @@
   <div class="h-full overflow-y-auto bg-[--surface]">
     <!-- Header band -->
     <div class="border-b border-[--border] bg-[--surface]">
-      <div class="max-w-[1200px] mx-auto px-4 sm:px-6 pt-6 pb-4">
+      <div class="max-w-[1600px] mx-auto px-4 sm:px-6 pt-6 pb-4">
         <header class="flex items-start justify-between gap-3">
           <div class="flex items-start gap-3 min-w-0">
             <span class="size-10 rounded-lg grid place-items-center shrink-0"
@@ -10,9 +10,9 @@
               <Icon :icon="BarChart3" :size="20" />
             </span>
             <div class="min-w-0">
-              <h1 class="text-[19px] font-semibold text-[--foreground] leading-7 tracking-[-0.01em]">Dashboards</h1>
+              <h1 class="text-[19px] font-semibold text-[--foreground] leading-7 tracking-[-0.01em]">Report Builder</h1>
               <p class="hidden sm:block text-[13px] text-[--muted] mt-0.5 max-w-xl">
-                Live dashboards built from your project <span class="text-[--foreground] font-medium">and ERP</span> data —
+                Build custom reports from your project <span class="text-[--foreground] font-medium">and ERP</span> data —
                 scoped by project, milestone, or time period.
               </p>
             </div>
@@ -31,7 +31,7 @@
       </div>
     </div>
 
-    <div class="max-w-[1200px] mx-auto px-4 sm:px-6 py-6">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
       <!-- Create a report: template tiles (Wrike-style, collapsible) -->
       <section class="mb-7">
         <button type="button" class="flex items-center gap-1.5 text-[13px] font-semibold text-[--foreground] mb-3"

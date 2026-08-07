@@ -267,7 +267,7 @@
 
                     <!-- Due date -->
                     <td v-if="cols.due_date" class="px-3 w-24 [&_.text-muted]:text-muted">
-                      <DueDateChip :date="task.due_date" />
+                      <DueDateChip :date="task.due_date" absolute />
                     </td>
 
                     <!-- Priority -->

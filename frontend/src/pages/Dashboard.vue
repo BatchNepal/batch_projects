@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-full bg-background font-sans text-foreground">
-    <div class="max-w-[1440px] mx-auto px-6 py-6">
+    <div class="max-w-[1600px] mx-auto px-6 py-6">
 
       <!-- ── Page Header ─────────────────────────────────────────────── -->
       <header class="flex items-start justify-between mb-6 gap-4">

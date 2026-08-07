@@ -11,7 +11,7 @@
     <div v-if="ent.loaded && !ent.can('goals')" class="goals-lock">
       <Lock class="size-5 text-primary" />
       <div>
-        <p class="text-[14px] font-semibold text-foreground">Goals require the {{ ent.requiredPlanFor('goals') }} plan</p>
+        <p class="text-[14px] font-semibold text-foreground">Track goals across every project</p>
         <p class="text-[13px] text-muted mt-1">Align epics across projects with OKR-style goal tracking.</p>
       </div>
     </div>
@@ -125,7 +125,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.goals-root { padding: 24px 28px 40px; max-width: 960px; }
+.goals-root { padding: 24px 28px 40px; max-width: 1600px; margin: 0 auto; }
 .goals-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .goals-lock { display: flex; align-items: flex-start; gap: 16px; padding: 20px; border-radius: 10px; border: 1px solid var(--border-secondary); background: color-mix(in oklab, var(--primary) 5%, transparent); }
 .goals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }

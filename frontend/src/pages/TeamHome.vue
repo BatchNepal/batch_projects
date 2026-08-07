@@ -1061,6 +1061,7 @@ import {
   ChevronRight, FolderOpen, ExternalLink,
   X, Plus, Zap, Pencil, Clock, Trash2, Check, BarChart2, Pin, PinOff, CheckSquare,
 } from 'lucide-vue-next'
+import { alertDialog } from '@/composables/useConfirmDialog'
 
 const route   = useRoute()
 const store   = useProjectStore()
@@ -1397,7 +1398,7 @@ async function toggleProjectAssign(p) {
     await store.fetchTeams()
   } catch (e) {
     console.error('Failed to assign project', e)
-    alert(e.message || 'Failed to update project assignment')
+    alertDialog(e.message || 'Failed to update project assignment')
   }
 }
 

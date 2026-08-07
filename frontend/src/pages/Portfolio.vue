@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-full bg-[var(--background)] font-sans text-[var(--foreground)]">
-    <div class="max-w-[1440px] mx-auto px-6 py-6">
+    <div class="max-w-[1600px] mx-auto px-6 py-6">
       <header class="flex items-center justify-between mb-6 gap-4">
         <div>
           <h1 class="text-xl font-semibold text-foreground leading-7">Portfolio</h1>
