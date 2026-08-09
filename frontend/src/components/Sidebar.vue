@@ -239,7 +239,7 @@
           </NavItem>
 
           <!-- "More" — overflow menu for less-frequently-used surfaces
-               (Wrike keeps only a few items always visible, tucks the rest
+               (a short always-visible set, with the rest tucked
                behind one "More" popover instead of a long flat list). -->
           <div class="relative">
             <NavItem :active="moreMenuActive" data-more-menu @click="moreMenuOpen = !moreMenuOpen">
@@ -919,7 +919,7 @@ const reportsActive = computed(() => {
 
 // Dashboards moved into the "More" popover (see moreMenuOpen) — no pinned
 // sub-items inline in the sidebar, matching the flat single-click reference
-// (Wrike's own "More" menu has no nested items either).
+// (a "More" menu with nested submenus becomes a maze, not a shortcut).
 // Lights up the "More" trigger while any dashboard route is open (the
 // listing itself lives inside that popover — see "Dashboards" button
 // above — and pinned dashboards get their own top-level row instead, see

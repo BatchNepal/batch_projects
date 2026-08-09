@@ -165,7 +165,7 @@
           </Transition>
         </div>
 
-        <!-- RIGHT — live preview (Asana-style) -->
+        <!-- RIGHT — live preview -->
         <aside class="hidden lg:block sticky top-12" aria-hidden="true">
           <div class="pv rounded-md overflow-hidden">
             <!-- Mock project header -->

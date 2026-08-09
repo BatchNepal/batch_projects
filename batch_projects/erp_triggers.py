@@ -32,7 +32,7 @@ from batch_projects.api.erp_link import _tenant_ok
 #   - WORKSPACE-scope rules can match ANY doctype's lifecycle event — no
 #     project resolution needed (payload carries project=None, same as an
 #     external.webhook event — see run_for_event's project=None handling).
-#     This is the intended n8n-style extension point: "when anything of type
+#     This is the intended extension point: "when anything of type
 #     X happens anywhere, do Y."
 #   - PROJECT-scope rules only apply to the 4 hand-wired doctypes above,
 #     which already know how to resolve a BP Project via _tenant_ok. Generic

@@ -1,6 +1,6 @@
 """Premium email templates for batch_projects notifications.
 
-Design language — "06 Linear/Asana"
+Design language — quiet, typographic, product-notification style
 ────────────────────────────────────
 • White card on a soft grey page; one 3px coloured top-rule encodes the
   notification type without words.
@@ -9,7 +9,7 @@ Design language — "06 Linear/Asana"
   in the footer — never a hard-coded vendor name.
 • Issue title is the hero; an actor row (coloured initials avatar + sentence)
   states who did what; threaded context (status pills, comment quote, change
-  table) is indented to the avatar gutter — the Linear/Asana rhythm.
+  table) is indented to the avatar gutter, giving every block one rhythm.
 • One neutral ramp (#101828 → #98A2B3) and one semantic pill palette shared by
   every template, so "Done / Blocked / In Review" mean the same colour everywhere.
 • Aggregate emails (digest / weekly / report) reuse a single stats-panel atom.
@@ -69,7 +69,7 @@ _PRIORITY_COLOR = {
     "Critical": "#B42318",
 }
 
-# Deterministic coloured avatars (Linear-style) keyed off the actor's name
+# Deterministic coloured avatars keyed off the actor's name
 _AVATAR = [
     ("#EFF8FF", "#175CD3"), ("#ECFDF3", "#027A48"), ("#FFFAEB", "#B54708"),
     ("#FEF3F2", "#B42318"), ("#F4F3FF", "#5925DC"), ("#ECFDFF", "#0E7090"),

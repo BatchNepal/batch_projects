@@ -30,7 +30,8 @@ export function playNotificationPing() {
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35)
     gain.connect(ctx.destination)
 
-    // Two quick ascending notes (Slack/Jira-style ping), not a single beep.
+    // Two quick ascending notes, not a single beep — reads as a notification
+    // rather than an error buzz.
     const notes = [
       { freq: 880,    at: 0 },
       { freq: 1318.5, at: 0.08 },

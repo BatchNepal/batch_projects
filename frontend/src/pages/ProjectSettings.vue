@@ -2233,7 +2233,7 @@ function goBack() {
    Rows inside keep their py-4; the card supplies the frame + h-padding. */
 /* Settings sections = airy divided lists. NO container box, NO gray panel —
    structure from whitespace + hairline rows; only the form controls carry an
-   edge. Linear/Notion register, not an admin-template card grid. */
+   edge. A focused document register, not an admin-template card grid. */
 .bp-set-card {
   background: var(--surface);
   box-shadow: var(--surface-shadow);

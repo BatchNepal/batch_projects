@@ -16,7 +16,7 @@ import { Handle, Position } from '@vue-flow/core'
 import { Plus } from 'lucide-vue-next'
 
 // A dangling "+" placeholder node — sits at the end of an open edge,
-// inviting the next step (n8n's own affordance for this is the pattern
+// inviting the next step (an inline affordance on the edge is the pattern
 // being followed; this is our own component/markup, not their code).
 defineProps({ id: { type: String, required: true } })
 const emit = defineEmits(['add'])

@@ -1513,7 +1513,7 @@ function scrollToToday(smooth = true) {
   color: var(--accent-foreground); font-size: 11px; font-weight: var(--font-bold);
   text-shadow: 0 1px 1.5px rgba(0,0,0,.25);
 }
-/* ClickUp: label + avatars live inside the bar once there's room (see the
+/* Label + avatars live inside the bar once there's room (see the
    w>=64 branch in the template) — flex children of .gt-bar, laid out over
    the absolutely-positioned fill/progress layers beneath them. */
 .gt-bar-in {

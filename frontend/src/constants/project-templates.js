@@ -5,7 +5,7 @@ import {
 
 export const TEMPLATE_CATEGORIES = ['Software', 'Services', 'Construction', 'Operations', 'General']
 
-// Jira/monday-style category accenting — tile bg gets a soft tint of the
+// Category accenting — tile bg gets a soft tint of the
 // color, the icon gets the full color. Saturated and distinct per industry.
 export const CATEGORY_COLORS = {
   'Start fresh': '#64748B',
@@ -30,11 +30,11 @@ export const TEMPLATES = [
   { id: 'simple',          label: 'Simple',          icon: CircleDashed,  category: 'General',      description: 'Three states, one task type.' },
 ]
 
-// Jira calls its work item an "Issue"; Wrike/Monday/Asana call it a "Task" —
+// Some methodologies call the unit of work an "Issue", most call it a "Task" —
 // hardcoding either everywhere reads wrong for the other half of our
 // templates (a "Bug tracking" software project vs. a "Site management"
 // construction one). Software is the one category whose users actually
-// come from Jira; everything else maps to the more universal "Task".
+// use issue-tracker language; everything else maps to the more universal "Task".
 export function getTaskWord(templateId) {
   const tpl = TEMPLATES.find(t => t.id === templateId)
   return tpl?.category === 'Software' ? 'Issue' : 'Task'

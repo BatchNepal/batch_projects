@@ -145,7 +145,7 @@ const routes = [
     path: "/workspace/dashboard",
     redirect: "/workspace/reports/dashboard",
   },
-  // ── Dashboards: Wrike-style live/glance boards — separate from Reports
+  // ── Dashboards: live/glance boards — separate from Reports
   // above (scheduled/exportable, BP Report). See BP Dashboard. ──
   {
     path: "/workspace/dashboards",

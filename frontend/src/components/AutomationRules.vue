@@ -239,7 +239,7 @@
       </div>
     </TabsPanel>
 
-    <!-- ══════════════ WORKFLOWS TAB — n8n-style graph canvas ══════ -->
+    <!-- ══════════════ WORKFLOWS TAB — graph canvas ═══════════════ -->
     <TabsPanel :model-value="activeTab" value="workflows">
       <div v-if="unlocked" class="flex items-center justify-between mb-3">
         <p class="text-[13px] text-muted">
@@ -402,7 +402,7 @@ async function load() {
   } catch (e) { /* viewer with no access — leave empty */ }
 }
 
-// ── Workflows tab — the n8n-style canvas builder, lives
+// ── Workflows tab — the node-graph canvas builder, lives
 // alongside the flat rules above rather than replacing them ──
 const workflows = ref([])
 async function loadWorkflows() {

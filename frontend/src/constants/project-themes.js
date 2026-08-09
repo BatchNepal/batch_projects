@@ -1,6 +1,6 @@
 // Project theme avatars — complete pre-rendered tiles (bold color fill +
 // illustrated character, baked as one image) supplied directly by design,
-// matching Jira's real avatar language. Each project gets a distinct,
+// an illustrated avatar language. Each project gets a distinct,
 // memorable identity instead of a plain color dot — see the Dashboard
 // "Project Health" cards. Assigned round-robin at project creation; stored
 // on BP Project as `theme` (falls back to a hash-of-key pick for projects

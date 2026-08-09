@@ -1,12 +1,12 @@
 """
 BP Workflow
 ───────────
-The n8n-style graph automation surface — additive alongside `BP Automation
+The graph automation surface — additive alongside `BP Automation
 Rule` (that doctype's simple flat-list rules are untouched; see
 WORKPLAN-PHASE24-AUTOMATION-CANVAS/00-README.md Ground Rule 6).
 
 `nodes`/`edges` are a flat array pair (Vue Flow's own native shape), not
-n8n's nested connections-by-node-name map — see 01-DATA-MODEL.md §2 for why.
+a nested connections-by-node-name map — see 01-DATA-MODEL.md §2 for why.
 Validation here is the SERVER-SIDE gate; the canvas UI should also validate
 client-side for UX, but this is the one that actually matters.
 """
