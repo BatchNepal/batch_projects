@@ -197,6 +197,7 @@ scheduler_events = {
         "batch_projects.events.send_due_date_reminders",
         "batch_projects.events.run_due_soon_automations",
         "batch_projects.events.run_overdue_automations",
+        "batch_projects.api.erp_link.reconcile_erpnext_sync",
     ],
     "daily_long": [
         "batch_projects.events.send_daily_digest",

@@ -50,6 +50,71 @@ class BPProject(Document):
         self._validate_json_field("custom_fields", list)
         self._validate_json_field("enabled_views", list)
 
+    def after_insert(self):
+        """Auto-link this project to an ERPNext Project on creation.
+
+        Fires post-commit — the BP Project row exists, so the link helper can
+        re-read it via frappe.get_doc. Skipped when the project has no
+        company, already carries a link, or the optional opt-out field
+        `auto_create_erpnext_project` is explicitly unchecked."""
+        # ── Recursion guard: frappe.db.set_value inside the helper fires
+        #    on_update, which must bail immediately ──────────────────────
+        if frappe.flags.in_bp_project_sync:
+            return
+
+        if not self.company or self.erpnext_project:
+            return
+
+        # Field doesn't exist yet (migration pending) — default True so the
+        # feature works immediately; an admin can add the field later to opt
+        # out per-project.
+        if not getattr(self, "auto_create_erpnext_project", True):
+            return
+
+        try:
+            frappe.flags.in_bp_project_sync = True
+            from batch_projects.api.erp_link import _auto_link_erpnext_project
+            _auto_link_erpnext_project(self.name)
+        except Exception:
+            frappe.log_error(
+                title="BP Project auto-link failed",
+                message=frappe.get_traceback(),
+            )
+        finally:
+            frappe.flags.in_bp_project_sync = False
+
+    def on_update(self):
+        """Write-back status and target-end-date to linked ERPNext Project.
+
+        Only fires when the BP Project actually carries an erpnext_project
+        link AND a tracked field changed. Degrades silently on any error —
+        the BP Project save must never be blocked by a sync failure."""
+        # ── Recursion guard — see after_insert above ────────────────────
+        if frappe.flags.in_bp_project_sync:
+            return
+
+        if not self.erpnext_project:
+            return
+
+        changed = (
+            self.has_value_changed("status")
+            or self.has_value_changed("target_end_date")
+        )
+        if not changed:
+            return
+
+        try:
+            frappe.flags.in_bp_project_sync = True
+            from batch_projects.api.erp_link import _sync_to_erpnext_project
+            _sync_to_erpnext_project(self.name)
+        except Exception:
+            frappe.log_error(
+                title="BP Project ERPNext sync failed",
+                message=frappe.get_traceback(),
+            )
+        finally:
+            frappe.flags.in_bp_project_sync = False
+
     def _validate_json_field(self, fieldname, expected_type):
         val = getattr(self, fieldname, None)
         if not val:

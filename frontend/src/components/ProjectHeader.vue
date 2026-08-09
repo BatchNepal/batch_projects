@@ -30,16 +30,16 @@
             <h1 class="text-lg font-semibold text-foreground truncate max-w-[480px]">
               {{ currentProject?.project_name || projectKey }}
             </h1>
-            <a
+            <button
               v-if="pipelineSource"
-              :href="pipelineSource.href"
-              target="_blank" rel="noopener noreferrer"
+              type="button"
+              @click="openPipelineSource"
               class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
                      bg-[var(--surface-secondary)] text-muted hover:text-foreground shrink-0 transition-colors"
               :title="`Created from ${pipelineSource.typeLabel} ${pipelineSource.name}`"
             >
               <component :is="pipelineSource.icon" :size="10" :stroke-width="2" /> From {{ pipelineSource.name }}
-            </a>
+            </button>
           </div>
         </div>
 
@@ -292,7 +292,7 @@ import {
   LayoutDashboard, Kanban, List, ListTodo, Paperclip, GanttChart,
   Banknote, Lock, NotebookText, PenTool, FileText, Target, UserPlus,
 } from 'lucide-vue-next'
-import { saveProjectAsTemplate, updateProjectGeneral } from '@/utils/api'
+import { saveProjectAsTemplate, updateProjectGeneral, ensureErpDocAccess } from '@/utils/api'
 import { promptDialog, confirmDialog } from '@/composables/useConfirmDialog'
 
 const route  = useRoute()
@@ -321,12 +321,28 @@ const currentProject = computed(() => store.projects.find(p => p.key === project
 const pipelineSource = computed(() => {
   const p = currentProject.value
   if (!p) return null
-  if (p.source_sales_order) return { name: p.source_sales_order, typeLabel: 'Sales Order', href: `/app/sales-order/${p.source_sales_order}`, icon: Banknote }
-  if (p.source_quotation)   return { name: p.source_quotation,   typeLabel: 'Quotation',   href: `/app/quotation/${p.source_quotation}`,     icon: Banknote }
-  if (p.source_opportunity) return { name: p.source_opportunity, typeLabel: 'Opportunity', href: `/app/opportunity/${p.source_opportunity}`, icon: Target }
-  if (p.source_lead)        return { name: p.source_lead,        typeLabel: 'Lead',        href: `/app/lead/${p.source_lead}`,               icon: UserPlus }
+  if (p.source_sales_order) return { name: p.source_sales_order, typeLabel: 'Sales Order', doctype: 'Sales Order', href: `/app/sales-order/${p.source_sales_order}`, icon: Banknote }
+  if (p.source_quotation)   return { name: p.source_quotation,   typeLabel: 'Quotation',   doctype: 'Quotation',   href: `/app/quotation/${p.source_quotation}`,     icon: Banknote }
+  if (p.source_opportunity) return { name: p.source_opportunity, typeLabel: 'Opportunity', doctype: 'Opportunity', href: `/app/opportunity/${p.source_opportunity}`, icon: Target }
+  if (p.source_lead)        return { name: p.source_lead,        typeLabel: 'Lead',        doctype: 'Lead',        href: `/app/lead/${p.source_lead}`,               icon: UserPlus }
   return null
 })
+
+// SPA members hold zero ERPNext DocPerm by design — a raw desk link 403s
+// unless the backend first grants a per-document share (tenancy-checked
+// against this project's own source_* fields). See useErpDocOpener.js.
+async function openPipelineSource() {
+  const src = pipelineSource.value
+  if (!src) return
+  const win = window.open('', '_blank', 'noopener')
+  try {
+    await ensureErpDocAccess(src.doctype, src.name)
+    if (win) win.location = src.href
+  } catch (e) {
+    if (win) win.close()
+    throw e
+  }
+}
 
 const COLORS = ['#225DFB','#7C3AED','#059669','#DC2626','#D97706','#0891B2','#BE185D','#9333EA']
 const projectColor = computed(() => {

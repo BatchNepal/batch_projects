@@ -943,7 +943,7 @@ import { useRoute } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 import { PRIORITIES, PRIORITY_MAP, avatarColor, initials } from '@/utils/constants.js'
 import { toast } from 'vue-sonner'
-import { createTask, getMirrorSchema, getMirrorValues, getViewPrefs, saveViewPrefs, deleteTask, createEpic, updateProjectLabels, createSprint } from '@/utils/api'
+import { createTask, getMirrorSchema, getMirrorValues, getViewPrefs, saveViewPrefs, deleteTask, createEpic, updateProjectLabels, createSprint, ensureErpDocAccess } from '@/utils/api'
 import CreatablePicker from '@/components/CreatablePicker.vue'
 import { formatMirrorValue } from '@/utils/mirrorFormat.js'
 import { resolveMarkerColor } from '@/utils/customFields.js'
@@ -1429,13 +1429,21 @@ function mirrorSortVal(issue,key){
 const moneyDrawerOpen    = ref(false)
 const moneyDrawerDoctype = ref('')
 const moneyDrawerName    = ref('')
-function openMirrorDoc(doctype,name){
+async function openMirrorDoc(doctype,name){
   if(MONEY_DRAWER_DOCTYPES.has(doctype)){
     moneyDrawerDoctype.value=doctype
     moneyDrawerName.value=name
     moneyDrawerOpen.value=true
-  }else{
-    window.open(`/app/${doctype.toLowerCase().replace(/ /g,'-')}/${encodeURIComponent(name)}`,'_blank','noopener')
+    return
+  }
+  // SPA members hold zero ERPNext DocPerm by design — see useErpDocOpener.js
+  const win = window.open('', '_blank', 'noopener')
+  try {
+    await ensureErpDocAccess(doctype, name)
+    if (win) win.location = `/app/${doctype.toLowerCase().replace(/ /g,'-')}/${encodeURIComponent(name)}`
+  } catch (e) {
+    if (win) win.close()
+    throw e
   }
 }
 function refreshMirrors(){

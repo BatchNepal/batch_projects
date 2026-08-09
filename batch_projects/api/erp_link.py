@@ -46,7 +46,11 @@ def link_erpnext_project(project, erpnext_project):
 @frappe.whitelist()
 def create_and_link_erpnext_project(project):
     """One-click path when no matching ERPNext Project exists yet: create one
-    from this BP Project's basics and link it."""
+    from this BP Project's basics and link it.
+
+    Sets status='Open' at creation time only. Subsequent BP Project status,
+    date, and percent_complete changes are NOT written back to the linked
+    ERPNext Project."""
     _check_permission(project, "BP Admin")
 
     doc = frappe.get_doc("BP Project", project)
@@ -1375,6 +1379,12 @@ def generate_invoice(project, period=None, tasks=None,
             )
 
     si.insert(ignore_permissions=True)
+    # ProjectMoney.vue's "Open" toast action deep-links straight to
+    # /app/sales-invoice/<name> — SPA members hold zero native ERPNext role
+    # by design, so grant the one document they just legitimately created.
+    frappe.share.add_docshare(
+        "Sales Invoice", si.name, frappe.session.user, read=1,
+        flags={"ignore_share_permission": True})
     frappe.db.commit()
 
     return {
@@ -1622,6 +1632,14 @@ def generate_milestone_invoice(milestone):
 
     doc.db_set("invoice_status", "Invoiced", update_modified=False)
     doc.db_set("sales_invoice", si.name, update_modified=False)
+    # The "Open" toast action deep-links straight to /app/sales-invoice/<name>
+    # — same zero-native-ERPNext-role gap ensure_erp_doc_access exists for,
+    # but this invoice has no BP Task Reference/project-field trail for that
+    # generic lookup to find, so grant the share directly here instead, where
+    # tenancy is already established (we just created it for this project).
+    frappe.share.add_docshare(
+        "Sales Invoice", si.name, frappe.session.user, read=1,
+        flags={"ignore_share_permission": True})
     frappe.db.commit()
 
     return {"ok": True, "sales_invoice": si.name, "grand_total": si.grand_total}
@@ -1752,6 +1770,12 @@ def generate_expense_invoice(project):
     si.currency = inv_currency
     si.conversion_rate = fx
     si.insert(ignore_permissions=True)
+    # ProjectMoney.vue's "Open" toast action deep-links straight to
+    # /app/sales-invoice/<name> — SPA members hold zero native ERPNext role
+    # by design, so grant the one document they just legitimately created.
+    frappe.share.add_docshare(
+        "Sales Invoice", si.name, frappe.session.user, read=1,
+        flags={"ignore_share_permission": True})
 
     for r in rows:
         frappe.db.set_value("Expense Claim Detail", r.name, "custom_sales_invoice", si.name, update_modified=False)
@@ -2045,6 +2069,65 @@ def get_erp_doc_summary(project, doctype, name):
     return out
 
 
+# Doctypes outside the Money drawer's 6-doctype scope that still get a raw
+# "Open in ERPNext" desk link somewhere in the SPA (ProjectHeader's pipeline
+# source, Connect-column references) — the BP Project field each is trusted
+# from. Anything not listed here is only ever trusted via a BP Task
+# Reference row (see _projects_referencing below).
+_PROJECT_FIELD_FOR_DOCTYPE = {
+    "Sales Order":  "source_sales_order",
+    "Quotation":    "source_quotation",
+    "Opportunity":  "source_opportunity",
+    "Lead":         "source_lead",
+    "Customer":     "client",
+}
+
+
+def _projects_referencing(doctype: str, name: str) -> set:
+    """Every BP Project that genuinely references (doctype, name) — via its
+    own pipeline-source/client field, or via a task's BP Task Reference.
+    Purely DB-derived, never trusts a client-supplied project."""
+    projects = set()
+    field = _PROJECT_FIELD_FOR_DOCTYPE.get(doctype)
+    if field:
+        projects |= set(frappe.get_all("BP Project", filters={field: name}, pluck="name"))
+    rows = frappe.db.sql(
+        """SELECT DISTINCT t.project FROM `tabBP Task Reference` r
+           JOIN `tabBP Task` t ON t.name = r.parent
+           WHERE r.ref_doctype=%s AND r.ref_name=%s""",
+        (doctype, name),
+    )
+    projects |= {r[0] for r in rows if r[0]}
+    return projects
+
+
+@frappe.whitelist()
+def ensure_erp_doc_access(doctype, name):
+    """Grant the caller a per-document read share on an ERPNext doc the SPA
+    is about to deep-link to (raw /app/<doctype>/<name> navigation) — SPA
+    members hold zero ERPNext DocPerm by design (see get_erp_doc_summary
+    above), so that link 403s for anyone without an unrelated ERPNext role.
+    Tenancy (does a project the caller can see genuinely reference this doc)
+    IS the authorization, same posture as get_erp_doc_summary; this just
+    covers doctypes outside the Money drawer's scope (Customer, Quotation,
+    Opportunity, Lead, Supplier, Stock Entry, ...). A per-document DocShare
+    (not a doctype-wide DocPerm grant) keeps the exposure to exactly the one
+    document the project actually links, never the whole doctype."""
+    from batch_projects import access
+
+    if not frappe.db.exists(doctype, name):
+        frappe.throw(_DENIED)
+
+    user = frappe.session.user
+    projects = _projects_referencing(doctype, name)
+    if not any(access.has_at_least(p, "Viewer", user) for p in projects):
+        frappe.throw(_DENIED)
+
+    frappe.share.add_docshare(
+        doctype, name, user, read=1, flags={"ignore_share_permission": True})
+    return {"ok": True}
+
+
 @frappe.whitelist()
 def submit_timesheet(project, timesheet):
     """The ONLY mutation the Money drawer exposes. GL-posting documents
@@ -2096,11 +2179,17 @@ def submit_timesheet(project, timesheet):
 
 # ─── FIELD METADATA ────────────────────────────────────────────────────────
 
-def _doctype_field_rows(doctype):
+def _doctype_field_rows(doctype, include_read_only=False):
     """Shared row-shaping for doctype field metadata — used by both the
     write-scoped get_erp_doctype_fields below and board.py's read-scoped
-    get_erp_doctype_fields_readonly (condition builders). Same shape either
-    way: only the caller's doctype whitelist differs (write vs. read)."""
+    get_erp_doctype_fields_readonly (condition builders, the dashboard row
+    designer). Same shape either way: only the caller's doctype whitelist
+    differs (write vs. read) — and, now, whether read_only/computed fields
+    (task_key, modified, owner, ...) are worth offering at all: never for a
+    WRITE target (include_read_only=False, the default — you can't set
+    them), but exactly what a read-only DISPLAY context wants (a row
+    designer showing "Modified" or a computed field is completely
+    reasonable, unlike trying to write to one)."""
     meta = frappe.get_meta(doctype)
     skip_types = {
         "Section Break", "Column Break", "Tab Break", "Table", "Table MultiSelect",
@@ -2109,7 +2198,9 @@ def _doctype_field_rows(doctype):
     }
     out = []
     for f in meta.fields:
-        if f.fieldtype in skip_types or f.hidden or f.read_only:
+        if f.fieldtype in skip_types or f.hidden:
+            continue
+        if f.read_only and not include_read_only:
             continue
         row = {
             "fieldname": f.fieldname,
@@ -2146,3 +2237,226 @@ def get_erp_doctype_fields(doctype):
     if doctype not in _ERPNEXT_DOCTYPE_WHITELIST:
         frappe.throw(f"DocType '{doctype}' is not allowed here.")
     return _doctype_field_rows(doctype)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Internal helpers — called ONLY from doctype controller hooks (bp_project.py).
+# No @frappe.whitelist(), no gateway check, no permission check.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Status mapping: BP Project → ERPNext Project.
+# BP Project has 3 statuses (Active / Archived / On Hold — bp_project.json:65).
+# ERPNext Project uses Open / Completed / Cancelled / Hold.
+_BP_TO_ERP_STATUS = {
+    "Active":    "Open",
+    "Archived":  "Completed",
+    "On Hold":   "Hold",
+}
+
+
+def _auto_link_erpnext_project(project):
+    """Create and link an ERPNext Project for `project` (a BP Project name).
+
+    Called from bp_project.py after_insert. No gateway signature, no
+    @frappe.whitelist() — the BP Project was already created through a
+    gateway-verified path, so re-verifying here would always fail inside
+    a doc event.
+
+    Degrades silently: a missing company, a lapsed license, or an ERPNext
+    insert failure are all logged and swallowed — the BP Project save
+    succeeds regardless.
+    """
+    doc = frappe.get_doc("BP Project", project)
+    if not doc.company or doc.erpnext_project:
+        return
+
+    company = doc.company or frappe.defaults.get_global_default("company")
+    if not company:
+        return
+
+    # Honour the entitlements gate (reads 24h-cached tier; no-ops if lapsed).
+    try:
+        from batch_projects.entitlements import require_feature
+        require_feature("integrations")
+    except Exception:
+        return
+
+    erp_doc = frappe.get_doc({
+        "doctype": "Project",
+        "project_name": doc.project_name,
+        "company": company,
+        "customer": doc.client or None,
+        "status": "Open",
+    })
+    erp_doc.insert(ignore_permissions=True)
+
+    # Write the link back. Uses frappe.db.set_value (not doc.save()) so the
+    # recursion guard in bp_project.py.on_update catches the resulting
+    # on_update fire and bails immediately.
+    frappe.db.set_value("BP Project", project, "erpnext_project", erp_doc.name)
+    doc.add_comment(
+        "Comment",
+        f"Auto-linked to ERPNext Project <b>{erp_doc.name}</b>.",
+    )
+
+
+def _sync_to_erpnext_project(bp_project_name):
+    """Write-back status and target_end_date to the linked ERPNext Project.
+
+    Called from bp_project.py on_update. Uses frappe.db.set_value (never
+    doc.save()) on the ERPNext Project to avoid re-entrant lifecycle hooks.
+    No @frappe.whitelist(), no gateway check — the caller already verified
+    the user had permission to save the BP Project.
+    """
+    bp = frappe.get_doc("BP Project", bp_project_name)
+    if not bp.erpnext_project:
+        return
+
+    if not frappe.db.exists("Project", bp.erpnext_project):
+        return
+
+    updates = {}
+
+    erp_status = _BP_TO_ERP_STATUS.get(bp.status)
+    if erp_status:
+        updates["status"] = erp_status
+
+    if bp.target_end_date:
+        updates["expected_end_date"] = bp.target_end_date
+
+    if updates:
+        frappe.db.set_value("Project", bp.erpnext_project, updates)
+
+
+def reconcile_erpnext_sync():
+    """Daily background job: reconcile BP Project ↔ ERPNext Project.
+
+    Two passes, capped per run so a large site never exceeds the scheduler
+    timeout:
+
+    1. Un-linked projects where company is set → auto-link them (up to
+       50 per run). Respects the per-project `auto_create_erpnext_project`
+       flag when present (defaults True).
+    2. Linked projects → compare status and target_end_date against the
+       live ERPNext Project. Sync any that drifted (up to 200 per run).
+
+    Individual failures are logged and skipped — one broken project never
+    aborts the whole batch. Runs under `frappe.flags.in_bp_project_sync` so
+    document hooks (bp_project.py on_update) bail immediately on every
+    frappe.db.set_value call inside the helpers.
+    """
+    from batch_projects.entitlements import require_feature
+
+    # Honour entitlements (reads 24h-cached tier; no-ops if lapsed).
+    try:
+        require_feature("integrations")
+    except Exception:
+        return
+
+    frappe.flags.in_bp_project_sync = True
+    stats = {"auto_linked": 0, "synced": 0, "skipped": 0, "failed": 0}
+
+    try:
+        # ── Pass 1: Auto-link un-linked projects with a company ──────
+        unlinked = frappe.db.get_all(
+            "BP Project",
+            filters={
+                "erpnext_project": ["is", "not set"],
+                "company": ["is", "set"],
+            },
+            pluck="name",
+            limit_page_length=50,
+        )
+
+        for bp_name in unlinked:
+            try:
+                bp = frappe.get_doc("BP Project", bp_name)
+                # Honour opt-out flag (field may not exist yet — default
+                # True so the feature works until the migration ships).
+                if not getattr(bp, "auto_create_erpnext_project", True):
+                    stats["skipped"] += 1
+                    continue
+                _auto_link_erpnext_project(bp_name)
+                stats["auto_linked"] += 1
+            except Exception:
+                frappe.log_error(
+                    title="Reconcile auto-link failed",
+                    message=frappe.get_traceback(),
+                    reference_doctype="BP Project",
+                    reference_name=bp_name,
+                )
+                stats["failed"] += 1
+
+        # ── Pass 2: Sync status / date drift on linked projects ───
+        linked = frappe.db.get_all(
+            "BP Project",
+            filters={"erpnext_project": ["is", "set"]},
+            fields=["name", "status", "target_end_date", "erpnext_project"],
+            limit_page_length=200,
+        )
+
+        # Build a lookup of ERPNext Project state in one query (avoids
+        # N+1 frappe.get_doc / frappe.db.get_value calls in the loop).
+        erp_names = list({
+            r["erpnext_project"]
+            for r in linked
+            if r.get("erpnext_project")
+        })
+        erp_map = {}
+        if erp_names:
+            for erp in frappe.db.get_all(
+                "Project",
+                filters={"name": ["in", erp_names]},
+                fields=["name", "status", "expected_end_date"],
+            ):
+                erp_map[erp["name"]] = erp
+
+        for bp_row in linked:
+            try:
+                erp = erp_map.get(bp_row["erpnext_project"])
+                if not erp:
+                    stats["skipped"] += 1
+                    continue
+
+                needs_sync = False
+
+                # Status mismatch?
+                expected_status = _BP_TO_ERP_STATUS.get(bp_row["status"])
+                if expected_status and erp.get("status") != expected_status:
+                    needs_sync = True
+
+                # Date mismatch?
+                bp_date = str(bp_row.get("target_end_date") or "")
+                erp_date = str(erp.get("expected_end_date") or "")
+                if bp_date and bp_date != erp_date:
+                    needs_sync = True
+
+                if needs_sync:
+                    _sync_to_erpnext_project(bp_row["name"])
+                    stats["synced"] += 1
+                else:
+                    stats["skipped"] += 1
+            except Exception:
+                frappe.log_error(
+                    title="Reconcile sync failed",
+                    message=frappe.get_traceback(),
+                    reference_doctype="BP Project",
+                    reference_name=bp_row["name"],
+                )
+                stats["failed"] += 1
+
+    finally:
+        frappe.flags.in_bp_project_sync = False
+
+    from frappe.utils.logger import get_logger
+
+    logger = get_logger("batch_projects.reconcile")
+    logger.info(
+        "ERPNext reconcile complete: auto_linked=%d synced=%d skipped=%d failed=%d",
+        stats["auto_linked"],
+        stats["synced"],
+        stats["skipped"],
+        stats["failed"],
+    )
+
+    return stats
