@@ -75,6 +75,20 @@
       "default": "1"
     },
     {
+      "fieldname": "last_run_at",
+      "fieldtype": "Datetime",
+      "label": "Last Run At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "last_run_status",
+      "fieldtype": "Select",
+      "label": "Last Run Status",
+      "options": "\nSuccess\nFailed\nSkipped",
+      "read_only": 1,
+      "in_standard_filter": 1
+    },
+    {
       "fieldname": "section_trigger",
       "fieldtype": "Section Break",
       "label": "Trigger"
@@ -96,7 +110,7 @@
       "reqd": 1,
       "in_list_view": 0,
       "in_standard_filter": 0,
-      "options": "task.created\ntask.updated\ntask.status_changed\ntask.assigned\ntask.unassigned\ntask.due_soon\ntask.overdue\ntask.field_changed\ntask.moved_sprint\ncomment.added\nschedule.recurring\nschedule.relative\nerp.invoice_submitted\nerp.payment_received\nerp.so_confirmed\nerp.doc_event\nexternal.webhook"
+      "options": "task.created\ntask.updated\ntask.status_changed\ntask.assigned\ntask.unassigned\ntask.due_soon\ntask.overdue\ntask.field_changed\ntask.moved_sprint\ntask.deleted\ncomment.added\nschedule.recurring\nschedule.relative\nerp.invoice_submitted\nerp.payment_received\nerp.so_confirmed\nerp.doc_event\nexternal.webhook"
     },
     {
       "fieldname": "trigger_config",

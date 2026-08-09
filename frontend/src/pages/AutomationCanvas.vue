@@ -101,6 +101,7 @@
           @connect="onConnect"
           @node-click="onNodeClick"
           @node-drag-start="pushHistory"
+          @node-drag-stop="onNodeDragStop"
           @node-context-menu="onNodeContextMenu"
           @edge-context-menu="onEdgeContextMenu"
           @pane-context-menu="onPaneContextMenu"
@@ -329,6 +330,16 @@ function onConnect(connection) {
 const configPanel = ref({ open: false, node: null })
 function onNodeClick({ node }) {
   if (node.type !== 'workflow') return
+  // Clicking the node that failed shows you exactly why, right
+  // there — the full message (Executions' own list still truncates to
+  // 160px so a graph stays scannable), before the Configure panel opens
+  // under it so fixing it is one motion, not a separate lookup.
+  if (node.data.status === 'error' && node.data.errorMessage) {
+    toast.error(node.data.label || 'Node failed', {
+      description: node.data.errorMessage,
+      duration: 8000,
+    })
+  }
   configPanel.value = { open: true, node }
 }
 function onSaveNodeConfig({ nodeId, label, config, retry, onError, disabled }) {
@@ -614,8 +625,20 @@ watch(() => props.workflowId, (id) => { workflowName.value = id; load() })
 // during load() too (nodes/edges/title all get set there) — resetting
 // isDirty at load()'s own end, after everything has settled, cancels that
 // out without needing a separate suppress flag.
+// { deep: true } here was the real cause of the canvas's drag jank: Vue Flow
+// mutates node.position directly (v-model:nodes) on every mousemove during a
+// live drag, and a deep watcher on the WHOLE nodes array re-diffs every
+// node's every property on every single one of those frames — cost scales
+// with node count, felt as stutter on anything but a tiny graph. Dropping to
+// shallow still catches every STRUCTURAL change here (push/splice/filter/
+// reassignment — delete, duplicate, connect, addNode, undo/redo restore all
+// go through those, and Vue's array instrumentation notifies a shallow
+// watcher on those same as a deep one would); the one thing a shallow watch
+// can't see is a bare position mutation mid-drag, made up for by flagging
+// dirty explicitly on node-drag-stop below instead.
 const isDirty = ref(false)
-watch([nodes, edges, title, isActive], () => { isDirty.value = true }, { deep: true })
+watch([nodes, edges, title, isActive], () => { isDirty.value = true })
+function onNodeDragStop() { isDirty.value = true }
 function onBeforeUnload(e) {
   if (!isDirty.value) return
   e.preventDefault()
@@ -654,17 +677,22 @@ function openTestModal() {
 }
 function resetNodeStatuses() {
   for (const n of nodes.value) {
-    if (n.type === 'workflow') n.data.status = 'idle'
+    if (n.type === 'workflow') { n.data.status = 'idle'; n.data.errorMessage = null }
   }
 }
 function paintRunOnCanvas(run) {
   const byId = {}
-  for (const n of run.nodes) byId[n.node_id] = n.status
+  for (const n of run.nodes) byId[n.node_id] = n
   for (const n of nodes.value) {
     if (n.type !== 'workflow') continue
-    const status = byId[n.id]
-    if (!status) continue
-    n.data.status = status === 'Failed' ? 'error' : status === 'Skipped' ? 'idle' : 'success'
+    const row = byId[n.id]
+    if (!row) continue
+    n.data.status = row.status === 'Failed' ? 'error' : row.status === 'Skipped' ? 'idle' : 'success'
+    // Carried onto the node itself (not just the run list) so clicking the
+    // node THAT FAILED — "go straight to what broke,
+    // in place, on the graph" — shows the real message immediately,
+    // instead of only a 160px-truncated line buried in the Executions tab.
+    n.data.errorMessage = row.status === 'Failed' ? (row.message || 'Failed — no message recorded.') : null
   }
 }
 async function onTestTaskSelected(taskName) {

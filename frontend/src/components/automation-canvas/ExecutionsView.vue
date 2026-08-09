@@ -25,14 +25,23 @@
           <Button size="sm" variant="light" @click.stop="emit('view-run', run)">View on canvas</Button>
         </button>
         <div v-if="expanded === run.run_id" class="border-t border-border divide-y divide-border">
-          <div v-for="n in run.nodes" :key="n.node_id" class="flex items-center gap-2.5 px-3 py-2 pl-9">
-            <span
-              :class="cn('size-1.5 rounded-full shrink-0',
-                         n.status === 'Failed' ? 'bg-danger' : n.status === 'Skipped' ? 'bg-muted-tertiary' : 'bg-success')"
-            />
-            <span class="text-xs text-foreground flex-1 min-w-0 truncate">{{ labelFor(n.node_id) }}</span>
-            <span class="text-[11px] text-muted shrink-0">{{ n.status }}</span>
-            <span v-if="n.message" class="text-[11px] text-danger truncate max-w-[160px]" :title="n.message">{{ n.message }}</span>
+          <div v-for="n in run.nodes" :key="n.node_id" class="flex flex-col gap-1 px-3 py-2 pl-9">
+            <div class="flex items-center gap-2.5">
+              <span
+                :class="cn('size-1.5 rounded-full shrink-0',
+                           n.status === 'Failed' ? 'bg-danger' : n.status === 'Skipped' ? 'bg-muted-tertiary' : 'bg-success')"
+              />
+              <span class="text-xs text-foreground flex-1 min-w-0 truncate">{{ labelFor(n.node_id) }}</span>
+              <span class="text-[11px] text-muted shrink-0">{{ n.status }}</span>
+            </div>
+            <!-- Full message, not truncated — this used to be a 160px-clipped
+                 span (title-tooltip only), which is exactly the "where did
+                 the error actually come from" the audit flagged as missing.
+                 Retry-attempt info (see api/automation.py/graph.go) already
+                 rides inside this same message string. -->
+            <p v-if="n.message" class="text-[11px] pl-4" :class="n.status === 'Failed' ? 'text-danger' : 'text-muted'">
+              {{ n.message }}
+            </p>
           </div>
         </div>
       </div>
@@ -48,7 +57,7 @@ import Button from '@/ui/Button.vue'
 import { cn } from '@/lib/utils'
 import { getWorkflowRuns } from '@/utils/api'
 
-// n8n-style Editor/Executions toggle (WORKPLAN-PHASE25 A4) — this component
+// Editor/Executions toggle (WORKPLAN-PHASE25 A4) — this component
 // IS the "Executions" side, swapped in for the canvas area by the parent's
 // own toolbar toggle (no drawer, per spec). `nodes` is the CURRENTLY LOADED
 // graph (Vue Flow runtime nodes) purely for label lookup — BP Workflow Run

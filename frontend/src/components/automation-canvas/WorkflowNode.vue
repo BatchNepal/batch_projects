@@ -2,8 +2,10 @@
   <div
     :class="cn(
       'wf-node group relative flex items-center gap-2.5 rounded-lg border bg-surface px-3 py-2.5 min-w-[180px] transition-colors',
-      selected ? 'border-accent shadow-focus' : 'border-border shadow-surface hover:border-border-hover',
+      status === 'error' ? 'border-danger shadow-[0_0_0_3px_var(--danger-soft)]'
+        : selected ? 'border-accent shadow-focus' : 'border-border shadow-surface hover:border-border-hover',
     )"
+    :title="status === 'error' && data.errorMessage ? data.errorMessage : undefined"
     :style="cardMinHeight ? { minHeight: cardMinHeight + 'px' } : undefined"
   >
     <Handle

@@ -364,6 +364,21 @@ class BPTask(Document):
             from batch_projects import bridge
             bridge.cancel_scheduled_job(self.bridge_job_id)
 
+        # events.TASK_DELETED existed but nothing ever emitted it — "automate
+        # on task delete" was unbuildable despite the trigger dropdown having
+        # room for it. Fires before the row is actually gone (on_trash, not
+        # after_delete), same timing every other task event already uses;
+        # an action that tries to further mutate THIS task (e.g. "Change
+        # Status") is a rule-authoring mistake, not something to special-
+        # case here — per-action isolation already logs that as a normal
+        # Failed run instead of blocking the delete.
+        from batch_projects.events import emit, TASK_DELETED
+        emit(TASK_DELETED, {
+            "project": self.project,
+            "task": self.name,
+            "task_key": self.task_key,
+        })
+
     def _sync_recurrence(self):
         from batch_projects import bridge
         from frappe.utils import getdate, nowdate

@@ -77,8 +77,14 @@ export function actionPhrase(a) {
  *  payload (triggers/operators/condition_fields). */
 export function ruleSentence(rule, options) {
   const spans = []
-  const trig = options.triggers?.find(t => t.value === rule.trigger_event)?.label || rule.trigger_event || 'something happens'
-  spans.push({ text: 'When ', bold: false })
+  // board.py's own trigger labels already read "When a task's status
+  // changes" etc (_AUTOMATION_TRIGGERS) — a hardcoded second "When " here
+  // doubled up into "When When a task's status changes" for every rule.
+  // Only the raw/unmatched fallback (a legacy trigger_event with no
+  // matching option, or none at all) still needs its own lead-in.
+  const trigLabel = options.triggers?.find(t => t.value === rule.trigger_event)?.label
+  const trig = trigLabel || rule.trigger_event || 'something happens'
+  if (!trigLabel) spans.push({ text: 'When ', bold: false })
   spans.push({ text: trig, bold: true, key: 'trigger' })
 
   const clauses = conditionClauses(rule)

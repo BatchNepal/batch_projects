@@ -1,8 +1,8 @@
 """
 BP Automation Rule
 ──────────────────
-A "When → If → Then" rule, in the spirit of enterprise automation / Monday recipes /
-Asana rules / Odoo base_automation — v2: workspace scope + ordered
+A "When → If → Then" rule — the recipe/trigger-action shape enterprise
+automation tools converge on — v2: workspace scope + ordered
 multi-action list + richer triggers.
 
     WHEN  a trigger event fires                    (trigger_event + trigger_config)
@@ -336,13 +336,16 @@ def run_for_event(event_name: str, payload: dict):
                     continue
                 if not _match(_parse(rule.conditions), ctx, payload):
                     continue  # conditions not met — not logged (would flood)
-                _run_actions(rule, ctx, payload)
+                results = _run_actions(rule, ctx, payload)
+                status, _ = _aggregate_status(results)
+                _update_rule_last_run(rule.name, status)
             except Exception:
                 frappe.log_error(
                     frappe.get_traceback(),
                     f"BP Automation rule failed: {rule.name} ({rule.rule_name})",
                 )
                 _log_run(rule, payload, "Failed", _short_error())
+                _update_rule_last_run(rule.name, "Failed")
     finally:
         frappe.flags.bp_automation_depth = depth
 
@@ -381,13 +384,17 @@ def run_scheduled(rule_name: str, payload: dict):
     try:
         if not _match(_parse(rule.conditions), ctx, payload):
             _log_run(rule, payload, "Skipped", "conditions not met")
+            _update_rule_last_run(rule_name, "Skipped")
             return "Skipped", "conditions not met"
         results = _run_actions(rule, ctx, payload)
-        return _aggregate_status(results)
+        status, message = _aggregate_status(results)
+        _update_rule_last_run(rule_name, status)
+        return status, message
     except Exception:
         frappe.log_error(frappe.get_traceback(), f"BP scheduled rule failed: {rule_name}")
         msg = _short_error()
         _log_run(rule, payload, "Failed", msg)
+        _update_rule_last_run(rule_name, "Failed")
         return "Failed", msg
     finally:
         frappe.flags.bp_automation_depth = depth
@@ -422,6 +429,7 @@ def _run_relative_schedule(rule):
 
     dedup_after = frappe.utils.add_days(today, -1)
     fired = 0
+    any_failed = False
     for project in projects:
         try:
             completed = set(frappe.get_cached_doc("BP Project", project).get_completed_statuses())
@@ -446,16 +454,22 @@ def _run_relative_schedule(rule):
             try:
                 if not _match(_parse(rule.conditions), ctx, payload):
                     continue
-                _run_actions(rule, ctx, payload)
+                results = _run_actions(rule, ctx, payload)
+                if _aggregate_status(results)[0] == "Failed":
+                    any_failed = True
                 fired += 1
             except Exception:
                 frappe.log_error(
                     frappe.get_traceback(),
                     f"BP schedule.relative failed: {rule.name}/{t.name}",
                 )
+                any_failed = True
     frappe.db.commit()
     if fired:
-        return "Success", f"Fired for {fired} task(s)"
+        status = "Failed" if any_failed else "Success"
+        _update_rule_last_run(rule.name, status)
+        return status, f"Fired for {fired} task(s)" + (", some failed" if any_failed else "")
+    _update_rule_last_run(rule.name, "Skipped")
     return "Skipped", "No matching tasks"
 
 
@@ -537,6 +551,21 @@ def _run_actions(rule, ctx, payload) -> list:
     for idx, action in enumerate(actions):
         try:
             status, message = _execute(action, ctx, payload)
+        except frappe.TimestampMismatchError:
+            # Deliberately NOT swallowed by the generic handler below.
+            # TimestampMismatchError subclasses Exception, so catching it here
+            # made api/automation.py::apply_action's conflict-retry loop
+            # structurally unreachable — it retries on exactly this error, but
+            # never saw one, because this per-action isolation converted it to
+            # a ("Failed", …) tuple first. Net effect: every gateway-dispatched
+            # rule that raced a concurrent write (the drag = move_task +
+            # reorder_tasks case that retry was written for) failed permanently
+            # instead of retrying. Re-running the whole action list on retry is
+            # safe — every task-saving action is check-and-skip idempotent.
+            # The Python-engine path is unaffected: run_for_event's own
+            # per-rule `except Exception` still catches this and logs the same
+            # Failed run row it always did.
+            raise
         except Exception:
             frappe.log_error(
                 frappe.get_traceback(),
@@ -546,6 +575,52 @@ def _run_actions(rule, ctx, payload) -> list:
         _log_run(rule, payload, status, message, action_index=idx, action_type=action.get("type"))
         results.append((status, message))
     return results
+
+
+def _update_rule_last_run(rule_name, status):
+    """Stamp BP Automation Rule.last_run_at/last_run_status — the same
+    pattern report_workflow_run already keeps for BP Workflow, applied here
+    so AutomationRules.vue's existing `r.last_run_status` failing-run badge
+    (previously permanently dead — the field didn't exist) actually lights
+    up. Best-effort: this must never break the automation it's reporting on.
+
+    Also the single choke point for failure notification (every rule-
+    execution path funnels through here) — edge-triggered on the PREVIOUS
+    status so a rule stuck failing on every event notifies its owner once,
+    not once per event."""
+    try:
+        prev = frappe.db.get_value("BP Automation Rule", rule_name, "last_run_status")
+        frappe.db.set_value("BP Automation Rule", rule_name, {
+            "last_run_at": frappe.utils.now_datetime(),
+            "last_run_status": status,
+        })
+        if status == "Failed" and prev != "Failed":
+            _notify_rule_failure(rule_name)
+    except Exception:
+        pass
+
+
+def _notify_rule_failure(rule_name):
+    """Tell the rule's owner it just started failing — the gap the audit
+    found: nothing EVER notified anyone when a rule silently stopped
+    running, so a broken automation was only ever discovered by someone
+    manually opening Run History. Best-effort, never raises."""
+    try:
+        rule = frappe.db.get_value(
+            "BP Automation Rule", rule_name, ["rule_name", "project", "owner"], as_dict=True)
+        if not rule or not rule.owner:
+            return
+        from batch_projects.events import _create_notification
+        _create_notification(
+            # actor="Administrator" (never None — _create_notification's own
+            # actor_name lookup assumes a real user) stands in for "the
+            # system/automation engine", not a person who caused the failure.
+            recipient=rule.owner, notification_type="Automation Failed",
+            task=None, project=rule.project, actor="Administrator",
+            message=f'Automation "{rule.rule_name or rule_name}" just failed. Check its run history.',
+        )
+    except Exception:
+        pass
 
 
 def _aggregate_status(results: list):

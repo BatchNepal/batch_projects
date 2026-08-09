@@ -147,6 +147,7 @@ def apply_action(rule=None, payload=None, **_):
         _aggregate_status,
         _log_run,
         _short_error,
+        _update_rule_last_run,
     )
 
     rule_doc = frappe.get_doc("BP Automation Rule", rule)
@@ -169,6 +170,13 @@ def apply_action(rule=None, payload=None, **_):
                 ctx = _build_context(payload)  # fresh task doc every attempt
                 results = _run_actions(rule_doc, ctx, payload)
                 status, message = _aggregate_status(results)
+                if attempt > 1:
+                    # Retry-attempt visibility (previously only the final
+                    # attempt's outcome was ever recorded anywhere) — a run
+                    # that needed 2 tries now reads that way in Run History
+                    # instead of looking identical to one that succeeded
+                    # first try.
+                    message = f"{message} (succeeded on retry {attempt}/{_CONFLICT_RETRIES})"
                 break
             except TimestampMismatchError:
                 frappe.db.rollback()
@@ -180,11 +188,15 @@ def apply_action(rule=None, payload=None, **_):
                 if attempt == _CONFLICT_RETRIES:
                     raise
                 time.sleep(0.15 * attempt)
+        _update_rule_last_run(rule, status)
         return {"status": status, "message": message}
     except Exception:
         frappe.log_error(frappe.get_traceback(), f"BP gateway-dispatched action failed: {rule}")
         msg = _short_error()
+        if "TimestampMismatchError" in frappe.get_traceback():
+            msg = f"{msg} (failed after {_CONFLICT_RETRIES} attempts — conflict retry exhausted)"
         _log_run(rule_doc, payload, "Failed", msg)
+        _update_rule_last_run(rule, "Failed")
         return {"status": "Failed", "message": msg}
     finally:
         frappe.flags.bp_automation_depth = depth
@@ -521,9 +533,7 @@ _NODE_REGISTRY = {
                  {"value": "task.updated", "label": "is updated (any field)"},
                  {"value": "task.field_changed", "label": "has a specific field changed"},
                  {"value": "task.moved_sprint", "label": "is moved to another sprint"},
-                 # task.deleted: the TASK_DELETED constant exists in events.py
-                 # but nothing in the codebase ever calls emit() with it —
-                 # a dead event, omitted for the same reason as due_soon/overdue above.
+                 {"value": "task.deleted", "label": "is deleted"},
              ]},
             {"name": "from_status", "label": "From status", "type": "select",
              "options_source": "statuses", "allow_custom": True,
@@ -671,7 +681,13 @@ _NODE_REGISTRY = {
     },
     "logic.merge": {
         "category": "logic", "label": "Merge", "icon": "GitBranch",
-        "config_schema": [{"name": "mode", "type": "select", "required": True, "options": ["wait_all", "first"]}],
+        # "wait_all" (real branch-join semantics) used to be offered here
+        # alongside "first" but the Go engine (graph.go::runLogicNode)
+        # never read the mode at all — every merge behaved as "first"
+        # regardless of what a user picked, silently. No config left to
+        # offer honestly: a merge node just joins as soon as any wired
+        # branch arrives, full stop, until real wait_all bookkeeping exists.
+        "config_schema": [],
     },
     "logic.switch": {
         "category": "logic", "label": "Switch", "icon": "GitBranch",
@@ -961,11 +977,35 @@ def report_workflow_run(workflow=None, run_id=None, status=None, **_):
     if not workflow or not status:
         return {"status": "skipped", "reason": "missing workflow or status"}
     try:
+        # Edge-triggered notify, same posture as
+        # bp_automation_rule._update_rule_last_run: alert once when a
+        # workflow starts failing, not once per run while it stays broken.
+        prev = frappe.db.get_value("BP Workflow", workflow, "last_run_status")
         frappe.db.set_value("BP Workflow", workflow, {
             "last_run_at": frappe.utils.now_datetime(),
             "last_run_status": status,
         })
         frappe.db.commit()
+        if status == "Failed" and prev != "Failed":
+            _notify_workflow_failure(workflow)
     except Exception:
         frappe.log_error(frappe.get_traceback(), f"report_workflow_run failed: {workflow}/{run_id}")
     return {"status": "recorded"}
+
+
+def _notify_workflow_failure(workflow):
+    """Same gap as bp_automation_rule._notify_rule_failure, for the Go-
+    gateway-executed graph workflows — nothing ever told anyone when one
+    started failing. Best-effort, never raises."""
+    try:
+        wf = frappe.db.get_value("BP Workflow", workflow, ["title", "project", "owner"], as_dict=True)
+        if not wf or not wf.owner:
+            return
+        from batch_projects.events import _create_notification
+        _create_notification(
+            recipient=wf.owner, notification_type="Automation Failed",
+            task=None, project=wf.project, actor="Administrator",
+            message=f'Workflow "{wf.title or workflow}" just failed. Check its Executions tab.',
+        )
+    except Exception:
+        pass
