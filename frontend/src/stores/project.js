@@ -893,6 +893,25 @@ export const useProjectStore = defineStore("project", () => {
     } catch (e) {
       console.error("Failed to load issue:", e);
       showTaskDetail.value = false;
+      return;
+    }
+    // Every TaskDetail dropdown (status, task type, labels, custom fields,
+    // project members) reads currentProject/projectMembers — never the task
+    // itself. Board/List/Gantt already have the right project loaded via
+    // fetchBoard() before a task is ever clickable there; dashboard widgets
+    // (ColumnWidget, KanbanWidget, TableWidget) open tasks from ANY project
+    // with no such guarantee, so those dropdowns rendered either empty
+    // (nothing loaded yet) or silently the WRONG project's options (stale
+    // from whichever project this tab last viewed). Sync it here — skipped
+    // when already correct, so Board/List/Gantt's existing fast path is
+    // unchanged.
+    const taskProject = selectedTask.value?.project;
+    if (taskProject && currentProject.value?.name !== taskProject) {
+      try {
+        await fetchBoard(taskProject);
+      } catch (e) {
+        console.error("Failed to load project config for task detail:", e);
+      }
     }
   }
 
