@@ -69,14 +69,14 @@ const STYLES = {
     accent:  'bg-accent-soft text-accent-soft-foreground hover:bg-accent-soft-hover',
     success: 'bg-success-soft text-success-soft-foreground hover:bg-success-soft-hover',
     warning: 'bg-warning-soft text-warning-soft-foreground hover:bg-warning-soft-hover',
-    danger:  'bg-danger-soft text-danger-soft-foreground hover:bg-danger-soft-hover',
+    danger:  'bg-danger-soft text-danger-soft-foreground  hover:bg-danger-soft-hover',
   },
   outline: {
-    default: 'bg-transparent border border-border text-foreground hover:bg-default',
-    accent:  'bg-transparent border border-accent text-accent hover:bg-accent-soft',
-    success: 'bg-transparent border border-success text-success hover:bg-success-soft',
-    warning: 'bg-transparent border border-warning text-warning hover:bg-warning-soft',
-    danger:  'bg-transparent border border-danger text-danger hover:bg-danger-soft',
+    default: 'bg-transparent shadow-sm border border-border text-foreground hover:bg-default',
+    accent:  'bg-transparent shadow-sm border border-accent text-accent hover:bg-accent-soft',
+    success: 'bg-transparent shadow-sm border border-success text-success hover:bg-success-soft',
+    warning: 'bg-transparent shadow-sm border border-warning text-warning hover:bg-warning-soft',
+    danger:  'bg-transparent shadow-sm border border-danger text-danger hover:bg-danger-soft',
   },
   ghost: {
     default: 'bg-transparent text-foreground hover:bg-default',
@@ -101,7 +101,7 @@ const sz  = computed(() => SIZE[props.size]  ?? SIZE.md)
 const col = computed(() => STYLES[props.variant]?.[props.color] ?? STYLES.solid.default)
 
 const classes = computed(() => cn(
-  'btn relative inline-flex items-center justify-center font-medium whitespace-nowrap',
+  'btn relative shadow-sm rounded-md inline-flex items-center justify-center font-medium whitespace-nowrap',
   'select-none outline-none rounded-md',
   'transition-[background-color,box-shadow,transform,color,border-color]',
   'disabled:opacity-45 disabled:pointer-events-none',

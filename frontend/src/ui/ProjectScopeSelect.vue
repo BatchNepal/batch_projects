@@ -3,7 +3,7 @@
   <div ref="triggerRef" class="relative" @click.stop>
     <button
       type="button"
-      class="heroui-select inline-flex items-center gap-1.5 h-6 pl-2.5 pr-2 rounded-md bg-default hover:bg-[--surface-hover] text-[--foreground] text-xs font-medium outline-none transition-[background-color,box-shadow] cursor-pointer focus-visible:ring-2 focus-visible:ring-[--accent]/25"
+      class="heroui-select inline-flex items-center gap-1.5 h-7 pl-2.5 pr-2 rounded-md bg-default hover:bg-[--surface-hover] text-[--foreground] text-xs font-medium outline-none transition-[background-color,box-shadow] cursor-pointer focus-visible:ring-2 focus-visible:ring-[--accent]/25"
       :class="{ 'border-[--accent] ring-2 ring-[--accent]/20': open }"
       @click="toggle"
     >

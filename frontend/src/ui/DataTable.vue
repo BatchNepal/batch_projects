@@ -24,7 +24,7 @@
         <template v-if="loading">
           <tr v-for="n in skeletonCount" :key="`sk-${n}`" class="border-b border-separator">
             <td v-for="(col, ci) in columns" :key="col.key" class="px-3 py-2 align-middle">
-              <div class="h-2.5 rounded-sm bg-default" :style="{ width: W[(n * 3 + ci) % W.length] }" />
+              <Skeleton class="h-2.5 rounded-sm" :style="{ width: W[(n * 3 + ci) % W.length] }" />
             </td>
           </tr>
         </template>
@@ -55,6 +55,8 @@
 </template>
 
 <script setup>
+import Skeleton from './Skeleton.vue'
+
 defineProps({
   columns:       { type: Array,    required: true },
   rows:          { type: Array,    default: () => [] },

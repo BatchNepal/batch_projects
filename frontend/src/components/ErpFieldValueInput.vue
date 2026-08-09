@@ -20,6 +20,19 @@
     @update:model-value="v => emit('update:modelValue', v)"
   />
 
+  <!-- Datetime — previously fell through to a plain text input (the
+       generic v-else at the bottom), the one common fieldtype this editor
+       didn't actually adapt to despite claiming to be "the ONE fieldtype-
+       adaptive ERPNext value editor". `datetime-local`'s value has no
+       seconds/timezone suffix by default; Frappe stores/accepts
+       "YYYY-MM-DD HH:MM:SS", so both directions get a small format bridge
+       instead of silently writing a value Frappe would reject. -->
+  <Input
+    v-else-if="fieldMeta?.fieldtype === 'Datetime'"
+    :model-value="toDatetimeLocal(modelValue)" type="datetime-local" size="sm" class="flex-1"
+    @update:model-value="v => emit('update:modelValue', fromDatetimeLocal(v))"
+  />
+
   <Input
     v-else-if="['Int', 'Float', 'Currency', 'Percent'].includes(fieldMeta?.fieldtype)"
     :model-value="modelValue" type="number" size="sm" class="flex-1" :placeholder="placeholder || 'Value…'"
@@ -82,6 +95,22 @@ const { erpDocLabel } = useErpDoctypeFields()
 
 function searchErp(doctype, q) {
   return searchErpDocuments(doctype, q, props.project).then(rows => rows.map(r => ({ value: r.name, label: r.label })))
+}
+
+// Frappe Datetime <-> <input type="datetime-local"> — "YYYY-MM-DD HH:MM:SS"
+// (or an ISO string) on one side, "YYYY-MM-DDTHH:MM" (no seconds, no
+// timezone) on the other. Best-effort: an unparseable value just clears the
+// field rather than throwing mid-render.
+function toDatetimeLocal(v) {
+  if (!v) return ''
+  const d = new Date(String(v).replace(' ', 'T'))
+  if (isNaN(d)) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+function fromDatetimeLocal(v) {
+  if (!v) return ''
+  return v.replace('T', ' ') + ':00'
 }
 
 // Prefer a label the caller already knows; otherwise resolve+cache one for
