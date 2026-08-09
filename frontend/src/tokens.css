@@ -7,7 +7,24 @@
    TYPOGRAPHY
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+/* Self-hosted Inter (frontend/public/fonts/Inter/) — Google Fonts CDN was
+   unreliable on-prem, same reason Excalidraw's fonts are vendored below. */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter/InterVariable.woff2') format('woff2-variations'),
+       url('/fonts/Inter/InterVariable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter/InterVariable-Italic.woff2') format('woff2-variations'),
+       url('/fonts/Inter/InterVariable-Italic.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
 
 :root {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -143,7 +160,7 @@
      the "one step past the card" surface, matches our usage). */
   --surface:                      var(--white);
   --surface-foreground:           var(--foreground);
-  --surface-secondary:            #f4f4f5;
+  --surface-secondary:            #fbfbfb;
   --surface-secondary-foreground: var(--foreground);
   --surface-tertiary:             oklch(0.955 0.003 264);
   --surface-tertiary-foreground:  var(--foreground);
