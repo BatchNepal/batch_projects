@@ -69,14 +69,16 @@
    "fieldname": "company",
    "fieldtype": "Link",
    "label": "Company",
-   "options": "Company"
+   "options": "Company",
+   "ignore_user_permissions": 1
   },
   {
    "fieldname": "department",
    "fieldtype": "Link",
    "label": "Department",
    "options": "Department",
-   "description": "Maps to ERPNext Department for org sync"
+   "description": "Manual link to an ERPNext Department for reporting and filtering. This field is not automatically synchronized.",
+   "ignore_user_permissions": 1
   },
   {
    "fieldname": "section_desc",
