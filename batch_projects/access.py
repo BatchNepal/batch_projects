@@ -91,6 +91,30 @@ def is_guest(user: str | None = None) -> bool:
     return GUEST_ROLE in frappe.get_roles(user)
 
 
+# Baseline Frappe Role granted the instant a user gets ANY project standing
+# (a BP Project Member row, via invite-accept, project creation, or
+# update_project_members). Without it a member with no unrelated ERPNext
+# role (e.g. "Projects User") holds zero DocPerm on BP Task/BP Project/etc,
+# so Frappe denies the generic REST API/reports/desk list views before this
+# module's own has_permission/permission_query_conditions hooks (see
+# permissions.py) ever run — those hooks do the REAL per-project, per-action
+# narrowing; this role only has to open the door far enough for them to be
+# consulted at all. See patches.grant_bp_member_baseline_docperm for exactly
+# which doctypes/ptypes it's allowed on (kept read-only wherever a doctype
+# has no has_permission hook to further narrow write/create by role rank —
+# granting write there would let ANY member bypass an Admin/Manager-only
+# whitelisted endpoint, e.g. BP Invitation, via raw REST instead).
+MEMBER_ROLE = "BP Member"
+
+
+def ensure_member_role(user: str | None) -> None:
+    if not user or user in ("Administrator", "Guest"):
+        return
+    if MEMBER_ROLE in frappe.get_roles(user):
+        return
+    frappe.get_doc("User", user).add_roles(MEMBER_ROLE)
+
+
 def get_effective_role(project: str, user: str | None = None) -> str | None:
     """The role `user` effectively holds on `project`, applying explicit
     membership first, then falling back to what the project's visibility

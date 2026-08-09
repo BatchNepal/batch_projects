@@ -43,6 +43,7 @@ def _add_membership(project: str, user: str, role: str):
     existing = frappe.db.get_value(
         "BP Project Member", {"parent": project, "user": user}, ["name", "role"], as_dict=True)
     from batch_projects.events import emit, PROJECT_ROLE_CHANGED
+    access.ensure_member_role(user)
 
     if existing:
         if existing.role != role:

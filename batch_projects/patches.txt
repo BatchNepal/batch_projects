@@ -31,3 +31,8 @@ batch_projects.patches.rename_intake_forms_to_random
 # Dashboard grid col-num 12->48 (DashboardView.vue) — rescale existing
 # layouts' x/w/minW by the same 4x so widgets keep their size/position.
 batch_projects.patches.rescale_dashboard_layout_columns
+# Audit fix (2026-08-09): "BP Member" role fixture existed but was never
+# granted DocPerm nor assigned to members, so permissions.py's project-scoped
+# access hooks never ran for anyone without an unrelated ERPNext role — see
+# access.ensure_member_role() and this patch's own docstring.
+batch_projects.patches.grant_bp_member_baseline_docperm
