@@ -607,6 +607,11 @@ export const generateExpenseInvoice = (project) =>
   callErpLink("generate_expense_invoice", { project });
 export const getErpDocSummary = (project, doctype, name) =>
   callErpLink("get_erp_doc_summary", { project, doctype, name });
+// Must resolve before opening any raw /app/<doctype>/<name> desk link — SPA
+// members hold zero ERPNext DocPerm by design, so the desk 403s otherwise.
+// See useErpDocOpener.js.
+export const ensureErpDocAccess = (doctype, name) =>
+  callErpLink("ensure_erp_doc_access", { doctype, name });
 export const submitTimesheet = (project, timesheet) =>
   callErpLink("submit_timesheet", { project, timesheet });
 export const getErpDoctypeFields = (doctype) =>
@@ -974,6 +979,14 @@ export const getErpDocumentLabel = (doctype, name) =>
 export const getErpDoctypeFieldsReadonly = (doctype) =>
   call("get_erp_doctype_fields_readonly", { doctype });
 
+// Real, grounded value choices for one field (row designer's per-value
+// color config) — BP Task.status resolves project-aware workflow_states
+// instead of a nonexistent Select options list; everything else falls back
+// to real distinct values already in the data. See get_field_value_choices'
+// own docstring for the full resolution order.
+export const getFieldValueChoices = (doctype, fieldname, project = null) =>
+  call("get_field_value_choices", { doctype, fieldname, project });
+
 export const addReference = (task, ref_doctype, ref_name, two_way = 0) =>
   call("add_reference", { issue: task, ref_doctype, ref_name, two_way });
 
@@ -1298,7 +1311,7 @@ export const getPublicForm = (form) =>
 export const submitIntakeForm = (form, values) =>
   callForms("submit_intake_form", { form, values });
 
-// ─── DASHBOARDS (Wrike-style live dashboards, BP Dashboard — distinct from ────
+// ─── DASHBOARDS (live glance dashboards, BP Dashboard — distinct from ─────────
 // the scheduled/exportable BP Report above) ────────────────────────────────────
 // Same reasoning as INTAKE FORMS above: call the real module path directly so
 // bp-gateway's MethodGate table (gated on "dashboards", Team tier) actually
@@ -1323,6 +1336,7 @@ export const getColumnWidgetData = (params) =>
   callDashboards("get_column_widget_data", {
     ...params,
     filters: JSON.stringify(params.filters || []),
+    extra_fields: JSON.stringify(params.extra_fields || []),
   });
 
 // ─── Generic doctype-source widget engine (any doctype other than BP Task) ────
@@ -1334,6 +1348,11 @@ export const getWidgetSourceFields = (doctype) =>
 
 export const getWidgetSourceFieldOptions = (doctype, fieldname, query) =>
   callDashboards("get_widget_source_field_options", { doctype, fieldname, query });
+
+// Metric widget's multi-source mode: sum of filtered record counts across
+// one or more doctypes, instead of the single BP-Task group_by/metric rollup.
+export const getMultiSourceCount = (sources, scope) =>
+  callDashboards("get_multi_source_count", { sources: JSON.stringify(sources || []), scope });
 
 // Relative-date vocabulary for the filter builder ("Overdue", "Next 7 days",
 // ...). Served by the backend so the token list can't drift from what
@@ -1348,6 +1367,7 @@ export const getDoctypeColumnData = (params) =>
     ...params,
     filters: JSON.stringify(params.filters || []),
     label_fields: JSON.stringify(params.label_fields || []),
+    extra_fields: JSON.stringify(params.extra_fields || []),
   });
 
 export const getWidgetSourceDocQuickview = (doctype, name) =>

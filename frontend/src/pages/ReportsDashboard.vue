@@ -32,7 +32,7 @@
     </div>
 
     <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
-      <!-- Create a report: template tiles (Wrike-style, collapsible) -->
+      <!-- Create a report: template tiles (collapsible) -->
       <section class="mb-7">
         <button type="button" class="flex items-center gap-1.5 text-[13px] font-semibold text-[--foreground] mb-3"
           @click="showTemplates = !showTemplates">
@@ -170,7 +170,7 @@
         <p class="text-[15px] font-semibold text-[--foreground]">{{ editingId ? 'Rename report' : (formTemplate ? formTemplate.label : 'New report') }}</p>
       </ModalHeader>
       <ModalBody class="px-5 py-4 flex flex-col gap-3.5">
-        <!-- Icon + color identity (Wrike-style) -->
+        <!-- Icon + color identity -->
         <div class="flex items-center gap-3">
           <span class="size-12 rounded-lg grid place-items-center shrink-0 shadow-sm transition-colors"
             :style="{ background: formColor + '24', color: formColor }">

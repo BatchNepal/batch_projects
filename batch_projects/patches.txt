@@ -28,3 +28,6 @@ batch_projects.patches.backfill_triage_flags
 # /intake/<name> URL. Must run after the doctype's autoname config is
 # already synced to "hash" (post_model_sync).
 batch_projects.patches.rename_intake_forms_to_random
+# Dashboard grid col-num 12->48 (DashboardView.vue) — rescale existing
+# layouts' x/w/minW by the same 4x so widgets keep their size/position.
+batch_projects.patches.rescale_dashboard_layout_columns

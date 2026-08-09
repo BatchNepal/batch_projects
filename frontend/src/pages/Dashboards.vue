@@ -252,6 +252,13 @@ const CAT = { blue: REPORT_COLORS[0], orange: REPORT_COLORS[4], purple: REPORT_C
 // rendering many columns. See ColumnWidget.vue and stores/dashboards.js'
 // addWidget(x, y) support.
 const COLUMN_W = WIDGET_DEFAULTS.column.w
+// Must match DashboardView.vue's <GridLayout col-num> — was a bare `12`
+// hardcoded at both call sites below; harmless while WIDGET_DEFAULTS.column.w
+// was also 3 (i.e. exactly 12/4), but the col-num 12->48 rescale (see
+// stores/dashboards.js) moved that .w to 12, which made `(i * 12) % 12`
+// always 0 — every templated column would have landed at x:0, stacked on
+// top of each other instead of laid out side by side.
+const GRID_COLS = 48
 const TEMPLATES = [
   { key: 'blank', label: 'Blank dashboard', desc: 'Start from scratch and add your own widgets.', icon: LayoutDashboard, color: CAT.blue,
     build: async () => {} },
@@ -267,7 +274,7 @@ const TEMPLATES = [
       } catch {}
       people = people.filter(m => m.user).slice(0, 12)
       people.forEach((m, i) => {
-        const w = s.addWidget(id, 'column', { x: (i * COLUMN_W) % 12, y: Math.floor(i * COLUMN_W / 12) * WIDGET_DEFAULTS.column.h })
+        const w = s.addWidget(id, 'column', { x: (i * COLUMN_W) % GRID_COLS, y: Math.floor(i * COLUMN_W / GRID_COLS) * WIDGET_DEFAULTS.column.h })
         s.updateWidgetConfig(id, w.id, { title: m.full_name || m.user, filterBy: 'assignee', filterValue: m.user })
       })
     } },
@@ -284,7 +291,7 @@ const TEMPLATES = [
         if (ws.length) statuses = ws.slice(0, 6)
       }
       statuses.forEach((status, i) => {
-        const w = s.addWidget(id, 'column', { x: (i * COLUMN_W) % 12, y: Math.floor(i * COLUMN_W / 12) * WIDGET_DEFAULTS.column.h })
+        const w = s.addWidget(id, 'column', { x: (i * COLUMN_W) % GRID_COLS, y: Math.floor(i * COLUMN_W / GRID_COLS) * WIDGET_DEFAULTS.column.h })
         s.updateWidgetConfig(id, w.id, { title: status, filterBy: 'status', filterValue: status, statusFilter: 'all' })
       })
     } },

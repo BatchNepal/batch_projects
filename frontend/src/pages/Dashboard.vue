@@ -111,7 +111,7 @@
           </section>
 
           <!-- Inbox -->
-          <section id="inbox" class="bg-overlay rounded-lg border border-border shadow-sm overflow-hidden">
+          <section id="inbox" class="bg-overlay rounded-lg shadow-sm overflow-hidden">
             <div class="flex items-center justify-between px-5 py-4 border-b border-separator">
               <div class="flex items-center gap-2">
                 <h2 class="text-base font-semibold text-foreground">Inbox</h2>

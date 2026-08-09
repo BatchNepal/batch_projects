@@ -1,15 +1,25 @@
 <template>
   <div class="kw">
+    <!-- 5, not 3 — real column count comes FROM the data we haven't loaded
+         yet (project workflow_states / generic group-by values), so an
+         exact match isn't available upfront; 5 sits closer to the typical
+         4-8 statuses a real board has than the old 3 did. -->
     <div v-if="loading && !columns.length" class="kw-loading">
-      <Skeleton v-for="i in 3" :key="i" class="w-[330px] h-full rounded-sm shrink-0" />
+      <Skeleton v-for="i in 5" :key="i" class="w-[330px] h-full rounded-sm shrink-0" />
     </div>
 
-    <div v-else-if="!columns.length" class="kw-empty">
+    <div v-else-if="!columns.length && !loading" class="kw-empty">
       <Inbox :size="18" class="text-muted opacity-60" />
       <span class="text-[12px] text-muted">No data for this scope</span>
     </div>
 
-    <div v-else class="kw-cols">
+    <!-- Say plainly why cards can't be dragged, rather than leaving a board
+         that looks interactive but silently ignores every drop. -->
+    <p v-if="!canDrag" class="kw-readonly-note">
+      Read-only — drag-and-drop moves cards by status. Group by Status to enable it.
+    </p>
+
+    <div v-if="columns.length" class="kw-cols">
       <KanbanColumnShell
         v-for="col in columns" :key="col.key"
         :title="col.label" :count="col.rows.length" :color="col.color"
@@ -101,24 +111,48 @@ function serialiseScope(s) {
   return s || 'all'
 }
 
+// One grouped request, not one request per column. This used to fire N
+// parallel get_column_widget_data calls (one per status) purely to rebuild
+// what a single grouped call already returns — an N+1 that grew with every
+// status a project defined.
+const MAX_KANBAN_COLUMNS = 12
+
 async function loadTaskColumns() {
   const scope = effScope.value
-  let statuses = DEFAULT_STATUSES
+  const groupBy = props.widget.group_by || 'status'
+
+  // A kanban wants to show a status column even when it's EMPTY — that's
+  // where you drop things. Grouped data only ever contains non-empty
+  // groups, so the project's declared workflow states are merged in as the
+  // expected column set, in their real pipeline order.
+  let expected = []
   let colorMap = {}
-  if (scope && scope !== 'all' && !Array.isArray(scope)) {
-    const proj = store.projects.find(p => p.name === scope || p.key === scope)
-    const ws = (proj?.workflow_states || []).filter(Boolean)
-    if (ws.length) {
-      statuses = ws.map(s => s.name || s)
-      colorMap = Object.fromEntries(ws.map(s => [s.name || s, s.color]))
+  if (groupBy === 'status') {
+    expected = DEFAULT_STATUSES
+    if (scope && scope !== 'all' && !Array.isArray(scope)) {
+      const proj = store.projects.find(p => p.name === scope || p.key === scope)
+      const ws = (proj?.workflow_states || []).filter(Boolean)
+      if (ws.length) {
+        expected = ws.map(s => s.name || s)
+        colorMap = Object.fromEntries(ws.map(s => [s.name || s, s.color]))
+      }
     }
   }
-  const results = await Promise.all(statuses.map(status =>
-    getColumnWidgetData({ scope: serialiseScope(scope), filter_by: 'status', filter_value: status })
-  ))
-  columns.value = statuses.map((status, i) => ({
-    key: status, label: status, color: colorMap[status] || null,
-    rows: (results[i]?.buckets || []).flatMap(b => b.tasks),
+
+  const res = await getColumnWidgetData({
+    scope: serialiseScope(scope), status_filter: 'all', group_by: groupBy,
+    filters: props.widget.filters || [],
+  })
+  const byKey = Object.fromEntries((res?.buckets || []).map(b => [b.key, b]))
+
+  const keys = [...expected]
+  for (const b of res?.buckets || []) if (!keys.includes(b.key)) keys.push(b.key)
+
+  columns.value = keys.slice(0, MAX_KANBAN_COLUMNS).map(k => ({
+    key: k,
+    label: byKey[k]?.label || k,
+    color: colorMap[k] || null,
+    rows: byKey[k]?.tasks || [],
   }))
 }
 
@@ -176,6 +210,7 @@ function onDragLeave(key) {
 async function onDrop(col) {
   dragOverKey.value = null
   if (leaveTimer) clearTimeout(leaveTimer)
+  if (!canDrag.value) return
   if (isTask.value) {
     const drag = window.__dragIssue
     if (!drag) return
@@ -237,6 +272,16 @@ async function dropGeneric(row, newKey) {
   }
 }
 
+// Dropping a card writes the grouped field. For BP Task that write is
+// update_task_status, which enforces the real dependency-blocking rules —
+// there is deliberately no generic "set any BP Task field" write path
+// (update_widget_source_field refuses BP Task for exactly that reason), so
+// a Task board grouped by anything else is read-only rather than silently
+// writing around that validation.
+const canDrag = computed(() =>
+  !isTask.value || (props.widget.group_by || 'status') === 'status'
+)
+
 const cfgKey = () => [props.widget.doctype, props.widget.group_by, JSON.stringify(props.widget.filters || []), serialiseScope(effScope.value), props.refreshKey].join('|')
 watch(cfgKey, load)
 onMounted(load)
@@ -244,6 +289,10 @@ onMounted(load)
 
 <style scoped>
 .kw { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.kw-readonly-note {
+  flex-shrink: 0; font-size: 11px; color: var(--muted);
+  padding: 4px 8px 6px;
+}
 .kw-cols { flex: 1; min-height: 0; display: flex; gap: 12px; align-items: stretch; overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
 .kw-col-body { flex: 1; min-height: 0; overflow-y: auto; }
 .kw-col-empty { text-align: center; font-size: 12px; color: var(--muted); padding: 24px 0; }

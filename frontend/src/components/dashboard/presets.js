@@ -1,4 +1,4 @@
-// Jira-style preset report templates.
+// Preset report templates — the handful of reports agile teams reach for.
 // Each preset declares how to FETCH its slice and BUILD a normalized render spec.
 // Render specs are consumed by PresetWidget.vue. All powered by EXISTING endpoints.
 import { getReports, getWidgetData, getPortfolio, getMarginReport, getWorkload, getUtilization, queryTasks, getSprintReport, getSprints, getMilestoneReport } from '@/utils/api'

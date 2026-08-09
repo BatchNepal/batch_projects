@@ -18,7 +18,7 @@
 
     <!-- table -->
     <div class="tw-table">
-      <DataTable :columns="cols" :rows="pageRows" :loading="loading"
+      <DataTable :columns="cols" :rows="pageRows" :loading="loading" :skeleton-count="pageSize"
         :sort-key="effSortBy" :sort-dir="effSortDir" @sort="toggleSort">
         <template #cell-status="{ value }">
           <Chip size="sm" :color="statusColor(value)" variant="flat">{{ value || '—' }}</Chip>

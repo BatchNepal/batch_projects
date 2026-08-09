@@ -80,8 +80,12 @@
 
     <!-- TABLE MODE -->
     <template v-else-if="mode === 'table'">
+      <!-- row count follows the widget's own configured pageSize (capped —
+           a 50-row skeleton is its own kind of ugly) instead of a hardcoded
+           5, so it stops visibly growing/shrinking the moment real rows
+           replace it. -->
       <div v-if="loading && !rows.length" class="qw-skels">
-        <div v-for="n in 5" :key="n" class="qw-skel-row">
+        <div v-for="n in Math.min(pageSize, 10)" :key="n" class="qw-skel-row">
           <Skeleton class="h-3 w-20 rounded" />
           <Skeleton class="h-3 flex-1 rounded" />
           <Skeleton class="h-3 w-24 rounded" />

@@ -2,27 +2,37 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import * as api from "@/utils/api";
 
-// Grid defaults per widget type (12-col, row-height 10, margin 12) — same
-// grid shape as reports.js's WIDGET_DEFAULTS, plus "column": a single
-// Wrike-dashboard-style glance column (one person/status, date-bucketed,
-// read-mostly, click through to the real task). Narrow + tall by design —
-// a template composes N of these side by side into a full board, rather
-// than one wide widget cramming many columns into itself. See ColumnWidget.vue.
+// Grid defaults per widget type (48-col, row-height 10, margin 12) — a
+// single glance column (one person/status,
+// date-bucketed, read-mostly, click through to the real task). Narrow +
+// tall by design — a template composes N of these side by side into a full
+// board, rather than one wide widget cramming many columns into itself. See
+// ColumnWidget.vue.
+//
+// Column count is 48, not 12 — DashboardView.vue's <GridLayout col-num>
+// went from 12 to 48 (4x) so resize/drag steps in ~10-15px increments
+// instead of ~110px ones; every w/minW below is the OLD 12-col value x4 to
+// keep each widget's rendered size unchanged. Existing dashboards saved
+// under the old 12-col scale are rescaled by the same x4 in a one-time
+// patch (batch_projects.patches.rescale_dashboard_layout_columns) — new
+// widgets read these already-scaled defaults directly, no runtime
+// conversion layer anywhere. h/minH are row-height units, untouched by the
+// column rescale.
 export const WIDGET_DEFAULTS = {
-  metric: { w: 3, h: 13, minW: 2, minH: 5 },
-  chart: { w: 6, h: 21, minW: 3, minH: 8 },
-  table: { w: 8, h: 20, minW: 4, minH: 7 },
-  preset: { w: 6, h: 21, minW: 3, minH: 8 },
-  query: { w: 9, h: 24, minW: 4, minH: 10 },
-  text:  { w: 4, h: 10, minW: 2, minH: 4 },
+  metric: { w: 12, h: 13, minW: 8, minH: 5 },
+  chart: { w: 24, h: 21, minW: 12, minH: 8 },
+  table: { w: 32, h: 20, minW: 16, minH: 7 },
+  preset: { w: 24, h: 21, minW: 12, minH: 8 },
+  query: { w: 36, h: 24, minW: 16, minH: 10 },
+  text:  { w: 16, h: 10, minW: 8, minH: 4 },
   // Short by default — a title+description line only needs ~50-70px; the
   // old h:8 (~164px) left a lot of dead space below the text since the grid
   // box height is independent of content height (see HeaderWidget.vue).
-  header: { w: 8, h: 4, minW: 3, minH: 3 },
-  column: { w: 3, h: 44, minW: 2, minH: 16 },
+  header: { w: 32, h: 4, minW: 12, minH: 3 },
+  column: { w: 12, h: 44, minW: 8, minH: 16 },
   // A full board, not a single glance column — wide/tall by default so its
   // auto-generated columns have room, same as the real per-project Board.vue.
-  kanban: { w: 12, h: 40, minW: 6, minH: 20 },
+  kanban: { w: 48, h: 40, minW: 24, minH: 20 },
 };
 
 // A single project's own workflow_states are the real, accurate status
@@ -39,10 +49,6 @@ function uid(prefix = "w") {
 function newWidget(type, extra = {}) {
   const base = {
     id: uid("w"), type, title: "", description: "", scope: "inherit", borderless: extra.borderless || false,
-    // Unset (null) keeps the automatic default (16px, 0 if borderless) —
-    // see DashboardView.vue's effPadding(). Every widget type gets these,
-    // not just column/header.
-    padding_x: extra.padding_x ?? null, padding_y: extra.padding_y ?? null,
   };
   if (type === "chart") return { ...base, chartType: "bar", group_by: "status", metric: "count", colorScheme: "blue" };
   if (type === "metric") return { ...base, group_by: "status", metric: "count", colorScheme: "blue" };
@@ -69,7 +75,7 @@ function newWidget(type, extra = {}) {
     // keys on — same path pre-existing saved widgets (which predate the
     // `doctype` field) already rely on.
     doctype: extra.doctype || null, filters: extra.filters || [],
-    // Wrike-style Overdue/Today/This week rail. On by default — the backend
+    // Overdue/Today/This week rail. On by default — the backend
     // only returns buckets for sources with a real deadline field, so this
     // is a no-op for Customer/Item/Payment Entry style sources.
     bucketed: extra.bucketed !== false,
@@ -84,8 +90,8 @@ function newWidget(type, extra = {}) {
 
 // Persistable widget fields only (never store live data/loading).
 function slimWidget(w) {
-  const { id, type, title, description, chartType, group_by, metric, scope, colorScheme, preset, period, statusFilter, priority, sortBy, sortOrder, limit, columns, pageSize, bql, text, filterBy, filterValue, doctype, filters, borderless, bucketed, label_fields, date_field, link_url, link_label, color, padding_x, padding_y } = w;
-  return { id, type, title, description, chartType, group_by, metric, scope, colorScheme, preset, period, statusFilter, priority, sortBy, sortOrder, limit, columns, pageSize, bql, text, filterBy, filterValue, doctype, filters, borderless, bucketed, label_fields, date_field, link_url, link_label, color, padding_x, padding_y };
+  const { id, type, title, description, chartType, group_by, metric, scope, colorScheme, preset, period, statusFilter, priority, sortBy, sortOrder, limit, columns, pageSize, bql, text, filterBy, filterValue, doctype, filters, sources, borderless, bucketed, label_fields, date_field, link_url, link_label, color, row_template } = w;
+  return { id, type, title, description, chartType, group_by, metric, scope, colorScheme, preset, period, statusFilter, priority, sortBy, sortOrder, limit, columns, pageSize, bql, text, filterBy, filterValue, doctype, filters, sources, borderless, bucketed, label_fields, date_field, link_url, link_label, color, row_template };
 }
 
 // Single-project scope -> the BP Dashboard.project column (for server filtering).

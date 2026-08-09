@@ -2802,7 +2802,7 @@ def get_sprints(project):
 
 @frappe.whitelist()
 def get_sprint_capacity(sprint):
-    """Per-member allocation vs capacity for one sprint (Monday's "Capacity"
+    """Per-member allocation vs capacity for one sprint (the "Capacity"
     sprint-header button). Allocation = sum of estimated_hours across each
     member's tasks IN THIS SPRINT; capacity = BP Team Member.capacity_hours_per_sprint
     (the same figure Workload/Utilization already use), 40h default.
@@ -3693,6 +3693,8 @@ def create_project(
     creator = frappe.session.user
     from batch_projects.entitlements import assert_seat_available
     assert_seat_available(creator)
+    from batch_projects import access
+    access.ensure_member_role(creator)
     frappe.db.sql(
         """INSERT INTO `tabBP Project Member`
                (name, parent, parenttype, parentfield, idx, user, role, creation, modified, owner, modified_by)
@@ -4095,7 +4097,7 @@ def get_automation_options(project=None):
     returned anything, and unconditionally called frappe.get_doc("BP Project",
     project) even when project was None/"" — crashing every workspace-scope
     load with DoesNotExistError."""
-    statuses, task_types, members = [], [], []
+    statuses, task_types, members, labels = [], [], [], []
     if project:
         _check_permission(project, "BP Viewer")
         proj = frappe.get_doc("BP Project", project)
@@ -4105,6 +4107,16 @@ def get_automation_options(project=None):
             {"user": m.user, "full_name": frappe.db.get_value("User", m.user, "full_name") or m.user}
             for m in (proj.members or [])
         ]
+        # BP Project.labels is a list of {id, label, color} (see
+        # update_project_labels/ProjectSettings.vue's labelsDraft) — the
+        # "Add Label" action editor just needs the label strings.
+        # AutomationRuleEditor.vue:188 did `options.labels.length` on a key
+        # this function never returned at all — TypeError on open, for any
+        # rule real enough to actually reach the "Add Label" branch (which,
+        # before actions/scope/etc were even fetched — see
+        # get_automation_rules — could never happen; fixing that surfaced
+        # this).
+        labels = [l.get("label") for l in _parse_json(proj.labels, []) if l.get("label")]
     condition_fields = [
         {"value": "to_status",    "label": "New status",   "type": "select", "options": statuses},
         {"value": "from_status",  "label": "Old status",   "type": "select", "options": statuses},
@@ -4120,6 +4132,7 @@ def get_automation_options(project=None):
         "statuses": statuses,
         "task_types": task_types,
         "members": members,
+        "labels": labels,
         "condition_fields": condition_fields,
         "triggers": _AUTOMATION_TRIGGERS,
         "actions": _AUTOMATION_ACTIONS,
@@ -4148,6 +4161,7 @@ _AUTOMATION_TRIGGERS = [
     {"value": "task.assigned",       "label": "When a task is assigned"},
     {"value": "task.due_soon",       "label": "When a task is due soon"},
     {"value": "comment.added",       "label": "When a comment is added"},
+    {"value": "task.deleted",        "label": "When a task is deleted"},
 ]
 
 
@@ -6787,6 +6801,10 @@ def update_project_members(project, members):
     new_users = {m["user"] for m in clean if not is_seated(m["user"])}
     assert_seats_available(len(new_users))
 
+    from batch_projects import access
+    for u in {m["user"] for m in clean} - current_users:
+        access.ensure_member_role(u)
+
     frappe.db.sql(
         "DELETE FROM `tabBP Project Member` WHERE parent=%s",
         project
@@ -7194,7 +7212,7 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
 
 @frappe.whitelist()
 def get_erpnext_departments():
-    """Fetch ERPNext departments for team-department mapping."""
+    """Fetch ERPNext departments for the manual team-department picker (read-only, no sync)."""
     _require_system_user()
     try:
         departments = frappe.get_all(
@@ -7925,6 +7943,7 @@ _AUTOMATION_TRIGGERS = [
     {"value": "task.assigned",       "label": "When a task is assigned"},
     {"value": "task.due_soon",       "label": "When a task is due soon"},
     {"value": "comment.added",       "label": "When a comment is added"},
+    {"value": "task.deleted",        "label": "When a task is deleted"},
 ]
 
 _AUTOMATION_ACTIONS = [
@@ -8037,13 +8056,21 @@ def get_automation_rules(project):
     rows = frappe.get_all(
         "BP Automation Rule",
         filters={"project": project},
-        fields=["name", "rule_name", "is_active", "trigger_event",
-                "conditions", "action_type", "action_config", "modified"],
+        fields=["name", "rule_name", "description", "is_active", "trigger_event",
+                "conditions", "action_type", "action_config", "actions",
+                "scope", "project_filter", "owner", "modified",
+                "last_run_at", "last_run_status"],
         order_by="modified desc",
     )
     for r in rows:
         r["conditions"] = _parse_json(r.get("conditions"), [])
         r["action_config"] = _parse_json(r.get("action_config"), {})
+        # v2 field — omitting it here used to make the editor believe every
+        # rule had no real action at all, defaulting a fresh "Change Status"
+        # blank action on open and silently overwriting the true one on the
+        # next Save (see AutomationRuleEditor.vue's draft.actions fallback).
+        r["actions"] = _parse_json(r.get("actions"), [])
+        r["project_filter"] = _parse_json(r.get("project_filter"), [])
     return rows
 
 
@@ -8313,5 +8340,125 @@ _ERP_DOC_EVENT_DOCTYPES = [
     "Customer", "Supplier", "Lead", "Opportunity", "Project",
     "Timesheet", "Expense Claim", "Stock Entry", "Work Order",
 ]
+
+
+@frappe.whitelist()
+def get_erp_doctype_fields_readonly(doctype):
+    """Read-scoped docfield metadata — referenced by name in two other
+    functions' own comments (automation.py, erp_link.py) and called by the
+    frontend's useErpDoctypeFields composable as if it already existed, but
+    never actually defined anywhere: every real call hit a whitelist-method-
+    not-found error, silently swallowed by the composable's own
+    `.catch(() => {})` — trigger.doc_event's dynamic per-doctype condition-
+    field picker has been showing an empty list this whole time with no
+    visible error anywhere. Now real.
+
+    Unlike get_erp_doctype_fields (write-scoped, a fixed whitelist — you can
+    only offer fields for a doctype the action can actually write to), this
+    is real Frappe read-permission-gated instead of a fixed doctype list:
+    it needs to serve BOTH _ERP_DOC_EVENT_DOCTYPES above (the automation
+    condition-picker's original, narrower use) AND the dashboard row
+    designer (BP Task, BP Project, or any doctype a widget can be scoped
+    to — see dashboards.py's own widget-source registry, a DIFFERENT list
+    again). A fixed list here would need to be the union of every future
+    caller's needs and drift immediately; a real permission check can't.
+    Field metadata (names/types/labels) is far lower-sensitivity than
+    record data, so this is a deliberately wider gate than either sibling
+    endpoint, not a mistake.
+    """
+    _require_system_user()
+    if not doctype or not frappe.db.exists("DocType", doctype):
+        return []
+    if not frappe.has_permission(doctype, "read"):
+        return []
+    from batch_projects.api.erp_link import _doctype_field_rows
+    return _doctype_field_rows(doctype, include_read_only=True)
+
+
+# Above this many distinct values a field stops being a set you'd colour
+# per-value and becomes free text. 25 comfortably covers real status/stage/
+# category/priority vocabularies (the longest workflow in this codebase's own
+# project templates is 6) while excluding names, titles and descriptions.
+_ENUM_MAX_CARDINALITY = 25
+
+
+@frappe.whitelist()
+def get_field_value_choices(doctype, fieldname, project=None):
+    """Real, grounded value choices for one field — powers the row
+    designer's per-value color config. Never asks a user to hand-type a
+    string and hope it matches real data (BP Task.status specifically used
+    to: it's Data, not Select — see BP Task.status' own field docstring —
+    "validated dynamically against project workflow_states", so a plain
+    Select-options lookup returns nothing for it).
+
+    Resolution order:
+    1. BP Task.status: not a DB-level enum at all — each BP Project defines
+       its own workflow_states (name/color/category), so "In Progress" on
+       one project and "Scoping"/"Delivered" on another are equally valid.
+       `project` given -> that project's own states. Omitted (a workspace-
+       wide column mixes many projects) -> the union of every project this
+       user can access, deduped, order-preserving by first appearance.
+    2. A real Select field -> its declared options, in declared order.
+    3. Everything else -> the actual DISTINCT values already present in the
+       data (permission-scoped), but ONLY when the field is genuinely
+       enum-like: at most _ENUM_MAX_CARDINALITY distinct values. A free-text
+       field like `title` or `description` technically has distinct values
+       too, and returning them produced a colour picker listing 50 unrelated
+       task titles — noise, not a choice. Anything above the ceiling returns
+       [] so the designer falls back to "colour the whole field, or name the
+       specific values you care about", which is the only sane UI for an
+       open-ended field.
+    """
+    _require_system_user()
+    if not doctype or not frappe.db.exists("DocType", doctype):
+        return []
+    if not frappe.has_permission(doctype, "read"):
+        return []
+
+    if doctype == "BP Task" and fieldname == "status":
+        from batch_projects.permissions import get_accessible_projects
+        if project:
+            if not frappe.db.exists("BP Project", project):
+                return []
+            accessible = get_accessible_projects()
+            if accessible is not None and project not in accessible:
+                return []
+            return [s.get("name") for s in _parse_json(
+                frappe.db.get_value("BP Project", project, "workflow_states"), []
+            ) if s.get("name")]
+
+        accessible = get_accessible_projects()
+        filters = {"name": ["in", list(accessible)]} if accessible is not None else {}
+        rows = frappe.get_all("BP Project", filters=filters, pluck="workflow_states")
+        seen, out = set(), []
+        for raw in rows:
+            for s in _parse_json(raw, []):
+                name = s.get("name")
+                if name and name not in seen:
+                    seen.add(name)
+                    out.append(name)
+        return out
+
+    meta = frappe.get_meta(doctype)
+    field = meta.get_field(fieldname)
+    if field and field.fieldtype == "Select":
+        return [o for o in (field.options or "").split("\n") if o]
+
+    # Long-text fieldtypes are never enum-like, whatever the data happens to
+    # look like — skip the query entirely rather than scanning a big column
+    # just to throw the answer away on the cardinality check below.
+    if field and field.fieldtype in ("Text", "Small Text", "Long Text", "Text Editor",
+                                     "Code", "HTML Editor", "Markdown Editor", "JSON"):
+        return []
+
+    # Grounded fallback: real distinct values, not a schema guess. Scoped by
+    # the same permission query engine every list view already uses, so this
+    # never leaks a value from a record the caller couldn't otherwise see.
+    # Fetch one MORE than the ceiling so "did we exceed it?" is answerable
+    # without a second COUNT(DISTINCT) round trip.
+    rows = frappe.get_list(doctype, fields=[fieldname], distinct=True,
+                           limit_page_length=_ENUM_MAX_CARDINALITY + 1, order_by=fieldname)
+    values = [r[fieldname] for r in rows if r.get(fieldname)]
+    return [] if len(values) > _ENUM_MAX_CARDINALITY else values
 
 

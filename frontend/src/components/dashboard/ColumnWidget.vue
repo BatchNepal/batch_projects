@@ -1,8 +1,14 @@
 <template>
-  <div class="cw">
+  <div class="cw hide-scrollbar">
     <!-- column header: no icon — "Title (count)", description only if set -->
     <div class="cw-head">
+      
       <div class="min-w-0 flex-1">
+         <!-- drag handle -->
+            <div class="drag-handle z-10  cursor-grab active:cursor-grabbing text-[--muted]"
+              >
+              <Icon :icon="GripVertical" :size="14" />
+            </div>
         <p class="cw-title">{{ widget.title || defaultTitle }} <span class="cw-count">({{ total }})</span></p>
         <p v-if="widget.description" class="cw-sub">{{ widget.description }}</p>
       </div>
@@ -11,14 +17,30 @@
     <!-- unconfigured: never silently defaults to a doctype — prompts instead -->
     <div v-if="unconfigured" class="cw-empty">
       <span class="cw-configure-icon"><Columns3 :size="18" /></span>
-      <Button size="sm" variant="bordered" @click="$emit('configure')">Configure</Button>
+      <Button size="sm"  variant="bordered" @click="$emit('configure')">Configure</Button>
     </div>
 
-    <!-- loading -->
+    <!-- loading — shaped to match the REAL bucket-header + two-line
+         WidgetRow structure below (marker + title / chip + date), not a
+         couple of generic bars. Row count (5) is a reasonable average, not
+         an attempt to predict the real count — the goal is "swaps to
+         something the same general shape", not pixel-perfect, since the
+         box itself is grid-sized and never moves regardless. -->
     <div v-else-if="loading && !rows.length" class="cw-body">
-      <Skeleton class="h-4 w-16 rounded-md mb-2" />
-      <Skeleton class="h-10 w-full rounded-lg mb-1" />
-      <Skeleton class="h-10 w-full rounded-lg" />
+      <div class="cw-skel-group-head px-2 py-2">
+        <Skeleton class="h-3 w-20 rounded-md" />
+        <Skeleton class="h-3 w-5 rounded-md ml-auto" />
+      </div>
+      <div v-for="i in 5" :key="i" class="cw-skel-row">
+        <div class="cw-skel-line1">
+          <Skeleton class="size-4 rounded-[4px] shrink-0" />
+          <Skeleton class="h-3.5 flex-1 rounded-md" />
+        </div>
+        <div class="cw-skel-line2">
+          <Skeleton class="h-2.5 w-16 rounded-md" />
+          <Skeleton class="h-2.5 w-10 rounded-md ml-auto" />
+        </div>
+      </div>
     </div>
 
     <!-- no access — a dashboard can be shared with someone who lacks ERP
@@ -37,36 +59,37 @@
       <span class="text-[11.5px] text-[--muted]">Nothing here</span>
     </div>
 
-    <!-- Wrike-style time rail: sticky Overdue/Today/This week/Later
-         sub-headers. Only when the source has a real DEADLINE field to
-         bucket on (the backend returns no buckets for historical dates like
-         posting_date — filing every past record under "Overdue" is noise).
-         `bucketed: false` on the widget forces the plain list back. -->
-    <div v-else class="cw-body">
+    <!-- Grouped rows with sticky sub-headers. What the groups ARE depends on
+         the widget's `group_by`: the Overdue/Today/This week time rail
+         (default), one group per value of any field, or a single unlabelled
+         group when grouping is off. The unlabelled case renders no header at
+         all — an empty grey bar reads as a bug, not as "no grouping". -->
+    <div v-else class="cw-body hide-scrollbar">
       <template v-if="showBuckets">
         <div v-for="b in buckets" :key="b.key" class="cw-group">
-          <div class="cw-group-head" :class="b.key === 'overdue' ? 'is-overdue' : ''">
-            <span class="cw-dot" :class="`dot-${b.key}`" />
-            <span class="cw-group-label">{{ b.label }}</span>
+          <button
+            v-if="b.label"
+            type="button" class="cw-group-head shadow-sm px-2 py-2 font-semibold"
+            :class="b.key === 'overdue' ? 'is-overdue' : ''"
+            @click="toggleBucket(b.key)"
+          >
+            <ChevronDown :size="12" class="cw-group-chevron" :class="{ 'is-collapsed': collapsedBuckets.has(b.key) }" />
+            <span class="cw-group-label text-gray-800 font-medium">{{ b.label }}</span>
             <span class="cw-group-count">{{ b.tasks.length }}</span>
-          </div>
-          <WidgetRow
-            v-for="r in b.tasks" :key="r.name"
-            :title="r.title"
-            :chips="isTask ? taskChips(r) : genericChips(r)"
-            :avatars="rowAvatars(r)"
-            :date="isTask ? r.due_date : r.date"
-            @click="isTask ? openTask(r.name) : openRecord(r)"
-          />
+          </button>
+          <template v-if="!collapsedBuckets.has(b.key)">
+            <WidgetRow
+              v-for="r in b.tasks" :key="r.name"
+              v-bind="rowProps(r)"
+              @click="isTask ? openTask(r.name) : openRecord(r)"
+            />
+          </template>
         </div>
       </template>
       <template v-else>
         <WidgetRow
           v-for="r in rows" :key="r.name"
-          :title="r.title"
-          :chips="isTask ? taskChips(r) : genericChips(r)"
-          :avatars="rowAvatars(r)"
-          :date="isTask ? r.due_date : r.date"
+          v-bind="rowProps(r)"
           @click="isTask ? openTask(r.name) : openRecord(r)"
         />
       </template>
@@ -82,10 +105,12 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { Inbox, Columns3, Lock } from 'lucide-vue-next'
+import { Inbox, Columns3, Lock, ChevronDown } from 'lucide-vue-next'
 import { Skeleton, Button } from '@/ui'
-import { getColumnWidgetData, getDoctypeColumnData } from '@/utils/api'
+import { getColumnWidgetData, getDoctypeColumnData, getWidgetSourceFields } from '@/utils/api'
 import { useProjectStore } from '@/stores/project'
+import { withMinDuration } from '@/lib/utils'
+import { resolveRowProps, fieldMetaLookup, templateFieldNames } from '@/utils/rowTemplate'
 import WidgetRow from './WidgetRow.vue'
 import DocQuickview from './DocQuickview.vue'
 
@@ -127,14 +152,28 @@ const sourceLabel = computed(() => props.widget.doctype || 'this source')
 // populated too, so toggling `bucketed` never needs a refetch.
 const showBuckets = computed(() => props.widget.bucketed !== false && buckets.value.length > 0)
 
+// Per-instance, session-only fold state (collapsible date-bucket
+// headers) — keyed by bucket key, which is stable across reloads, so a
+// column stays collapsed through its own data refreshes. Not persisted.
+const collapsedBuckets = ref(new Set())
+function toggleBucket(key) {
+  const s = new Set(collapsedBuckets.value)
+  if (s.has(key)) s.delete(key); else s.add(key)
+  collapsedBuckets.value = s
+}
+
 async function loadTask() {
   const res = await getColumnWidgetData({
     scope: serialiseScope(effScope.value),
-    filter_by: props.widget.filterBy || 'assignee',
+    // Only sent when a pre-unified-filters dashboard still carries one —
+    // the endpoint's own default is now "no quick filter" (see its
+    // docstring), so omitting these must not silently filter anything.
+    filter_by: props.widget.filterBy || null,
     filter_value: props.widget.filterValue || null,
     status_filter: props.widget.statusFilter || 'open',
-    // Filter-builder rows stack on top of the quick picker (AND).
     filters: props.widget.filters || [],
+    group_by: props.widget.group_by || 'date',
+    extra_fields: templateFieldNames(props.widget.row_template),
   })
   // Buckets arrive due-date ordered (overdue → today → this week → later →
   // no date), so the flat fallback is just a concatenation of them.
@@ -151,6 +190,8 @@ async function loadGeneric() {
     // undefined (not null) lets the backend fall back to this doctype's own
     // default deadline field; an explicit '' is the user's "no date" choice.
     date_field: props.widget.date_field === undefined ? undefined : props.widget.date_field,
+    group_by: props.widget.group_by || 'date',
+    extra_fields: templateFieldNames(props.widget.row_template),
     limit: 200,
   })
   rows.value = res?.rows || []
@@ -165,8 +206,10 @@ async function load() {
   loading.value = true
   noAccess.value = false
   try {
-    if (isTask.value) await loadTask()
-    else await loadGeneric()
+    // Anti-flicker: a warm-cache response can resolve in under a frame,
+    // which just flashes the skeleton instead of ever being seen — holds
+    // the skeleton for a real minimum instead, never delays a slow load.
+    await withMinDuration((isTask.value ? loadTask() : loadGeneric()))
   } catch (e) {
     reset()
     // The backend's PermissionError message arrives as a plain Error (see
@@ -194,34 +237,95 @@ function rowAvatars(r) {
   return r.owner ? [r.owner] : []
 }
 
+// Same identity pair (theme + key-as-seed) Sidebar.vue's project list
+// renders via ProjectAvatar — the real illustrated tile, not a generic
+// line icon. Task-only: no other doctype this app renders has a "project".
+function projectAvatarItem(r) {
+  return { kind: 'avatar-project', theme: r.project_theme, seed: r.project_key, label: r.project_name }
+}
+
 function statusColor(v) {
   const s = String(v || '').toLowerCase()
   if (/done|complete|closed|resolved|active|won/.test(s)) return 'success'
-  if (/progress|review|testing|replied|open|contacted|negotiation/.test(s)) return 'primary'
+  // Chip.vue only knows default|accent|success|warning|danger — 'primary'
+  // isn't one of them and silently fell through to gray (STYLES.soft.default).
+  if (/progress|review|testing|replied|open|contacted|negotiation/.test(s)) return 'accent'
   if (/block|hold|lost|inactive|junk/.test(s)) return 'danger'
   return 'default'
 }
-// Status shown again only when the column ISN'T already a single-status
-// glance (filterBy === 'status' means every row already shares one status —
-// showing it a second time is redundant, same posture the old card version
-// used).
-function taskChips(t) {
-  const chips = []
-  if (props.widget.filterBy !== 'status' && t.status) chips.push({ text: t.status, color: statusColor(t.status) })
-  if (t.task_type) chips.push({ text: t.task_type, color: 'default' })
-  return chips
+
+// Field metadata for whatever doctype this column effectively renders — the
+// SAME source RowDesignerModal.vue's picker, the filter builder and group-by
+// all use (get_widget_source_fields), so a saved row_template's
+// Date/Datetime detection matches exactly what was offered when it was
+// configured, and synthetic fields like project_key resolve here too.
+const effDoctype = computed(() => (isTask.value ? 'BP Task' : props.widget.doctype))
+const sourceFields = ref([])
+watch(effDoctype, async (dt) => {
+  sourceFields.value = dt ? await getWidgetSourceFields(dt).catch(() => []) : []
+}, { immediate: true })
+const fieldMeta = computed(() => fieldMetaLookup(sourceFields.value))
+
+// Unconfigured (no row_template — the overwhelming majority until someone
+// opts in) fallback. Task keeps its project tile — real, non-redundant
+// data. Every OTHER doctype used to also get a hashed-initials avatar box
+// here showing the record's own name right next to... the record's own
+// name in the title — pure noise, removed. Its owner (a DIFFERENT
+// identity, not redundant) still shows on line 2.
+function fallbackLine1(r) {
+  const items = []
+  if (isTask.value) items.push(projectAvatarItem(r))
+  items.push({ kind: 'text', text: r.title })
+  return items
 }
-function genericChips(r) {
-  const chips = []
-  if (r.status) chips.push({ text: r.status, color: statusColor(r.status) })
-  for (const l of (r.labels || [])) chips.push({ text: String(l.value), color: 'default', title: l.label })
-  return chips
+function fallbackLine2(r) {
+  const items = []
+  if (isTask.value) {
+    // Status repeated only when the column isn't already a single-status
+    // glance (filterBy === 'status' means every row already shares one).
+    if (props.widget.filterBy !== 'status' && r.status) items.push({ kind: 'text', text: r.status, color: statusColor(r.status) })
+    if (r.task_type) items.push({ kind: 'text', text: r.task_type, color: 'default' })
+    items.push({ kind: 'avatars', people: r.assignees || [] })
+  } else {
+    if (r.status) items.push({ kind: 'text', text: r.status, color: statusColor(r.status) })
+    for (const l of (r.labels || [])) items.push({ kind: 'text', text: String(l.value), color: 'default' })
+    // r.owner is a resolved {user, full_name, user_image} object (see
+    // get_doctype_column_data), not a bare username string — reuse the
+    // 'avatars' renderer (already handles image-or-initials via Avatar.vue)
+    // instead of a one-off shape.
+    if (r.owner) items.push({ kind: 'avatars', people: [r.owner] })
+  }
+  return items
+}
+
+// A configured row_template takes over entirely; an unconfigured widget
+// falls back to the layout above, so nothing existing regresses.
+function rowProps(r) {
+  if (props.widget.row_template) {
+    const resolved = resolveRowProps(props.widget.row_template, r, {
+      projectAvatar: () => projectAvatarItem(r),
+      assignees: () => rowAvatars(r),
+      fieldMeta: fieldMeta.value,
+      fallbackTitle: () => r.title,
+    })
+    if (resolved) return resolved
+  }
+  return {
+    line1: fallbackLine1(r),
+    line2: fallbackLine2(r),
+    date: isTask.value ? r.due_date : r.date,
+  }
 }
 
 const cfgKey = () => [
   props.widget.doctype, serialiseScope(effScope.value), props.widget.filterBy, props.widget.filterValue,
   props.widget.statusFilter, JSON.stringify(props.widget.filters || []),
-  JSON.stringify(props.widget.label_fields || []), props.widget.date_field, props.refreshKey,
+  JSON.stringify(props.widget.label_fields || []), props.widget.date_field,
+  props.widget.group_by,
+  // row_template drives the SELECT list (extra_fields), so a template change
+  // genuinely needs a refetch, not just a re-render.
+  JSON.stringify(templateFieldNames(props.widget.row_template)),
+  props.refreshKey,
 ].join('|')
 watch(cfgKey, load)
 onMounted(load)
@@ -231,17 +335,22 @@ defineExpose({ load })
 <style scoped>
 .cw { height: 100%; display: flex; flex-direction: column; min-height: 0; }
 
-.cw-head { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
-.cw-title { font-size: 13.5px; font-weight: 600; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cw-count { font-weight: 500; color: var(--muted); }
-.cw-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-head { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 10px; border-bottom: 1px solid var(--border); margin-bottom: 0px; }
+.cw-title { font-size: 14px; font-weight: 600; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-count { font-weight: 600; color: var(--muted); }
+.cw-sub { font-size: 11px; color: var(--muted); margin-top: 0px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .cw-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 .cw-configure-icon { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-secondary); color: var(--muted); }
-.cw-noaccess-title { font-size: 12.5px; font-weight: 500; color: var(--foreground); }
-.cw-noaccess-sub { font-size: 11.5px; color: var(--muted); text-align: center; max-width: 200px; line-height: 1.45; margin-top: -4px; }
+.cw-noaccess-title { font-size: 12.5px; font-weight: 600; color: var(--foreground); }
+.cw-noaccess-sub { font-size: 11px; color: var(--muted); text-align: center; max-width: 200px; line-height: 1.45; margin-top: -4px; }
 
-.cw-body { flex: 1; min-height: 0; overflow-y: auto; padding-top: 2px; }
+.cw-body { flex: 1; min-height: 0; overflow-y: auto; padding-top: 0px; }
+
+.cw-skel-group-head { display: flex; align-items: center; background: #f2f2f2; }
+.cw-skel-row { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-bottom: 1px solid #e5e5e5; }
+.cw-skel-line1 { display: flex; align-items: center; gap: 8px; }
+.cw-skel-line2 { display: flex; align-items: center; gap: 6px; }
 
 /* ── time rail ──────────────────────────────────────────────────────────
    Sticky sub-header per date bucket. Chrome stays neutral (composition law
@@ -251,20 +360,21 @@ defineExpose({ load })
 .cw-group + .cw-group { margin-top: 10px; }
 
 .cw-group-head {
-  position: sticky; top: 0; z-index: 1;
-  display: flex; align-items: center; gap: 6px;
-  padding: 5px 2px 5px 0;
-  background: var(--surface);
+  position: sticky; top: -1px; z-index: 1; width: 100%;
+  display: flex; align-items: center; gap: 8px;
+  background: #f2f2f2; border: none; cursor: pointer;
 }
+.cw-group-chevron { flex-shrink: 0; transition: transform .12s; color: var(--muted); }
+.cw-group-chevron.is-collapsed { transform: rotate(-90deg); }
 .cw-group-label {
-  font-size: 11px; font-weight: 500; text-transform: uppercase;
-  letter-spacing: 0.04em; color: var(--muted);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.04em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cw-group-head.is-overdue .cw-group-label { color: var(--danger-soft-foreground); }
+
 .cw-group-count {
   margin-left: auto; flex-shrink: 0;
-  font-size: 10.5px; font-weight: 500; color: var(--muted);
+  font-size: 10.5px; font-weight: 600; color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 

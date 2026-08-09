@@ -1,7 +1,7 @@
 """
 batch_projects/api/dashboards.py
 ───────────────────────────────────
-BP Dashboard — Wrike-style live dashboards. Separate from BP Report (which stays
+BP Dashboard — live glance dashboards. Separate from BP Report (which stays
 scheduled/exportable, see api/board.py's save_report/get_saved_reports). Paid
 feature end to end: BPDashboard.validate() gates writes, but list/get/delete
 don't go through validate(), so every whitelisted method here re-checks
@@ -167,16 +167,120 @@ def _bucket_for(due_date, today):
     return "later"
 
 
-@frappe.whitelist()
-def get_column_widget_data(scope="all", filter_by="assignee", filter_value=None, status_filter="open",
-                            filters=None):
-    """One column's worth of tasks, bucketed by due date (Overdue/Today/This
-    week/Later/No due date) — read-mostly, click through to the real task to
-    act on it. Deliberately NOT drag-and-drop; that interactivity already
-    exists on the real per-project Board.vue. filter_value=None with
-    filter_by='assignee' means "unassigned".
+# ─── Grouping ──────────────────────────────────────────────────────────────
+# A column widget's rows can be grouped three ways, chosen in Configure:
+#   'date' (default) — the Overdue/Today/This week/Later time rail.
+#   'none'           — one flat list, no group headers at all.
+#   <fieldname>      — one group per distinct value of that field (status,
+#                      priority, epic, project, labels, any Select/Link/Data
+#                      field the doctype actually has).
+# Every path returns the same {key,label,tasks} bucket shape, so the frontend
+# renders grouped output identically no matter which mode produced it.
+_GROUP_NONE_KEY = "__ungrouped__"
+_GROUP_EMPTY_KEY = "__none__"
 
-    filter_by: 'assignee' | 'status' | 'priority' | 'project'
+
+def _synthetic_fields(doctype):
+    """Fields with no docfield behind them that are still real, useful things
+    to filter, group or show a row by.
+
+    BP Task's assignees live in the BP Task Assignee child table, so
+    introspection can never surface them (_build_db_filters resolves the
+    filter, _group_tasks_by_field the grouping). project_key/project_name are
+    computed per row by get_column_widget_data — exposing them here is what
+    lets a row show the short "SOLOV" key instead of a long project title
+    eating the whole line.
+    """
+    if doctype != "BP Task":
+        return []
+    return [
+        {"fieldname": "assignee", "label": "Assignee", "fieldtype": "Link",
+         "read_only": True, "options": "User", "synthetic": True},
+        {"fieldname": "project_key", "label": "Project key", "fieldtype": "Data",
+         "read_only": True, "options": None, "synthetic": True},
+        {"fieldname": "project_name", "label": "Project name", "fieldtype": "Data",
+         "read_only": True, "options": None, "synthetic": True},
+    ]
+
+
+def _extra_fields(doctype, requested, exclude=()):
+    """Validate caller-requested extra fieldnames against the doctype's real
+    introspected schema and return the ones worth adding to a SELECT.
+
+    Always schema-validated rather than passed through: these arrive from a
+    saved row template, i.e. ultimately from the browser, and land directly
+    in frappe.get_all's field list."""
+    req = _parse_json(requested, []) if isinstance(requested, str) else (requested or [])
+    if not req:
+        return []
+    valid = {f["fieldname"] for f in _readable_field_rows(doctype)}
+    seen, out = set(exclude), []
+    for f in req:
+        if isinstance(f, str) and f in valid and f not in seen:
+            out.append(f)
+            seen.add(f)
+    return out
+
+
+def _group_rows_by_field(rows, fieldname, order_hint=None, label_map=None, empty_label="None"):
+    """Bucket already-fetched rows by one field's value.
+
+    order_hint: values in the order they should appear (a Select field's
+    declared options, or a project's workflow_states). Anything not in the
+    hint follows, alphabetically. The empty/unset group is always last —
+    it's the residue, never the headline.
+
+    label_map: raw value -> display label (Link fields resolve to titles).
+    """
+    grouped = {}
+    for r in rows:
+        raw = r.get("_group_value")
+        key = _GROUP_EMPTY_KEY if raw in (None, "", []) else str(raw)
+        grouped.setdefault(key, []).append(r)
+
+    ordered = []
+    seen = set()
+    for v in (order_hint or []):
+        k = str(v)
+        if k in grouped and k not in seen:
+            ordered.append(k)
+            seen.add(k)
+    rest = sorted(k for k in grouped if k not in seen and k != _GROUP_EMPTY_KEY)
+    ordered.extend(rest)
+    if _GROUP_EMPTY_KEY in grouped:
+        ordered.append(_GROUP_EMPTY_KEY)
+
+    out = []
+    for k in ordered:
+        for r in grouped[k]:
+            r.pop("_group_value", None)
+        out.append({
+            "key": k,
+            "label": empty_label if k == _GROUP_EMPTY_KEY else ((label_map or {}).get(k) or k),
+            "tasks": grouped[k],
+        })
+    return out
+
+
+@frappe.whitelist()
+def get_column_widget_data(scope="all", filter_by=None, filter_value=None, status_filter="open",
+                            filters=None, group_by="date", extra_fields=None):
+    """One column's worth of tasks — read-mostly, click through to the real
+    task to act on it. Deliberately NOT drag-and-drop; that interactivity
+    already exists on the real per-project Board.vue.
+
+    group_by: 'date' (Overdue/Today/This week/Later — the default),
+    'none' (one flat list), or any groupable fieldname on BP Task
+    (status/priority/project/epic/task_type/sprint/... plus the synthetic
+    'assignee'). See _group_rows_by_field.
+
+    filter_by/filter_value: the retired quick-picker, honoured only when
+    explicitly passed so dashboards saved before the unified filter builder
+    keep working. filter_by='assignee' with filter_value=None means
+    "unassigned" — which is exactly why the default is now None rather than
+    'assignee': the old default silently filtered every caller that didn't
+    pass one down to unassigned tasks only, an easy trap for any new caller
+    (and one this endpoint's own tests walked straight into).
     """
     require_feature("dashboards")
     # NOT `filters` — that name is this function's own parameter (the visual
@@ -238,16 +342,39 @@ def get_column_widget_data(scope="all", filter_by="assignee", filter_value=None,
         listed = [[k, *(v if isinstance(v, list) else ["=", v])] for k, v in db_filters.items()]
         db_filters = listed + extra
 
+    # The base set every row needs, PLUS whatever the caller's row template
+    # and group-by actually reference. Without extra_fields the row designer
+    # could offer any BP Task field while the query only ever returned these
+    # eight — picking, say, "Story points" for a row silently rendered
+    # nothing, because the value was simply never fetched.
     fields = ["name", "task_key", "title", "status", "priority", "task_type", "project", "due_date"]
+    fields += _extra_fields("BP Task", extra_fields, exclude=fields)
+    if group_by and group_by not in ("date", "none", "assignee") and group_by not in fields:
+        fields += _extra_fields("BP Task", [group_by], exclude=fields)
     tasks = frappe.get_all("BP Task", filters=db_filters, fields=fields, order_by="due_date asc", limit_page_length=500)
 
-    pname = {}
+    pinfo = {}
     type_colors = {}  # project -> {task_type: color}
     for t in tasks:
         p = t["project"]
-        if p not in pname:
-            pname[p] = frappe.db.get_value("BP Project", p, "project_name") or p
-        t["project_name"] = pname[p]
+        if p not in pinfo:
+            row = frappe.db.get_value(
+                "BP Project", p, ["project_name", "key", "theme"], as_dict=True
+            ) or {}
+            pinfo[p] = {
+                "project_name": row.get("project_name") or p,
+                # theme+key are the SAME identity pair Sidebar.vue's project
+                # list renders via ProjectAvatar/resolveProjectTheme — a real
+                # illustrated tile, not a Lucide icon name. project_icon (a
+                # Select of line-icon names, used only by the project-icon
+                # PICKER in ProjectSettings.vue) is a different, unrelated
+                # field and was the wrong one to reach for here.
+                "project_key": row.get("key") or p,
+                "project_theme": row.get("theme") or None,
+            }
+        t["project_name"] = pinfo[p]["project_name"]
+        t["project_key"] = pinfo[p]["project_key"]
+        t["project_theme"] = pinfo[p]["project_theme"]
         # Resolve each task's type color from ITS OWN project's issue_types —
         # never the caller's currentProject (a cross-project column widget
         # has no single "current" project, and TaskCard.vue's client-side
@@ -276,6 +403,16 @@ def get_column_widget_data(scope="all", filter_by="assignee", filter_value=None,
             for u in amap.get(t["name"], [])
         ]
 
+    group_by = (group_by or "date").strip()
+
+    if group_by == "none":
+        return {"buckets": [{"key": _GROUP_NONE_KEY, "label": "", "tasks": tasks}],
+                "total": len(tasks), "group_by": "none"}
+
+    if group_by and group_by != "date":
+        buckets = _group_tasks_by_field(tasks, group_by, scope_projects)
+        return {"buckets": buckets, "total": len(tasks), "group_by": group_by}
+
     today = frappe.utils.getdate()
     buckets = {}
     for t in tasks:
@@ -283,7 +420,66 @@ def get_column_widget_data(scope="all", filter_by="assignee", filter_value=None,
         buckets.setdefault(b, []).append(t)
 
     out = [{"key": b, "label": _BUCKET_LABEL[b], "tasks": buckets[b]} for b in _BUCKET_ORDER if buckets.get(b)]
-    return {"buckets": out, "total": len(tasks)}
+    return {"buckets": out, "total": len(tasks), "group_by": "date"}
+
+
+def _group_tasks_by_field(tasks, group_by, scope_projects):
+    """Group BP Task rows by one field. Handles the three shapes a Task field
+    can take: the synthetic multi-value 'assignee' (a task with two assignees
+    genuinely belongs in both groups), 'labels' (a JSON list, same deal), and
+    ordinary scalar fields."""
+    fields_meta = {f["fieldname"]: f for f in _readable_field_rows("BP Task")}
+    if group_by not in fields_meta and group_by != "assignee":
+        frappe.throw(f"Cannot group BP Task by '{group_by}'.")
+
+    # Multi-valued: one task appears under every value it holds. Anything
+    # else would force an arbitrary "primary" pick and silently hide work.
+    if group_by in ("assignee", "labels"):
+        grouped, empty = {}, []
+        label_map = {}
+        for t in tasks:
+            if group_by == "assignee":
+                vals = [a["user"] for a in t.get("assignees") or []]
+                for a in t.get("assignees") or []:
+                    label_map[a["user"]] = a.get("full_name") or a["user"]
+            else:
+                vals = _parse_json(t.get("labels"), []) or []
+                vals = [v if isinstance(v, str) else (v.get("value") or v.get("label")) for v in vals]
+                vals = [v for v in vals if v]
+            if not vals:
+                empty.append(t)
+                continue
+            for v in vals:
+                grouped.setdefault(str(v), []).append(t)
+        out = [{"key": k, "label": label_map.get(k, k), "tasks": grouped[k]} for k in sorted(grouped)]
+        if empty:
+            out.append({"key": _GROUP_EMPTY_KEY,
+                        "label": "Unassigned" if group_by == "assignee" else "No labels",
+                        "tasks": empty})
+        return out
+
+    meta = fields_meta[group_by]
+    order_hint, label_map = [], {}
+
+    if group_by == "status":
+        # A project's own workflow order, not alphabetical — "To Do, In
+        # Progress, Done" is the only ordering that reads as a pipeline.
+        for pn in scope_projects:
+            try:
+                for s in _parse_json(frappe.db.get_value("BP Project", pn, "workflow_states"), []):
+                    if s.get("name") and s["name"] not in order_hint:
+                        order_hint.append(s["name"])
+            except Exception:
+                continue
+    elif meta["fieldtype"] == "Select":
+        order_hint = meta.get("options") or []
+    elif meta["fieldtype"] == "Link":
+        label_map = _resolve_link_labels(meta.get("options"), [t.get(group_by) for t in tasks])
+
+    for t in tasks:
+        t["_group_value"] = t.get(group_by)
+    return _group_rows_by_field(tasks, group_by, order_hint, label_map,
+                                empty_label=f"No {(meta.get('label') or group_by).lower()}")
 
 
 # ─── Generic doctype-source widget engine ──────────────────────────────────
@@ -404,6 +600,9 @@ _APP_SOURCE_SPECS = {
         ("Attendance", "Attendance", "CalendarCheck", "People",
          ["status"], ["employee"], []),
     ],
+    # These are correctly app-gated (installed-apps check at line 517).
+    # They activate only when the corresponding Frappe app is installed
+    # on the site.
     "crm": [
         ("CRM Deal", "Deal (CRM)", "Handshake", "Sales",
          ["status"], ["deal_owner"], ["closed_date"]),
@@ -580,11 +779,13 @@ def get_widget_source_doctypes():
 def get_widget_source_fields(doctype):
     """Real filterable field list for `doctype`, for the visual filter
     builder's field dropdown — delegates to erp_link.py's generic
-    frappe.get_meta()-based introspection instead of a second copy."""
+    frappe.get_meta()-based introspection instead of a second copy, plus the
+    synthetic fields below that have no docfield but are genuinely
+    filterable/groupable (see _synthetic_fields)."""
     require_feature("dashboards")
     _require_system_user()
     _widget_source_entry(doctype)
-    return _readable_field_rows(doctype)
+    return _readable_field_rows(doctype) + _synthetic_fields(doctype)
 
 
 @frappe.whitelist()
@@ -614,6 +815,84 @@ def get_widget_source_field_options(doctype, fieldname, query=None, limit=20):
     rows = frappe.get_all(target_dt, filters=filters, fields=pluck_fields,
                            limit_page_length=int(limit or 20), order_by="modified desc")
     return [{"value": r["name"], "label": r.get(title_field) or r["name"]} for r in rows]
+
+
+@frappe.whitelist()
+def get_multi_source_count(sources, scope=None):
+    """Sum of FILTERED RECORD COUNTS across one or more doctypes, for the
+    'metric' widget's multi-source mode — e.g. "open Leads" + "active
+    Deals" as one KPI number, instead of one BP-Task rollup.
+
+    sources: [{doctype, filters}, ...] — each doctype must be in the same
+    whitelisted, permission-checked registry the column/kanban widgets'
+    doctype picker already uses (_widget_source_entry); an unlisted or
+    unreadable doctype throws rather than silently contributing 0, so a
+    misconfigured widget is visibly wrong, not quietly undercounting.
+
+    A BP Task source additionally gets the widget's own project `scope`
+    folded in (_resolve_scope) — the same project-scoping every other
+    Task-sourced widget on this dashboard already respects. Other
+    doctypes have no such concept here and use only their own filters.
+
+    Returns {total, breakdown: [{doctype, label, count}, ...]} — shaped
+    like get_widget_data's {total, ...} so WidgetView.vue's Metric
+    template (`widget.data.total`) needs no special case for this mode.
+    """
+    require_feature("dashboards")
+    _require_system_user()
+    sources = _parse_json(sources, []) if isinstance(sources, str) else (sources or [])
+    if not sources:
+        return {"total": 0, "breakdown": []}
+
+    breakdown = []
+    for src in sources:
+        doctype = (src or {}).get("doctype")
+        if not doctype:
+            continue
+        entry = _widget_source_entry(doctype)  # validates registry membership + real read permission
+        db_filters = _build_db_filters(doctype, src.get("filters"))
+        if doctype == "BP Task":
+            scope_filters, _, _ = _resolve_scope(scope or "all")
+            db_filters = [[k, *(v if isinstance(v, list) else ["=", v])] for k, v in scope_filters.items()] + db_filters
+        count = frappe.db.count(doctype, filters=db_filters)
+        breakdown.append({"doctype": doctype, "label": entry["label"], "count": count})
+
+    return {"total": sum(b["count"] for b in breakdown), "breakdown": breakdown}
+
+
+def _assignee_filter(operator, value):
+    """Translate an `assignee` filter row into plain BP Task `name` filters.
+
+    Returns a list of get_all filter triples. The child-table lookup happens
+    here (one query, no join), which keeps every caller — column widget,
+    kanban, metric counts — filtering assignees identically.
+    """
+    if operator in ("is_set", "is_not_set"):
+        assigned = set(frappe.get_all("BP Task Assignee",
+                                      filters={"parenttype": "BP Task"}, pluck="parent"))
+        if operator == "is_set":
+            return [["name", "in", list(assigned) or [""]]]
+        return [["name", "not in", list(assigned)]] if assigned else []
+
+    vals = value if isinstance(value, (list, tuple)) else [value]
+    vals = [v for v in vals if v not in (None, "")]
+    if not vals:
+        # An explicit "assignee is <nothing>" is the unassigned filter, which
+        # is a real thing people want — not a no-op.
+        assigned = set(frappe.get_all("BP Task Assignee",
+                                      filters={"parenttype": "BP Task"}, pluck="parent"))
+        return [["name", "not in", list(assigned)]] if assigned else []
+
+    names = set(frappe.get_all("BP Task Assignee",
+                               filters={"parenttype": "BP Task", "user": ["in", vals]},
+                               pluck="parent"))
+    negate = operator in ("!=", "not in")
+    if negate:
+        return [["name", "not in", list(names)]] if names else []
+    # Empty match set must still filter everything out, hence the [""] —
+    # an empty IN list is silently dropped by the query builder and would
+    # widen the result to "all tasks", the exact opposite of the intent.
+    return [["name", "in", list(names) or [""]]]
 
 
 _SAFE_FILTER_OPERATORS = {
@@ -702,6 +981,16 @@ def _build_db_filters(doctype, filters):
         fieldname = f.get("fieldname")
         operator = f.get("operator")
         value = f.get("value")
+
+        # 'assignee' is not a docfield — BP Task keeps assignees in the
+        # BP Task Assignee child table — so the introspected field list can
+        # never contain it and the visual builder had no way to express
+        # "assigned to X" at all. Resolve it here into a name-in-set filter
+        # so the builder covers everything the retired quick picker did.
+        if doctype == "BP Task" and fieldname == "assignee":
+            out.extend(_assignee_filter(operator, value))
+            continue
+
         if fieldname not in valid_fields:
             frappe.throw(f"Unknown filter field: {fieldname}")
 
@@ -804,14 +1093,16 @@ def get_doctype_group_data(doctype, group_by, filters=None, scope=None):
 
 @frappe.whitelist()
 def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=None,
-                             label_fields=None, date_field=None):
+                             label_fields=None, date_field=None, group_by="date",
+                             extra_fields=None):
     """Doctype-agnostic row-list engine for the generalized 'column' widget
-    (Wrike-style row list) and the 'kanban' widget's non-Task cards —
+    (glance row list) and the 'kanban' widget's non-Task cards —
     parametrized sibling of get_column_widget_data above (which stays
     BP-Task-only: its date-bucketing/assignee/type-color logic is worth
     keeping exactly as-is).
 
-    label_fields: up to 3 fieldnames shown as chips on the row's second line.
+    label_fields: fieldnames shown as chips on the row's second line (the
+    pre-row-designer path; no count limit — WidgetRow collapses overflow).
     date_field: one Date/Datetime fieldname shown right-aligned, or None —
     None IS the "hide date" option (one control, nothing to get out of sync).
     """
@@ -837,7 +1128,13 @@ def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=N
     if date_field and fields_meta.get(date_field, {}).get("fieldtype") not in ("Date", "Datetime"):
         frappe.throw(f"'{date_field}' is not a Date/Datetime field on {doctype}.")
     label_parsed = _parse_json(label_fields, []) if isinstance(label_fields, str) else (label_fields or [])
-    labels_wanted = [f for f in label_parsed if f in fields_meta][:3]
+    group_by = (group_by or "date").strip()
+    if group_by not in ("date", "none") and group_by not in fields_meta:
+        frappe.throw(f"Cannot group {doctype} by '{group_by}'.")
+    # No artificial cap: the row designer decides what shows and WidgetRow
+    # measures real width to collapse the overflow into "+N". A hard [:3]
+    # here silently dropped the 4th chip onwards with no feedback anywhere.
+    labels_wanted = [f for f in label_parsed if f in fields_meta]
 
     wanted = ["name", "modified"]
     if title_field != "name":
@@ -851,11 +1148,23 @@ def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=N
     for f in labels_wanted:
         if f not in wanted:
             wanted.append(f)
+    # Fields the caller's row template / group-by reference but nothing above
+    # already selected. Without this the row designer could offer any field
+    # while the query returned only the handful hard-coded here, so the block
+    # rendered blank with no error anywhere.
+    wanted += _extra_fields(doctype, extra_fields, exclude=wanted)
+    if group_by not in ("date", "none") and group_by not in wanted:
+        wanted.append(group_by)
 
     db_filters = _build_db_filters(doctype, filters)
     order_by = f"{date_field} asc" if date_field else (f"{sort} desc" if sort and sort in fields_meta else "modified desc")
     rows = frappe.get_all(doctype, filters=db_filters, fields=wanted,
                            order_by=order_by, limit_page_length=int(limit or 200))
+
+    # Grouping keys off the RAW stored value, not the display label in `out`
+    # — two records with the same label but different underlying links must
+    # not collapse into one group.
+    raw_by_name = {r["name"]: r for r in rows}
 
     status_labels = {}
     if status_field and fields_meta.get(status_field, {}).get("fieldtype") == "Link":
@@ -888,10 +1197,19 @@ def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=N
         if fields_meta[f]["fieldtype"] == "Link":
             label_link_lookups[f] = _resolve_link_labels(fields_meta[f]["options"], [r.get(f) for r in rows])
 
+    # Row-template fields, resolved to what a row should DISPLAY. A Link
+    # stores a docname (`CRM-LEAD-2026-00004`, a User id) but a row wants the
+    # human title, same as the label/status/owner paths above already do.
+    template_fields = _extra_fields(doctype, extra_fields)
+    template_link_lookups = {}
+    for f in template_fields:
+        if fields_meta.get(f, {}).get("fieldtype") == "Link":
+            template_link_lookups[f] = _resolve_link_labels(fields_meta[f]["options"], [r.get(f) for r in rows])
+
     out = []
     for r in rows:
         date_val = r.get(date_field) if date_field else None
-        out.append({
+        row = {
             "name": r["name"],
             "title": r.get(title_field) or r["name"],
             "modified": str(r.get("modified") or ""),
@@ -902,15 +1220,38 @@ def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=N
                 {"label": fields_meta[f]["label"], "value": label_link_lookups.get(f, {}).get(r.get(f), r.get(f))}
                 for f in labels_wanted if r.get(f) not in (None, "")
             ],
-        })
+        }
+        # THE bug this block fixes: `out` was a fixed-shape rebuild, so every
+        # field a row template asked for was fetched by the query above and
+        # then silently dropped here — the designer let you add First Name /
+        # Company / Country and the widget rendered an empty row, with the
+        # data plainly visible in the record's own detail panel. Only fields
+        # not already occupying a reserved key are copied, so a template
+        # referencing `status` can't clobber the resolved status label.
+        for f in template_fields:
+            if f in row:
+                continue
+            v = r.get(f)
+            row[f] = template_link_lookups.get(f, {}).get(v, v) if v is not None else None
+        out.append(row)
 
-    # Same Overdue/Today/This week/Later/No date bucketing BP Task columns
-    # already get — a Wrike glance column reads as a *time-triaged* list, not
-    # a flat dump, and that was the single biggest behavioural difference
-    # between a Task column and every other doctype's column. `rows` is still
-    # returned unchanged so callers that want the flat list keep working.
+    # Grouping — the same three modes BP Task columns get (see the Grouping
+    # block near _bucket_for). `rows` is still returned unchanged so callers
+    # that want the flat list keep working.
     buckets = []
-    if date_field:
+    if group_by == "none":
+        buckets = [{"key": _GROUP_NONE_KEY, "label": "", "tasks": out}]
+    elif group_by != "date":
+        meta = fields_meta[group_by]
+        order_hint = meta.get("options") or [] if meta["fieldtype"] == "Select" else []
+        label_map = {}
+        if meta["fieldtype"] == "Link":
+            label_map = _resolve_link_labels(meta.get("options"), [r.get(group_by) for r in raw_by_name.values()])
+        for row in out:
+            row["_group_value"] = raw_by_name.get(row["name"], {}).get(group_by)
+        buckets = _group_rows_by_field(out, group_by, order_hint, label_map,
+                                       empty_label=f"No {(meta.get('label') or group_by).lower()}")
+    elif date_field:
         today = frappe.utils.getdate()
         grouped = {}
         for row in out:
@@ -925,7 +1266,7 @@ def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=N
         ]
 
     return {"rows": out, "buckets": buckets, "total": len(out),
-            "doctype": doctype, "date_field": date_field}
+            "doctype": doctype, "date_field": date_field, "group_by": group_by}
 
 
 @frappe.whitelist()
