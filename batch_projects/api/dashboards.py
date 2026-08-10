@@ -620,9 +620,15 @@ _APP_SOURCE_SPECS = {
 
 _LAYOUT_FIELDTYPES = {
     "Section Break", "Column Break", "Tab Break", "Table", "Table MultiSelect",
-    "HTML", "Button", "Fold", "Heading", "Image", "Attach", "Attach Image",
+    "HTML", "Button", "Fold", "Heading",
     "Signature", "Password", "Geolocation", "Code", "Barcode",
 }
+# Image/Attach/Attach Image are deliberately NOT in the set above: they're
+# real data, just not filter/group-by material (frappe.get_all can't
+# usefully `=`/`like` a file URL) — excluding them here would also block the
+# row designer's avatar picker from ever offering them. FilterBuilder.vue and
+# the group-by picker each already whitelist their own relevant fieldtypes,
+# so nothing downstream has to special-case image fields out again.
 
 
 def _readable_field_rows(doctype):
@@ -640,9 +646,19 @@ def _readable_field_rows(doctype):
     against erp_link's write-scoped list, so read-only fields stay
     unwritable — this widens reads only."""
     meta = frappe.get_meta(doctype)
+    image_field = meta.image_field
     out = []
     for f in meta.fields:
-        if f.fieldtype in _LAYOUT_FIELDTYPES or f.hidden:
+        if f.fieldtype in _LAYOUT_FIELDTYPES:
+            continue
+        # A doctype's designated photo field (Customer/Lead/Contact/Supplier/
+        # Employee/Item's "image") is standardly hidden=1 in core — Frappe
+        # doesn't want it as an ordinary form input, it's surfaced via the
+        # record's sidebar/header instead. That's exactly why it's special,
+        # not a reason to exclude it here: it's the one hidden field this
+        # module's read-only, display-only callers (the row designer,
+        # specifically) genuinely want. Every OTHER hidden field stays out.
+        if f.hidden and f.fieldname != image_field:
             continue
         row = {
             "fieldname": f.fieldname,
@@ -785,7 +801,21 @@ def get_widget_source_fields(doctype):
     require_feature("dashboards")
     _require_system_user()
     _widget_source_entry(doctype)
-    return _readable_field_rows(doctype) + _synthetic_fields(doctype)
+    rows = _readable_field_rows(doctype) + _synthetic_fields(doctype)
+    # Frappe already knows which field IS a doctype's photo (the same one its
+    # own List View/Kanban use) — meta.image_field, e.g. Customer/Lead/
+    # Contact/Supplier/Employee/Item all declare "image". Tagging it here
+    # (rather than hardcoding a doctype list in the frontend) is what lets
+    # RowDesignerModal's default "Visual — Record identity" option use the
+    # real photo instead of always falling back to a hashed-initials avatar
+    # — see resolveAvatarBlock's 'identity' branch in rowTemplate.js.
+    image_field = frappe.get_meta(doctype).image_field
+    if image_field:
+        for r in rows:
+            if r["fieldname"] == image_field:
+                r["is_identity_image"] = True
+                break
+    return rows
 
 
 @frappe.whitelist()

@@ -29,8 +29,12 @@
 //       the other. value_map's fallback covers any value NOT in map (a
 //       status added after this was configured), checked after an exact hit.
 //     { kind: 'avatar', source, field }
-//       source: 'identity'   -> hashed-color avatar from the record's own
-//                                title (no field needed)
+//       source: 'identity'   -> the doctype's own photo field (Frappe's
+//                                meta.image_field — Customer/Lead/Contact/
+//                                Supplier/Employee/Item all have one), or a
+//                                hashed-color avatar from the record's own
+//                                title if the doctype has none / it's unset
+//                                (no field needed on the block itself)
 //               'project'    -> BP Task's own project tile (Task rows only)
 //               'assignees'  -> avatar stack (Task rows only — the only
 //                                doctype this app renders multi-assignee for)
@@ -86,7 +90,16 @@ export function resolveRowProps(template, record, ctx) {
 }
 
 function resolveAvatarBlock(blk, record, ctx) {
-  if (blk.source === 'identity') return { kind: 'avatar-hash', name: ctx.fallbackTitle(record) }
+  if (blk.source === 'identity') {
+    // The doctype's own photo (Customer/Lead/Contact/Supplier/Employee/Item
+    // all have one — see get_widget_source_fields' is_identity_image tag)
+    // beats a hashed-initials avatar whenever the record actually has one
+    // set; falls through to the hash avatar for doctypes with no photo
+    // field, or a record that hasn't set one.
+    const image = ctx.identityImageField ? record?.[ctx.identityImageField] : null
+    if (image) return { kind: 'avatar-image', image, name: ctx.fallbackTitle(record) }
+    return { kind: 'avatar-hash', name: ctx.fallbackTitle(record) }
+  }
   if (blk.source === 'project') return ctx.projectAvatar ? ctx.projectAvatar(record) : null
   if (blk.source === 'assignees') return { kind: 'avatars', people: ctx.assignees ? ctx.assignees(record) : [] }
   if (blk.source === 'field' && blk.field) {
@@ -135,16 +148,26 @@ function resolveColor(color, rawValue, fallback = 'default') {
 // while the query returned only its own hardcoded handful, and the block
 // rendered blank with no error anywhere (see get_column_widget_data's
 // extra_fields).
-export function templateFieldNames(template) {
+// `identityImageField` — the doctype's own designated photo field (Frappe's
+// meta.image_field, see get_widget_source_fields), if the template uses a
+// 'identity' avatar block anywhere. That block never names a field itself
+// (it's "whatever this record's own identity is"), so without this the
+// backend would never SELECT the photo column and resolveAvatarBlock's
+// identity branch would have nothing to fall through to but the hashed
+// avatar, even on a doctype that has a real photo.
+export function templateFieldNames(template, identityImageField) {
   if (!template) return []
   const out = new Set()
+  let usesIdentity = false
   const visit = (blk) => {
     if (!blk) return
     if (blk.field) out.add(blk.field)
+    if (blk.kind === 'avatar' && blk.source === 'identity') usesIdentity = true
   }
   ;(template.line1 || []).forEach(visit)
   ;(template.line2 || []).forEach(visit)
   visit(template.solo)
+  if (usesIdentity && identityImageField) out.add(identityImageField)
   return [...out]
 }
 

@@ -56,7 +56,7 @@
     <!-- empty -->
     <div v-else-if="!rows.length" class="cw-empty">
       <Inbox :size="16" class="text-[--muted] opacity-60" />
-      <span class="text-[11.5px] text-[--muted]">Nothing here</span>
+      <span class="text-sm text-[--muted]">Nothing here</span>
     </div>
 
     <!-- Grouped rows with sticky sub-headers. What the groups ARE depends on
@@ -74,7 +74,7 @@
             @click="toggleBucket(b.key)"
           >
             <ChevronDown :size="12" class="cw-group-chevron" :class="{ 'is-collapsed': collapsedBuckets.has(b.key) }" />
-            <span class="cw-group-label text-gray-800 font-medium">{{ b.label }}</span>
+            <span class="cw-group-label text-foreground font-medium">{{ b.label }}</span>
             <span class="cw-group-count">{{ b.tasks.length }}</span>
           </button>
           <template v-if="!collapsedBuckets.has(b.key)">
@@ -173,7 +173,7 @@ async function loadTask() {
     status_filter: props.widget.statusFilter || 'open',
     filters: props.widget.filters || [],
     group_by: props.widget.group_by || 'date',
-    extra_fields: templateFieldNames(props.widget.row_template),
+    extra_fields: templateFieldNames(props.widget.row_template, identityImageField.value),
   })
   // Buckets arrive due-date ordered (overdue → today → this week → later →
   // no date), so the flat fallback is just a concatenation of them.
@@ -191,7 +191,7 @@ async function loadGeneric() {
     // default deadline field; an explicit '' is the user's "no date" choice.
     date_field: props.widget.date_field === undefined ? undefined : props.widget.date_field,
     group_by: props.widget.group_by || 'date',
-    extra_fields: templateFieldNames(props.widget.row_template),
+    extra_fields: templateFieldNames(props.widget.row_template, identityImageField.value),
     limit: 200,
   })
   rows.value = res?.rows || []
@@ -265,6 +265,9 @@ watch(effDoctype, async (dt) => {
   sourceFields.value = dt ? await getWidgetSourceFields(dt).catch(() => []) : []
 }, { immediate: true })
 const fieldMeta = computed(() => fieldMetaLookup(sourceFields.value))
+// The doctype's own photo field, if it has one — see get_widget_source_fields'
+// is_identity_image tag / rowTemplate.js's 'identity' avatar branch.
+const identityImageField = computed(() => sourceFields.value.find(f => f.is_identity_image)?.fieldname || null)
 
 // Unconfigured (no row_template — the overwhelming majority until someone
 // opts in) fallback. Task keeps its project tile — real, non-redundant
@@ -307,6 +310,7 @@ function rowProps(r) {
       assignees: () => rowAvatars(r),
       fieldMeta: fieldMeta.value,
       fallbackTitle: () => r.title,
+      identityImageField: identityImageField.value,
     })
     if (resolved) return resolved
   }
@@ -324,7 +328,7 @@ const cfgKey = () => [
   props.widget.group_by,
   // row_template drives the SELECT list (extra_fields), so a template change
   // genuinely needs a refetch, not just a re-render.
-  JSON.stringify(templateFieldNames(props.widget.row_template)),
+  JSON.stringify(templateFieldNames(props.widget.row_template, identityImageField.value)),
   props.refreshKey,
 ].join('|')
 watch(cfgKey, load)
@@ -336,14 +340,14 @@ defineExpose({ load })
 .cw { height: 100%; display: flex; flex-direction: column; min-height: 0; }
 
 .cw-head { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 10px; border-bottom: 1px solid var(--border); margin-bottom: 0px; }
-.cw-title { font-size: 14px; font-weight: 600; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-title { font-size:var(--text-md); font-weight: 600; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cw-count { font-weight: 600; color: var(--muted); }
-.cw-sub { font-size: 11px; color: var(--muted); margin-top: 0px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-sub { font-size:var(--text-xs); color: var(--muted); margin-top: 0px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .cw-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 .cw-configure-icon { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-secondary); color: var(--muted); }
-.cw-noaccess-title { font-size: 12.5px; font-weight: 600; color: var(--foreground); }
-.cw-noaccess-sub { font-size: 11px; color: var(--muted); text-align: center; max-width: 200px; line-height: 1.45; margin-top: -4px; }
+.cw-noaccess-title { font-size:var(--text-sm); font-weight: 600; color: var(--foreground); }
+.cw-noaccess-sub { font-size:var(--text-xs); color: var(--muted); text-align: center; max-width: 200px; line-height: 1.45; margin-top: -4px; }
 
 .cw-body { flex: 1; min-height: 0; overflow-y: auto; padding-top: 0px; }
 
@@ -367,14 +371,14 @@ defineExpose({ load })
 .cw-group-chevron { flex-shrink: 0; transition: transform .12s; color: var(--muted); }
 .cw-group-chevron.is-collapsed { transform: rotate(-90deg); }
 .cw-group-label {
-  font-size: 11px; font-weight: 600;
+  font-size:var(--text-xs); font-weight: 600;
   letter-spacing: 0.04em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .cw-group-count {
   margin-left: auto; flex-shrink: 0;
-  font-size: 10.5px; font-weight: 600; color: var(--muted);
+  font-size:var(--text-xs); font-weight: 600; color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 

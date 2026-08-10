@@ -161,6 +161,10 @@ watch(() => props.doctype, async (dt) => {
   fields.value = dt ? await getWidgetSourceFields(dt).catch(() => []) : []
 }, { immediate: true })
 const fieldMeta = computed(() => fieldMetaLookup(fields.value))
+// See ColumnWidget.vue's identical computed / get_widget_source_fields'
+// is_identity_image tag — lets the preview show the real photo for the
+// default "Visual — Record identity" option on doctypes that have one.
+const identityImageField = computed(() => fields.value.find(f => f.is_identity_image)?.fieldname || null)
 
 let seq = 0
 const nextId = () => `b${Date.now()}_${seq++}`
@@ -363,6 +367,7 @@ const previewProps = computed(() => resolveRowProps(
       : [{ full_name: 'Alex Kim' }, { full_name: 'Sam Rai' }]),
     fieldMeta: fieldMeta.value,
     fallbackTitle: (r) => r?.title || r?.name || 'Sample record title',
+    identityImageField: identityImageField.value,
   },
 ))
 
@@ -386,8 +391,8 @@ function stripId({ id, ...rest }) { return rest }
 <style scoped>
 .rd-body { display: flex; flex-direction: column; gap: 16px; }
 
-.rd-section-label { font-size: 12px; font-weight: 600; color: var(--foreground); margin-bottom: 6px; }
-.rd-section-hint { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.rd-section-label { font-size:var(--text-sm); font-weight: 600; color: var(--foreground); margin-bottom: 6px; }
+.rd-section-hint { font-size:var(--text-xs); color: var(--muted); margin-top: 1px; }
 
 /* ── preview ─────────────────────────────────────────────────────────── */
 .rd-preview { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px 8px; background: var(--surface-secondary); }
@@ -398,19 +403,19 @@ function stripId({ id, ...rest }) { return rest }
   color: var(--muted); background: none; border: none; cursor: pointer;
 }
 .rd-nav-btn:hover { background: var(--default); color: var(--foreground); }
-.rd-sample-idx { font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
+.rd-sample-idx { font-size:var(--text-xs); font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
 .rd-preview-stage { display: flex; justify-content: center; }
 /* Pinned to a realistic single-column width so truncation and the "+N"
    badge behave here exactly as they do on the real dashboard. */
 .rd-preview-col { width: 330px; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); overflow: hidden; }
-.rd-preview-empty { padding: 22px 12px; text-align: center; font-size: 12px; color: var(--muted); }
-.rd-preview-note { font-size: 10.5px; color: var(--muted); margin-top: 7px; text-align: center; }
+.rd-preview-empty { padding: 22px 12px; text-align: center; font-size:var(--text-sm); color: var(--muted); }
+.rd-preview-note { font-size:var(--text-xs); color: var(--muted); margin-top: 7px; text-align: center; }
 
 /* ── zones ───────────────────────────────────────────────────────────── */
 .rd-zone-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
 .rd-zone-list { display: flex; flex-direction: column; gap: 5px; min-height: 4px; }
 .rd-zone-solo { min-height: 0; }
-.rd-zone-empty { font-size: 11.5px; color: var(--muted); font-style: italic; padding: 7px 2px; }
+.rd-zone-empty { font-size:var(--text-sm); color: var(--muted); font-style: italic; padding: 7px 2px; }
 .rd-zone-empty-drop {
   border: 1px dashed var(--border); border-radius: var(--radius-md);
   padding: 12px; text-align: center; font-style: normal;
@@ -419,7 +424,7 @@ function stripId({ id, ...rest }) { return rest }
 .rd-pos-toggle { display: flex; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; flex-shrink: 0; }
 .rd-pos-toggle button {
   display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11px; font-weight: 600; padding: 5px 8px;
+  font-size:var(--text-xs); font-weight: 600; padding: 5px 8px;
   color: var(--muted); background: var(--surface); border: none; cursor: pointer;
 }
 .rd-pos-toggle button:hover { background: var(--surface-secondary); color: var(--foreground); }
@@ -430,6 +435,6 @@ function stripId({ id, ...rest }) { return rest }
    scoped rule still matches. */
 .rd-ghost { opacity: .4; }
 
-.rd-reset { margin-right: auto; font-size: 12px; font-weight: 500; color: var(--muted); background: none; border: none; cursor: pointer; }
+.rd-reset { margin-right: auto; font-size:var(--text-sm); font-weight: 500; color: var(--muted); background: none; border: none; cursor: pointer; }
 .rd-reset:hover { color: var(--danger); }
 </style>
