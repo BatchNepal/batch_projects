@@ -1,5 +1,5 @@
 <template>
-  <div class="cw hide-scrollbar">
+  <div ref="cwRoot" class="cw hide-scrollbar">
     <!-- column header: no icon — "Title (count)", description only if set -->
     <div class="cw-head">
       
@@ -104,13 +104,13 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, provide } from 'vue'
 import { Inbox, Columns3, Lock, ChevronDown } from 'lucide-vue-next'
 import { Skeleton, Button } from '@/ui'
 import { getColumnWidgetData, getDoctypeColumnData, getWidgetSourceFields } from '@/utils/api'
 import { useProjectStore } from '@/stores/project'
 import { withMinDuration } from '@/lib/utils'
-import { resolveRowProps, fieldMetaLookup, templateFieldNames } from '@/utils/rowTemplate'
+import { resolveRowProps, fieldMetaLookup, templateFieldNames, COLUMN_WIDTH_KEY } from '@/utils/rowTemplate'
 import WidgetRow from './WidgetRow.vue'
 import DocQuickview from './DocQuickview.vue'
 
@@ -123,6 +123,27 @@ const props = defineProps({
 defineEmits(['configure'])
 
 const store = useProjectStore()
+
+// ONE ResizeObserver for the whole column, provided down to every WidgetRow
+// (see COLUMN_WIDTH_KEY in rowTemplate.js for the full rationale). Each row
+// still measures its own line-2 container — that width genuinely differs per
+// row, since a solo avatar or a date eats into it — but they no longer each
+// own an observer to decide WHEN. A 500-row column was creating 500 of them;
+// measured on a 3-widget/1500-row dashboard, that was 1508 observers firing a
+// ~3.8s cascade of separately-scheduled re-renders on every mount and on
+// every grid resize (edit mode, add-widget, any dialog that shifts layout).
+const cwRoot = ref(null)
+const columnWidth = ref(0)
+provide(COLUMN_WIDTH_KEY, columnWidth)
+let cwRO = null
+onMounted(() => {
+  if (!cwRoot.value) return
+  cwRO = new ResizeObserver((entries) => {
+    columnWidth.value = entries[0]?.contentRect?.width || cwRoot.value?.clientWidth || 0
+  })
+  cwRO.observe(cwRoot.value)
+})
+onBeforeUnmount(() => cwRO?.disconnect())
 
 // doctype === 'BP Task' is explicit, never assumed. The ONLY other case
 // treated as Task is a widget saved before `doctype` existed at all (has

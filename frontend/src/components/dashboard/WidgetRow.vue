@@ -34,8 +34,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, h } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, inject, h } from 'vue'
 import { Avatar, ProjectAvatar } from '@/ui'
+import { COLUMN_WIDTH_KEY } from '@/utils/rowTemplate'
 
 // Two-tier row + optional solo anchor.
 //   solo   — one block (image, icon, avatar, project tile, assignee stack, or
@@ -76,14 +77,36 @@ function useOverflow(itemsRef) {
   // painted in its pre-measurement shape. Later re-measurements (real
   // resizes) never re-hide — that itself would flicker on every resize.
   const ready = ref(false)
+  // Natural widths of EVERY item, captured while all of them are still in the
+  // DOM. This cache is what makes measure() idempotent, and its absence was
+  // the real bug behind the endless re-render: measure() read
+  // `row.children`, which after a collapse is only the items it CHOSE to
+  // show. That subset fits by construction, so it concluded "everything
+  // fits", reset to Infinity, re-rendered all items, overflowed, collapsed —
+  // and round again, forever, for any row whose content sits near the
+  // boundary (rows comfortably inside or outside it settle on the first
+  // pass, which is why only *some* rows ever visibly churned). Item widths
+  // don't depend on the container — .w-row-chip is flex-shrink:0 with a
+  // fixed max-width — so caching them is safe, and a container resize just
+  // re-fits the same numbers.
+  let widthCache = []
+
   function measure() {
     const row = el.value
     if (!row) return
-    const kids = [...row.children].filter((c) => !c.classList.contains('w-row-overflow-btn'))
-    if (!kids.length) { visible.value = Infinity; ready.value = true; return }
     const avail = row.clientWidth
     if (!avail) return
-    const widths = kids.map((k) => k.getBoundingClientRect().width)
+    const total = (itemsRef() || []).length
+    if (!total) { visible.value = Infinity; ready.value = true; return }
+
+    const kids = [...row.children].filter((c) => !c.classList.contains('w-row-overflow-btn'))
+    // Only refresh the cache when nothing is collapsed — i.e. when what's in
+    // the DOM really is the full set.
+    if (kids.length === total) widthCache = kids.map((k) => k.getBoundingClientRect().width)
+    // Always fit the FULL list, never just what's currently on screen.
+    const widths = widthCache.length === total ? widthCache : kids.map((k) => k.getBoundingClientRect().width)
+    if (!widths.length) return
+
     const totalAll = widths.reduce((a, b) => a + b, 0) + GAP * (widths.length - 1)
     if (totalAll <= avail) { visible.value = Infinity; ready.value = true; return }
     // Doesn't fit: re-fit against a budget that leaves room for the badge.
@@ -98,14 +121,28 @@ function useOverflow(itemsRef) {
     visible.value = Math.max(1, count) // never hide everything
     ready.value = true
   }
-  let ro
-  onMounted(() => {
+  // The column's width, provided ONCE by ColumnWidget (see COLUMN_WIDTH_KEY).
+  // This row used to own a ResizeObserver purely to learn when to re-measure.
+  // That's fine for one row and pathological for five hundred: a 500-task
+  // column produced 500 observers, each scheduling its own measure + reactive
+  // update, so every mount and every layout change (entering edit mode,
+  // opening a dialog — anything that resizes the grid) kicked off a
+  // multi-second cascade of independently-timed re-renders. Only rows whose
+  // line-2 content sits near the fit boundary actually CHANGE when measured,
+  // which is why it looked like "some rows flicker, others don't".
+  // One shared width means all rows re-measure in a single flush instead.
+  const columnWidth = inject(COLUMN_WIDTH_KEY, null)
+  onMounted(() => nextTick(measure))
+  // Column resized: the cached item widths are still valid (they don't depend
+  // on the container), so just re-fit them against the new space.
+  watch(() => (columnWidth ? columnWidth.value : 0), () => measure(), { flush: 'post' })
+  // Content changed: the cache is stale. Drop it and go back to rendering
+  // everything so the next measure can see the full set to re-cache from.
+  watch(itemsRef, () => {
+    widthCache = []
+    visible.value = Infinity
     nextTick(measure)
-    ro = new ResizeObserver(() => nextTick(measure))
-    if (el.value) ro.observe(el.value)
-  })
-  onBeforeUnmount(() => ro?.disconnect())
-  watch(itemsRef, () => nextTick(measure), { deep: true })
+  }, { deep: true })
   return { el, visible, ready }
 }
 const { el: line2El, visible: visible2, ready: line2Ready } = useOverflow(() => props.line2)

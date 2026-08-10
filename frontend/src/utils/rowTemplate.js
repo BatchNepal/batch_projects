@@ -181,3 +181,16 @@ export function fieldMetaLookup(fields) {
   for (const f of fields || []) byName[f.fieldname] = f
   return (fieldname) => byName[fieldname] || null
 }
+
+// Injection key: the column's own measured width, provided ONCE per widget
+// by ColumnWidget and consumed by every WidgetRow inside it.
+//
+// Rows still measure their own line-2 container (its width is the column
+// minus that row's solo avatar / date / padding, which genuinely differs per
+// row) — but they must not each own a ResizeObserver to learn WHEN to do it.
+// A 500-task column renders 500 rows, so that pattern created 500 observers
+// firing 500 independently-scheduled measure+re-render passes, a multi-second
+// cascade on every mount and on every layout change (entering edit mode,
+// opening a dialog). One observer per widget collapses that into a single
+// reactive change all rows read in one flush.
+export const COLUMN_WIDTH_KEY = Symbol('bp:columnWidth')
