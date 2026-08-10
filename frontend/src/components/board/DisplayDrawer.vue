@@ -106,7 +106,7 @@ async function resetDefaults() {
 
 .dp-section { padding: 2px 2px 4px; }
 .dp-section-label {
-  font-size: 11px;
+  font-size:var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .02em;
@@ -120,7 +120,7 @@ async function resetDefaults() {
   height: 30px;
   padding: 0 6px;
   border-radius: var(--radius-md);
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   color: var(--foreground);
   cursor: pointer;
   transition: background-color .1s;
@@ -145,7 +145,7 @@ async function resetDefaults() {
   justify-content: space-between;
   height: 34px;
   padding: 0 6px;
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   font-weight: 500;
   color: var(--foreground);
   cursor: pointer;

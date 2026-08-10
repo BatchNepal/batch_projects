@@ -202,7 +202,7 @@ function removeManualValue(i) {
 .rd-block-solo { background: var(--accent-soft); border-color: var(--accent-soft); }
 .rd-drag-handle { display: flex; cursor: grab; color: var(--muted); flex-shrink: 0; }
 .rd-drag-handle:active { cursor: grabbing; }
-.rd-block-label { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-block-label { flex: 1; min-width: 0; font-size:var(--text-sm); font-weight: 500; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rd-block-action {
   display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
   border-radius: var(--radius-sm); color: var(--muted); background: none; border: none; cursor: pointer; flex-shrink: 0;
@@ -231,10 +231,10 @@ function removeManualValue(i) {
   background: var(--surface-secondary); border: 1px solid var(--border);
   max-height: 260px; overflow-y: auto;
 }
-.rd-color-head { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.rd-color-head { font-size:var(--text-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .rd-color-row { display: flex; align-items: center; gap: 10px; }
 .rd-color-divider { border-top: 1px solid var(--border); padding-top: 8px; }
-.rd-color-row-label { flex: 1; min-width: 0; font-size: 12px; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rd-color-note { font-size: 11px; color: var(--muted); line-height: 1.45; }
-.rd-add-value { align-self: flex-start; font-size: 11.5px; font-weight: 600; color: var(--accent); background: none; border: none; cursor: pointer; padding: 2px 0; }
+.rd-color-row-label { flex: 1; min-width: 0; font-size:var(--text-sm); color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-color-note { font-size:var(--text-xs); color: var(--muted); line-height: 1.45; }
+.rd-add-value { align-self: flex-start; font-size:var(--text-sm); font-weight: 600; color: var(--accent); background: none; border: none; cursor: pointer; padding: 2px 0; }
 </style>

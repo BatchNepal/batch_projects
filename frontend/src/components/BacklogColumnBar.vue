@@ -58,7 +58,7 @@ const agg = computed(() => {
 .bl-cbcell--border { border-right: 1px solid var(--separator); }
 .bl-cbcell--num { justify-content: center; }
 .bl-colbar-lbl {
-  font-size: 10px; font-weight: 700; color: var(--muted);
+  font-size:var(--text-xs); font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
 }

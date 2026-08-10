@@ -18,7 +18,7 @@
   
     <!-- Title -->
     <h3
-      class="text-[14px] flex space-x-2 text-foreground font-semibold leading-snug tracking-tight line-clamp-2"
+      class="text-md flex space-x-2 text-foreground font-semibold leading-snug tracking-tight line-clamp-2"
     >
       <!-- Task type icon (smaller, more subtle) -->
           
@@ -28,7 +28,7 @@
     </h3>
     <p
       v-html="issue.description"
-      class="text-[12.5px] mt-1 line-clamp-2 font-medium text-muted leading-snug tracking-tight mb-3"
+      class="text-sm mt-1 line-clamp-2 font-medium text-muted leading-snug tracking-tight mb-3"
     ></p>
 
     <!-- ERP references + billable -->
@@ -58,7 +58,7 @@
         <span
           v-if="issue.due_date"
           :class="[
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded-xs text-[11px] font-semibold',
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded-xs text-xs font-semibold',
             isOverdue
               ? ' text-danger-soft-foreground bg-danger-soft border border-danger'
               : isDueSoon
@@ -123,7 +123,7 @@
             />
           </div>
           <span
-            class="text-[11px] font-semibold tabular-nums"
+            class="text-xs font-semibold tabular-nums"
             :class="progressPct === 100 ? 'text-success-soft-foreground' : 'text-muted'"
           >
             {{ completedSubtasks }}/{{ issue.sub_tasks.length }}
@@ -162,7 +162,7 @@
               </svg>
             </span> 
             <span
-              class="text-[11px] pt-[1px] font-semibold text-muted tracking-tight uppercase truncate"
+              class="text-xs pt-[1px] font-semibold text-muted tracking-tight uppercase truncate"
             >
               {{ issue.name }}
             </span>
@@ -188,7 +188,7 @@
             />
             <div
               v-if="(issue.assignees || []).length > 3"
-              class="w-6 h-6 rounded-full bg-default flex items-center justify-center text-muted text-[9px] font-bold ring-2 ring-white shrink-0"
+              class="w-6 h-6 rounded-full bg-default flex items-center justify-center text-muted text-micro font-bold ring-2 ring-white shrink-0"
             >
               +{{ issue.assignees.length - 3 }}
             </div>
@@ -394,18 +394,18 @@ function onContextMenu (e) {
 }
 .tc-erp-badge {
   display: inline-flex; align-items: center; height: 18px; padding: 0 6px;
-  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  font-size:var(--text-xs); font-weight: 700; letter-spacing: .02em;
   color: var(--accent-soft-foreground); background: var(--accent-soft);
   border: none; border-radius: var(--radius-sm); cursor: pointer;
 }
 .tc-billable-badge {
   display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
-  font-size: 10.5px; font-weight: 800; color: var(--success-soft-foreground);
+  font-size:var(--text-xs); font-weight: 800; color: var(--success-soft-foreground);
   background: var(--success-soft); border-radius: var(--radius-sm);
 }
 .tc-mirror-chip {
   display: inline-flex; align-items: center; height: 18px; padding: 0 6px;
-  font-size: 10px; font-weight: 600; color: var(--muted); background: var(--surface-secondary);
+  font-size:var(--text-xs); font-weight: 600; color: var(--muted); background: var(--surface-secondary);
   border: none; border-radius: var(--radius-sm); cursor: pointer; max-width: 140px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }

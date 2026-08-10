@@ -29,7 +29,7 @@
               <img :src="entitlements.branding.logo_url || '/assets/batch_projects/images/bp-logo-new.svg'" class="w-full h-full object-cover" alt="" />
             </div>
             <span
-              class="flex-1 text-[13px] font-semibold text-[var(--sidebar-text-active)] truncate"
+              class="flex-1 text-base font-semibold text-[var(--sidebar-text-active)] truncate"
               >{{ workspaceName }}</span
             >
             <ChevronsUpDown
@@ -75,11 +75,11 @@
             :stroke-width="1.75"
             class="text-[var(--sidebar-text)] shrink-0"
           />
-          <span class="flex-1 text-[12px] text-[var(--sidebar-text)] text-left"
+          <span class="flex-1 text-sm text-[var(--sidebar-text)] text-left"
             >Search or jump to…</span
           >
           <kbd
-            class="text-[10px] font-semibold text-[var(--sidebar-text)] bg-white/[0.1] border border-white/[0.12] rounded px-1 py-px leading-none shrink-0"
+            class="text-xs font-semibold text-[var(--sidebar-text)] bg-white/[0.1] border border-white/[0.12] rounded px-1 py-px leading-none shrink-0"
             >⌘K</kbd
           >
         </button>
@@ -158,7 +158,7 @@
           <!-- ── FAVORITES ──────────────────────────────────────── -->
           <div class="px-2 mt-5 mb-1.5" v-if="favoriteProjects.length > 0">
             <span
-              class="text-[10.5px] font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
+              class="text-xs font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
               >Favorites</span
             >
           </div>
@@ -177,7 +177,7 @@
               @click="go(store.projectLanding(p))"
             >
               <ProjectAvatar :theme="p.theme" :seed="p.key" size="xs" />
-              <span class="flex-1 text-[13px] font-medium truncate">{{
+              <span class="flex-1 text-base font-medium truncate">{{
                 p.project_name || p.name
               }}</span>
 
@@ -282,7 +282,7 @@
                 :style="{ background: `color-mix(in oklab, ${d.color || 'var(--accent)'} 20%, transparent)`, color: d.color || 'var(--accent)' }">
                 <component :is="iconFor(d.icon)" :size="11" :stroke-width="2" />
               </span>
-              <span class="flex-1 text-[13px] truncate">{{ d.name }}</span>
+              <span class="flex-1 text-base truncate">{{ d.name }}</span>
               <span
                 role="button"
                 tabindex="0"
@@ -299,7 +299,7 @@
           <!-- ── PROJECTS ───────────────────────────────────────── -->
           <div class="flex items-center px-2 mt-5 mb-1.5">
             <span
-              class="flex-1 text-[10.5px] font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
+              class="flex-1 text-xs font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
               >Projects</span
             >
             <button
@@ -337,7 +337,7 @@
               @click="go(store.projectLanding(p))"
             >
               <ProjectAvatar :theme="p.theme" :seed="p.key" size="xs" />
-              <span class="flex-1 text-[13px] font-medium truncate">{{
+              <span class="flex-1 text-base font-medium truncate">{{
                 p.project_name || p.name
               }}</span>
               <!-- spacer so name doesn't slide under the 3-dot -->
@@ -390,7 +390,7 @@
 
           <button
             v-if="store.projects.length > MAX_VISIBLE"
-            class="w-full flex items-center gap-1.5 h-7 px-2.5 text-[12px] text-[var(--sidebar-text)] hover:text-[var(--sidebar-text)] transition-colors"
+            class="w-full flex items-center gap-1.5 h-7 px-2.5 text-sm text-[var(--sidebar-text)] hover:text-[var(--sidebar-text)] transition-colors"
             @click="showAll = !showAll"
           >
             <component
@@ -404,7 +404,7 @@
 
           <button
             v-if="!store.projects.length"
-            class="w-full flex items-center gap-2 h-[33px] px-2.5 text-[13px] text-[var(--sidebar-text)] hover:text-[var(--sidebar-text)] hover:bg-white/[0.06] rounded-md transition-colors"
+            class="w-full flex items-center gap-2 h-[33px] px-2.5 text-base text-[var(--sidebar-text)] hover:text-[var(--sidebar-text)] hover:bg-white/[0.06] rounded-md transition-colors"
             @click="$router.push(`/workspace/new-project`)"
           >
             <Plus :size="14" :stroke-width="1.5" />
@@ -416,7 +416,7 @@
           <template v-if="entitlements.canWorkspace('reports')">
           <div class="px-2 mt-5 mb-1.5">
             <span
-              class="text-[10.5px] font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
+              class="text-xs font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
               >Reports</span
             >
           </div>
@@ -442,7 +442,7 @@
               :style="{ background: `color-mix(in oklab, ${r.color || 'var(--accent)'} 20%, transparent)`, color: r.color || 'var(--accent)' }">
               <component :is="iconFor(r.icon)" :size="11" :stroke-width="2" />
             </span>
-            <span class="flex-1 text-[13px] truncate">{{ r.name }}</span>
+            <span class="flex-1 text-base truncate">{{ r.name }}</span>
             <span
               role="button"
               tabindex="0"
@@ -459,7 +459,7 @@
           <!-- ── INSIGHTS ───────────────────────────────────────── -->
           <div class="px-2 mt-5 mb-1.5">
             <span
-              class="text-[10.5px] font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
+              class="text-xs font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
               >Insights</span
             >
           </div>
@@ -533,7 +533,7 @@
           <!-- ── TEAM ───────────────────────────────────────────── -->
           <div class="px-2 mt-5 mb-1.5">
             <span
-              class="text-[10.5px] font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
+              class="text-xs font-semibold uppercase tracking-widest text-[var(--sidebar-text)]"
               >Team</span
             >
           </div>
@@ -571,10 +571,10 @@
               @click="go('/workspace/team/' + t.team_key)"
             >
               <span
-                class="w-5 h-5 rounded-[4px] flex items-center justify-center text-[8.5px] font-bold shrink-0"
+                class="w-5 h-5 rounded-[4px] flex items-center justify-center text-micro font-bold shrink-0"
                 :style="{ background: t.team_color || 'var(--accent)' }"
               >{{ (t.team_name || '?').slice(0, 2).toUpperCase() }}</span>
-              <span class="flex-1 text-[13px] truncate">{{ t.team_name }}</span>
+              <span class="flex-1 text-base truncate">{{ t.team_name }}</span>
               <span class="w-4 shrink-0" />
             </button>
 
@@ -630,12 +630,12 @@
             <template v-if="!collapsed">
               <div class="flex-1 min-w-0 text-left">
                 <p
-                  class="text-[13px] font-semibold text-[var(--sidebar-text-active)] truncate leading-none"
+                  class="text-base font-semibold text-[var(--sidebar-text-active)] truncate leading-none"
                 >
                   {{ userName }}
                 </p>
                 <p
-                  class="text-[11px] text-[var(--sidebar-text)] truncate mt-0.5 leading-none"
+                  class="text-xs text-[var(--sidebar-text)] truncate mt-0.5 leading-none"
                 >
                   {{ userEmail }}
                 </p>
@@ -654,10 +654,10 @@
               class="absolute bottom-full left-2 right-2 mb-2 z-50 sb-pop sb-pop--up"
             >
               <div class="px-3 py-2.5 border-b border-separator">
-                <p class="text-[12.5px] font-semibold text-foreground truncate">
+                <p class="text-sm font-semibold text-foreground truncate">
                   {{ userName }}
                 </p>
-                <p class="text-[11px] text-muted truncate mt-0.5">
+                <p class="text-xs text-muted truncate mt-0.5">
                   {{ userEmail }}
                 </p>
               </div>
@@ -786,7 +786,7 @@
             >
               <img :src="entitlements.branding.logo_url || '/assets/batch_projects/images/bp-logo-new.svg'" class="w-full h-full object-cover" alt="" />
             </div>
-            <span class="text-[13px] font-semibold text-foreground">{{
+            <span class="text-base font-semibold text-foreground">{{
               workspaceName
             }}</span>
             <button
@@ -805,10 +805,10 @@
             >
               <ProjectAvatar :theme="p.theme" :seed="p.key" size="md" class="shrink-0" />
               <div class="flex-1 min-w-0">
-                <p class="text-[13px] font-semibold text-foreground truncate">
+                <p class="text-base font-semibold text-foreground truncate">
                   {{ p.project_name || p.name }}
                 </p>
-                <p class="text-[10.5px] text-muted font-mono mt-0.5">
+                <p class="text-xs text-muted font-mono mt-0.5">
                   {{ p.key }}
                 </p>
               </div>
@@ -825,10 +825,10 @@
           >
             <div class="sb-avatar shrink-0">{{ userInitials }}</div>
             <div class="flex-1 min-w-0">
-              <p class="text-[13px] font-semibold text-foreground truncate">
+              <p class="text-base font-semibold text-foreground truncate">
                 {{ userName }}
               </p>
-              <p class="text-[11px] text-muted truncate">{{ userEmail }}</p>
+              <p class="text-xs text-muted truncate">{{ userEmail }}</p>
             </div>
           </div>
         </div>
@@ -1210,7 +1210,7 @@ const NavItem = defineComponent({
           h(
             'span',
             {
-              class: 'flex-1 flex items-center gap-1.5 text-[13px] truncate'
+              class: 'flex-1 flex items-center gap-1.5 text-base truncate'
             },
             slots.default?.()
           )
@@ -1229,7 +1229,7 @@ const MobileTab = defineComponent({
         {
           onClick: () => emit('click'),
           class: [
-            'flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 rounded-md flex-1 text-[10px] font-medium transition-colors',
+            'flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 rounded-md flex-1 text-xs font-medium transition-colors',
             props.active ? 'text-[var(--accent)]' : 'text-muted'
           ].join(' ')
         },
@@ -1323,7 +1323,7 @@ const MobileTab = defineComponent({
 
 /* Unread badge */
 .sb-badge {
-  font-size: 10px;
+  font-size:var(--text-xs);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--accent);
@@ -1343,7 +1343,7 @@ const MobileTab = defineComponent({
   justify-content: center;
   background: color-mix(in oklab, var(--accent) 20%, transparent);
   color: var(--accent);
-  font-size: 10px;
+  font-size:var(--text-xs);
   font-weight: 700;
   flex-shrink: 0;
   border: 1.5px solid rgba(255, 255, 255, 0.18);
@@ -1357,7 +1357,7 @@ const MobileTab = defineComponent({
   width: 100%;
   min-height: 32px;
   padding: 6px 10px;
-  font-size: 13px;
+  font-size:var(--text-base);
   font-weight: 500;
   font-family: inherit;
   color: var(--foreground);

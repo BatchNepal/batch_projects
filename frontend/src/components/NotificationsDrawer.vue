@@ -4,12 +4,12 @@
       <div class="flex items-center justify-between w-full pr-1">
         <div class="flex items-baseline gap-2 min-w-0">
           <h2 class="text-sm font-semibold">Notifications</h2>
-          <span v-if="unreadCount > 0" class="text-[12.5px] text-muted tabular-nums shrink-0">{{ unreadCount }} unread</span>
+          <span v-if="unreadCount > 0" class="text-sm text-muted tabular-nums shrink-0">{{ unreadCount }} unread</span>
         </div>
         <div class="flex items-center gap-1 shrink-0">
           <button
             v-if="unreadCount > 0 && !searchOpen"
-            class="text-[12.5px] font-medium text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-surface-hover transition-colors"
+            class="text-sm font-medium text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-surface-hover transition-colors"
             @click="markAllRead"
           >
             Mark all read
@@ -88,7 +88,7 @@
 
       <div v-else class="flex flex-col p-1">
         <template v-for="group in groupedFiltered" :key="group.label">
-          <div class="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted opacity-80">
+          <div class="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-muted opacity-80">
             {{ group.label }}
           </div>
           <div
@@ -103,7 +103,7 @@
 
               <div class="flex flex-col min-w-0 flex-1">
                 <div class="flex items-start justify-between gap-2">
-                  <p class="text-[13px] leading-snug text-muted">
+                  <p class="text-base leading-snug text-muted">
                     <span class="font-semibold" :class="n.is_read ? 'text-muted' : 'text-foreground'">{{ n.actor_name || n.actor || 'System' }}</span>
                     {{ ' ' }}{{ getActionText(n) }}
                     <span v-if="n.task_title" class="font-medium" :class="n.is_read ? 'text-muted' : 'text-foreground'">{{ n.task_title }}</span>
@@ -126,16 +126,16 @@
                   </Dropdown>
                 </div>
 
-                <p v-if="messageSnippet(n)" class="text-[12.5px] text-muted mt-0.5 line-clamp-2">{{ messageSnippet(n) }}</p>
+                <p v-if="messageSnippet(n)" class="text-sm text-muted mt-0.5 line-clamp-2">{{ messageSnippet(n) }}</p>
 
                 <div class="flex items-center gap-2 mt-1.5">
-                  <span class="text-[11px] text-muted tabular-nums">{{ fmtRel(n.creation) }}</span>
-                  <span v-if="n.task_key" class="text-[11px] font-mono text-muted">{{ n.task_key }}</span>
-                  <span v-else-if="n.project" class="inline-flex items-center gap-1.5 text-[11px] text-muted">
+                  <span class="text-xs text-muted tabular-nums">{{ fmtRel(n.creation) }}</span>
+                  <span v-if="n.task_key" class="text-xs font-mono text-muted">{{ n.task_key }}</span>
+                  <span v-else-if="n.project" class="inline-flex items-center gap-1.5 text-xs text-muted">
                     <span class="size-1.5 rounded-full shrink-0" :style="{ background: projectColor(n.project) }" />
                     {{ projectLabel(n.project) }}
                   </span>
-                  <span v-if="dueChip(n)" class="text-[11px] font-medium px-1.5 py-px rounded-md" :class="dueChip(n).cls">
+                  <span v-if="dueChip(n)" class="text-xs font-medium px-1.5 py-px rounded-md" :class="dueChip(n).cls">
                     {{ dueChip(n).label }}
                   </span>
                 </div>
@@ -610,7 +610,7 @@ watch(showNotifDrawer, (open) => {
   height: 26px;
   padding: 0 8px;
   border-radius: var(--radius-md);
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   font-weight: 500;
   color: var(--muted);
   background: transparent;
@@ -637,7 +637,7 @@ watch(showNotifDrawer, (open) => {
   border-radius: var(--radius-md);
   background: var(--surface-secondary);
   border: 1px solid transparent;
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   color: var(--foreground);
   outline: none;
 }
@@ -674,7 +674,7 @@ watch(showNotifDrawer, (open) => {
   height: 26px;
   padding: 0 10px;
   border-radius: var(--radius-md);
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -692,7 +692,7 @@ watch(showNotifDrawer, (open) => {
   border-radius: var(--radius-md);
   background: var(--surface-secondary);
   border: 1px solid transparent;
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   color: var(--foreground);
   outline: none;
 }
@@ -707,7 +707,7 @@ watch(showNotifDrawer, (open) => {
   width: 100%;
   height: 32px;
   border-radius: var(--radius-md);
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   font-weight: 500;
   color: var(--muted);
   transition: background-color .12s, color .12s;

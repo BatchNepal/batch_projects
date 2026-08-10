@@ -1392,8 +1392,8 @@ function scrollToToday(smooth = true) {
 .gt-key { font-size: var(--text-xs); font-weight: var(--font-semibold); color: var(--muted); font-family: var(--font-mono); flex-shrink: 0; }
 .gt-name { flex: 1; min-width: 0; font-size: var(--text-sm); color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gt-date { flex-shrink: 0; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; padding-left: 6px; }
-.gt-erp-badge { flex-shrink: 0; height: 16px; padding: 0 5px; font-size: 9.5px; font-weight: 700; letter-spacing: .02em; color: var(--accent-soft-foreground); background: var(--accent-soft); border: none; border-radius: 3px; cursor: pointer; }
-.gt-billable-badge { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; font-size: 9.5px; font-weight: 800; color: var(--success-soft-foreground); background: var(--success-soft); border-radius: 3px; }
+.gt-erp-badge { flex-shrink: 0; height: 16px; padding: 0 5px; font-size:var(--text-micro); font-weight: 700; letter-spacing: .02em; color: var(--accent-soft-foreground); background: var(--accent-soft); border: none; border-radius: 3px; cursor: pointer; }
+.gt-billable-badge { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; font-size:var(--text-micro); font-weight: 800; color: var(--success-soft-foreground); background: var(--success-soft); border-radius: 3px; }
 .gt-rowtrack { flex: 1; box-sizing: border-box; border-bottom: 1px solid var(--surface-secondary); }
 .gt-rowtrack.hov { background: color-mix(in srgb, var(--surface-secondary) 55%, transparent); }
 
@@ -1405,7 +1405,7 @@ function scrollToToday(smooth = true) {
 .gt-chevron.collapsed { transform: rotate(0deg); }
 .gt-gdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .gt-gname { flex: 0 1 auto; min-width: 0; font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gt-gcount { flex-shrink: 0; font-size: 10px; font-weight: var(--font-semibold); color: var(--muted); background: var(--surface-secondary); padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.gt-gcount { flex-shrink: 0; font-size:var(--text-xs); font-weight: var(--font-semibold); color: var(--muted); background: var(--surface-secondary); padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
 .gt-gdate { margin-left: auto; flex-shrink: 0; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; padding-left: 6px; }
 
 /* Group summary bar — bracket with notched ends spanning children
@@ -1502,7 +1502,7 @@ function scrollToToday(smooth = true) {
 }
 .gt-dragchip {
   position: absolute; z-index: 6; pointer-events: none; white-space: nowrap;
-  font-size: 11px; font-weight: var(--font-semibold); color: var(--accent-foreground);
+  font-size:var(--text-xs); font-weight: var(--font-semibold); color: var(--accent-foreground);
   background: var(--accent); padding: 2px 8px; border-radius: 999px;
   box-shadow: var(--shadow-sm); font-variant-numeric: tabular-nums;
 }
@@ -1510,7 +1510,7 @@ function scrollToToday(smooth = true) {
    55% pastel is what made the canvas read washed-out. Done-ness is the ✓. */
 .gt-bar-check {
   position: relative; z-index: 1; flex-shrink: 0; padding-right: 7px;
-  color: var(--accent-foreground); font-size: 11px; font-weight: var(--font-bold);
+  color: var(--accent-foreground); font-size:var(--text-xs); font-weight: var(--font-bold);
   text-shadow: 0 1px 1.5px rgba(0,0,0,.25);
 }
 /* Label + avatars live inside the bar once there's room (see the
@@ -1529,7 +1529,7 @@ function scrollToToday(smooth = true) {
   font-size: var(--text-sm); color: var(--muted); white-space: nowrap; pointer-events: none;
 }
 .gt-bar-avs { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); z-index: 2; display: flex; align-items: center; }
-.gt-bar-av { width: 19px; height: 19px; border-radius: 50%; display: grid; place-items: center; color: var(--accent-foreground); font-size: 9px; font-weight: var(--font-bold); flex-shrink: 0; }
+.gt-bar-av { width: 19px; height: 19px; border-radius: 50%; display: grid; place-items: center; color: var(--accent-foreground); font-size:var(--text-micro); font-weight: var(--font-bold); flex-shrink: 0; }
 .gt-bar-more { background: var(--muted); }
 .gt-bar.milestone { background: transparent !important; box-shadow: none; width: 14px; height: 14px; }
 .gt-diamond { width: 12px; height: 12px; border-radius: 3px; transform: rotate(45deg); box-shadow: 0 1px 2px rgba(11,13,14,.2); }

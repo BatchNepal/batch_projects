@@ -62,14 +62,14 @@ function toggle(opt) {
   padding: 0 6px 4px;
 }
 .fp-section-label {
-  font-size: 11px;
+  font-size:var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .02em;
   color: var(--muted);
 }
 .fp-clear {
-  font-size: 11px;
+  font-size:var(--text-xs);
   font-weight: 500;
   color: var(--muted);
 }
@@ -90,7 +90,7 @@ function toggle(opt) {
   min-width: 0;
   background: transparent;
   outline: none;
-  font-size: 12px;
+  font-size:var(--text-sm);
   color: var(--foreground);
 }
 .fp-search-input::placeholder { color: var(--muted); }
@@ -109,7 +109,7 @@ function toggle(opt) {
   height: 30px;
   padding: 0 6px;
   border-radius: var(--radius-md);
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   color: var(--foreground);
   cursor: pointer;
   transition: background-color .1s;
@@ -130,7 +130,7 @@ function toggle(opt) {
 .fp-empty {
   padding: 10px 6px;
   text-align: center;
-  font-size: 12px;
+  font-size:var(--text-sm);
   color: var(--muted);
 }
 
@@ -147,7 +147,7 @@ function toggle(opt) {
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  font-size: 9px;
+  font-size:var(--text-micro);
   font-weight: 700;
   color: white;
   flex-shrink: 0;

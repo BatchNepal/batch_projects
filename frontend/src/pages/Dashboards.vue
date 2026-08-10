@@ -10,8 +10,8 @@
               <Icon :icon="LayoutDashboard" :size="20" />
             </span>
             <div class="min-w-0">
-              <h1 class="text-[19px] font-semibold text-[--foreground] leading-7 tracking-[-0.01em]">Dashboards</h1>
-              <p class="hidden sm:block text-[13px] text-[--muted] mt-0.5 max-w-xl">
+              <h1 class="text-xl font-semibold text-[--foreground] leading-7 tracking-[-0.01em]">Dashboards</h1>
+              <p class="hidden sm:block text-base text-[--muted] mt-0.5 max-w-xl">
                 Live, glanceable views across your projects — who has what, what's running, at a glance.
               </p>
             </div>
@@ -33,7 +33,7 @@
     <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
       <!-- Create a dashboard: template tiles -->
       <section class="mb-7">
-        <button type="button" class="flex items-center gap-1.5 text-[13px] font-semibold text-[--foreground] mb-3"
+        <button type="button" class="flex items-center gap-1.5 text-base font-semibold text-[--foreground] mb-3"
           @click="showTemplates = !showTemplates">
           <Icon :icon="showTemplates ? ChevronDown : ChevronRight" :size="16" class="text-[--muted]" />
           Create a dashboard
@@ -45,8 +45,8 @@
             <span class="size-9 rounded-lg grid place-items-center mb-2.5 shrink-0" :style="{ background: t.color + '1F', color: t.color }">
               <component :is="t.icon" :size="18" />
             </span>
-            <p class="text-[12.5px] font-semibold text-[--foreground] leading-tight">{{ t.label }}</p>
-            <p class="text-[11px] text-[--muted] mt-1 leading-snug line-clamp-2 min-h-[30px]">{{ t.desc }}</p>
+            <p class="text-sm font-semibold text-[--foreground] leading-tight">{{ t.label }}</p>
+            <p class="text-xs text-[--muted] mt-1 leading-snug line-clamp-2 min-h-[30px]">{{ t.desc }}</p>
           </button>
         </div>
       </section>
@@ -54,18 +54,18 @@
       <!-- Saved dashboards table -->
       <section>
         <div class="flex items-center gap-2 mb-2.5">
-          <p class="text-[13px] font-semibold text-[--foreground]">{{ tabHeading }}</p>
-          <span class="text-[11px] text-[--muted] tabular-nums">{{ tableDashboards.length }}</span>
+          <p class="text-base font-semibold text-[--foreground]">{{ tabHeading }}</p>
+          <span class="text-xs text-[--muted] tabular-nums">{{ tableDashboards.length }}</span>
         </div>
 
-        <div v-if="loading" class="py-12 text-center text-[13px] text-[--muted]">Loading…</div>
+        <div v-if="loading" class="py-12 text-center text-base text-[--muted]">Loading…</div>
 
         <div v-else-if="!tableDashboards.length" class="bg-[--surface] border border-[--border] rounded-lg p-10 flex flex-col items-center text-center shadow-sm">
           <span class="size-12 rounded-lg grid place-items-center mb-4" style="background: var(--accent-soft); color: var(--accent-soft-foreground);">
             <LayoutDashboard :size="24" />
           </span>
-          <p class="text-[14px] font-semibold text-[--foreground] mb-1">{{ emptyHeading }}</p>
-          <p class="text-[13px] text-[--muted] max-w-sm leading-relaxed mb-5">Pick a template above, or build one from scratch.</p>
+          <p class="text-md font-semibold text-[--foreground] mb-1">{{ emptyHeading }}</p>
+          <p class="text-base text-[--muted] max-w-sm leading-relaxed mb-5">Pick a template above, or build one from scratch.</p>
           <Button color="primary" size="sm" @click="openCreate()">
             <template #startContent><Icon :icon="Plus" :size="16" /></template>Create dashboard
           </Button>
@@ -74,7 +74,7 @@
         <div v-else class="border border-[--border] rounded-lg overflow-hidden bg-[--surface] shadow-sm">
           <table class="w-full text-left border-collapse">
             <thead>
-              <tr class="text-[11px] font-semibold uppercase tracking-wide text-[--muted] bg-[--surface-secondary]/40 border-b border-[--border]">
+              <tr class="text-xs font-semibold uppercase tracking-wide text-[--muted] bg-[--surface-secondary]/40 border-b border-[--border]">
                 <th class="px-4 py-2.5">Name</th>
                 <th class="px-3 py-2.5 hidden sm:table-cell">Scope</th>
                 <th class="px-3 py-2.5 hidden lg:table-cell">Last updated</th>
@@ -91,7 +91,7 @@
                       <component :is="iconFor(d.icon)" :size="14" />
                     </span>
                     <div class="min-w-0">
-                      <p class="text-[13px] font-medium text-[--foreground] flex items-center gap-1.5 min-w-0">
+                      <p class="text-base font-medium text-[--foreground] flex items-center gap-1.5 min-w-0">
                         <span class="truncate">{{ d.name }}</span>
                         <Star v-if="d.starred" :size="11" class="text-warning shrink-0" fill="currentColor" />
                         <Pin v-if="d.pinned" :size="11" class="text-[--accent] shrink-0" title="Pinned to sidebar" />
@@ -101,16 +101,16 @@
                              — so "private" here always means "private and mine." -->
                         <Lock v-else :size="11" class="text-[--muted] shrink-0" title="Private — only you can see this" />
                       </p>
-                      <p class="text-[11px] text-[--muted]">{{ (d.widgets || []).length }} widget{{ (d.widgets || []).length !== 1 ? 's' : '' }}</p>
+                      <p class="text-xs text-[--muted]">{{ (d.widgets || []).length }} widget{{ (d.widgets || []).length !== 1 ? 's' : '' }}</p>
                     </div>
                   </div>
                 </td>
                 <td class="px-3 py-2.5 hidden sm:table-cell">
-                  <span class="inline-flex items-center gap-1.5 text-[12px] text-[--foreground]">
+                  <span class="inline-flex items-center gap-1.5 text-sm text-[--foreground]">
                     <span class="size-1.5 rounded-full shrink-0" :style="{ background: scopeColor(d) }" />{{ scopeLabel(d) }}
                   </span>
                 </td>
-                <td class="px-3 py-2.5 hidden lg:table-cell text-[12px] text-[--muted] tabular-nums">{{ fmtDate(d.modified) }}</td>
+                <td class="px-3 py-2.5 hidden lg:table-cell text-sm text-[--muted] tabular-nums">{{ fmtDate(d.modified) }}</td>
                 <td class="px-3 py-2.5" @click.stop @keydown.stop>
                   <div class="flex items-center justify-end gap-0.5">
                     <button class="w-7 h-7 grid place-items-center rounded-md transition-colors hover:text-warning hover:bg-[--default]"
@@ -143,7 +143,7 @@
     <!-- Create / Rename modal -->
     <Modal :open="formOpen" @update:open="v => !v && (formOpen = false)" size="md" radius="lg" hideCloseButton>
       <ModalHeader class="px-5 pt-5">
-        <p class="text-[15px] font-semibold text-[--foreground]">{{ editingId ? 'Rename dashboard' : (formTemplate ? formTemplate.label : 'New dashboard') }}</p>
+        <p class="text-md font-semibold text-[--foreground]">{{ editingId ? 'Rename dashboard' : (formTemplate ? formTemplate.label : 'New dashboard') }}</p>
       </ModalHeader>
       <ModalBody class="px-5 py-4 flex flex-col gap-3.5">
         <!-- Icon + color identity -->
@@ -159,7 +159,7 @@
 
         <!-- Color row -->
         <div>
-          <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Color</p>
+          <p class="text-sm font-medium text-[--foreground] mb-1.5">Color</p>
           <div class="flex flex-wrap gap-1.5">
             <button v-for="c in COLORS" :key="c" type="button"
               class="size-6 rounded-full grid place-items-center transition-transform hover:scale-110"
@@ -171,7 +171,7 @@
 
         <!-- Icon grid -->
         <div>
-          <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Icon</p>
+          <p class="text-sm font-medium text-[--foreground] mb-1.5">Icon</p>
           <div class="grid grid-cols-9 gap-1 max-h-[132px] overflow-y-auto pr-1">
             <button v-for="n in ICON_NAMES" :key="n" type="button"
               class="aspect-square rounded-lg grid place-items-center border transition-colors"
@@ -186,7 +186,7 @@
         <template v-if="!editingId">
           <!-- Scope: project -->
           <div>
-            <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Project scope</p>
+            <p class="text-sm font-medium text-[--foreground] mb-1.5">Project scope</p>
             <Select v-model="formProject" size="sm" fullWidth>
               <SelectItem value="all">All projects (workspace)</SelectItem>
               <SelectItem v-for="p in projects" :key="p.name" :value="p.name">{{ p.project_name }}</SelectItem>
@@ -197,8 +197,8 @@
                pattern as every other gated toggle in the app. -->
           <div class="flex items-center justify-between gap-3 pt-1">
             <div class="min-w-0">
-              <p class="text-[13px] font-medium text-[--foreground]">Share with workspace</p>
-              <p class="text-[11.5px] text-[--muted] mt-0.5">Every member can view it. {{ ent.can('dashboards') ? '' : `Requires the ${ent.requiredPlanFor('dashboards')} plan.` }}</p>
+              <p class="text-base font-medium text-[--foreground]">Share with workspace</p>
+              <p class="text-sm text-[--muted] mt-0.5">Every member can view it. {{ ent.can('dashboards') ? '' : `Requires the ${ent.requiredPlanFor('dashboards')} plan.` }}</p>
             </div>
             <Switch :model-value="formVisibility === 'workspace'" @update:model-value="v => formVisibility = v ? 'workspace' : 'private'" />
           </div>
@@ -214,9 +214,9 @@
 
     <!-- Delete confirm -->
     <Modal :open="!!deleting" @update:open="v => !v && (deleting = null)" size="sm" radius="lg" hideCloseButton>
-      <ModalHeader class="px-5 pt-5"><p class="text-[15px] font-semibold text-[--foreground]">Delete dashboard?</p></ModalHeader>
+      <ModalHeader class="px-5 pt-5"><p class="text-md font-semibold text-[--foreground]">Delete dashboard?</p></ModalHeader>
       <ModalBody class="px-5 py-4">
-        <p class="text-[13px] text-[--muted]">"{{ deleting?.name }}" will be permanently removed.</p>
+        <p class="text-base text-[--muted]">"{{ deleting?.name }}" will be permanently removed.</p>
       </ModalBody>
       <ModalFooter class="px-5 pb-5 justify-end gap-2">
         <Button variant="bordered" size="sm" @click="deleting = null">Cancel</Button>

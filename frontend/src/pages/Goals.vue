@@ -1,7 +1,7 @@
 <template>
   <div class="goals-root">
     <div class="goals-header">
-      <h1 class="text-[20px] font-semibold text-foreground">Goals</h1>
+      <h1 class="text-3xl font-semibold text-foreground">Goals</h1>
       <Button v-if="ent.loaded && ent.can('goals')" size="sm" color="primary" @click="showCreate = true">
         <Plus class="size-3.5 mr-1" /> New Goal
       </Button>
@@ -11,8 +11,8 @@
     <div v-if="ent.loaded && !ent.can('goals')" class="goals-lock">
       <Lock class="size-5 text-primary" />
       <div>
-        <p class="text-[14px] font-semibold text-foreground">Track goals across every project</p>
-        <p class="text-[13px] text-muted mt-1">Align epics across projects with OKR-style goal tracking.</p>
+        <p class="text-md font-semibold text-foreground">Track goals across every project</p>
+        <p class="text-base text-muted mt-1">Align epics across projects with OKR-style goal tracking.</p>
       </div>
     </div>
 
@@ -26,16 +26,16 @@
       <div v-for="g in goals" :key="g.name"
            class="goal-card" :style="{ borderLeftColor: g.color || '#6366f1' }">
         <div class="flex items-center gap-2 mb-2">
-          <span class="text-[13px] font-semibold text-foreground truncate">{{ g.title }}</span>
+          <span class="text-base font-semibold text-foreground truncate">{{ g.title }}</span>
           <span class="goal-status" :class="statusClass(g.status)">{{ g.status }}</span>
         </div>
-        <div class="flex items-center gap-3 text-[11.5px] text-muted mb-3">
+        <div class="flex items-center gap-3 text-sm text-muted mb-3">
           <span v-if="g.start_date">{{ g.start_date }}</span>
           <span v-if="g.end_date">→ {{ g.end_date }}</span>
           <span v-if="g.owner">{{ g.owner }}</span>
         </div>
         <div class="mb-2">
-          <div class="flex items-center justify-between text-[12px]">
+          <div class="flex items-center justify-between text-sm">
             <span class="text-muted">Progress</span>
             <span class="font-semibold text-foreground">{{ g.progress }}%</span>
           </div>
@@ -44,9 +44,9 @@
           </div>
         </div>
         <div v-if="g.linked_epics?.length" class="flex flex-wrap gap-1">
-          <span v-for="e in g.linked_epics" :key="e" class="text-[11px] px-1.5 py-0.5 rounded bg-overlay text-muted font-mono">{{ e }}</span>
+          <span v-for="e in g.linked_epics" :key="e" class="text-xs px-1.5 py-0.5 rounded bg-overlay text-muted font-mono">{{ e }}</span>
         </div>
-        <p v-else class="text-[11px] text-muted">No epics linked</p>
+        <p v-else class="text-xs text-muted">No epics linked</p>
       </div>
     </div>
     <!-- The "New Goal" button already lives in the
@@ -57,7 +57,7 @@
     <!-- Create modal -->
     <Modal :open="showCreate" @update:open="v => !v && (showCreate = false)" size="sm" hideCloseButton>
       <ModalHeader class="px-5 pt-5">
-        <p class="text-[15px] font-semibold text-foreground">New Goal</p>
+        <p class="text-md font-semibold text-foreground">New Goal</p>
       </ModalHeader>
       <ModalBody class="px-5 py-4 space-y-3">
         <Input v-model="newTitle" label="Title" placeholder="e.g. Q3 Revenue Growth" />
@@ -130,7 +130,7 @@ onMounted(load)
 .goals-lock { display: flex; align-items: flex-start; gap: 16px; padding: 20px; border-radius: 10px; border: 1px solid var(--border-secondary); background: color-mix(in oklab, var(--primary) 5%, transparent); }
 .goals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 .goal-card { background: var(--overlay); border: 1px solid var(--border-secondary); border-left: 3px solid; border-radius: 8px; padding: 16px; }
-.goal-status { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+.goal-status { font-size:var(--text-xs); font-weight: 600; padding: 1px 7px; border-radius: 999px; }
 .goal-ok { background: color-mix(in oklab, var(--success) 15%, transparent); color: var(--success); }
 .goal-warn { background: color-mix(in oklab, var(--warning) 15%, transparent); color: var(--warning); }
 .goal-bad { background: color-mix(in oklab, var(--danger) 15%, transparent); color: var(--danger); }

@@ -60,11 +60,11 @@ function select() { setGroupValue(props.value) }
   --rd-accent: var(--accent);
   --rd-accent-hover: var(--accent-hover);
   --rd-on-fg: var(--accent-foreground);
-  font-size: 13px;
+  font-size:var(--text-base);
 }
 
-.rd-root[data-size='md'] { --rd-size: 20px; --rd-dot: 8px;  font-size: 14px; }
-.rd-root[data-size='lg'] { --rd-size: 24px; --rd-dot: 10px; font-size: 14px; }
+.rd-root[data-size='md'] { --rd-size: 20px; --rd-dot: 8px;  font-size:var(--text-md); }
+.rd-root[data-size='lg'] { --rd-size: 24px; --rd-dot: 10px; font-size:var(--text-md); }
 
 .rd-root[data-color='success'] { --rd-accent: var(--success); --rd-accent-hover: var(--success-hover); --rd-on-fg: var(--success-foreground); }
 .rd-root[data-color='warning'] { --rd-accent: var(--warning); --rd-accent-hover: var(--warning-hover); --rd-on-fg: var(--warning-foreground); }

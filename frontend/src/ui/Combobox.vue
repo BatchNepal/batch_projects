@@ -3,7 +3,7 @@
     :class="cn('flex flex-col gap-1.5 relative', fullWidth ? 'w-full' : 'w-fit', $attrs.class)"
     v-bind="{ ...$attrs, class: undefined }"
   >
-    <label v-if="label" :for="uid" class="text-[13px] font-medium leading-none text-foreground">
+    <label v-if="label" :for="uid" class="text-base font-medium leading-none text-foreground">
       {{ label }}<span v-if="isRequired" class="text-danger ml-0.5" aria-hidden="true">*</span>
     </label>
 
@@ -76,8 +76,8 @@
           style="max-height: 280px; max-width: min(360px, calc(100vw - 16px))"
           tabindex="-1"
         >
-          <div v-if="loading && !filtered.length" class="px-2.5 py-3 text-[13px] text-muted text-center">Searching…</div>
-          <div v-else-if="!filtered.length && !canCreate" class="px-2.5 py-3 text-[13px] text-muted text-center">
+          <div v-if="loading && !filtered.length" class="px-2.5 py-3 text-base text-muted text-center">Searching…</div>
+          <div v-else-if="!filtered.length && !canCreate" class="px-2.5 py-3 text-base text-muted text-center">
             {{ query.length < minChars ? `Type at least ${minChars} characters…` : 'No matches' }}
           </div>
           <div
@@ -113,8 +113,8 @@
       </Transition>
     </Teleport>
 
-    <p v-if="isInvalid && errorMessage" class="text-[12px] text-danger leading-snug">{{ errorMessage }}</p>
-    <p v-else-if="description" class="text-[12px] text-muted leading-snug">{{ description }}</p>
+    <p v-if="isInvalid && errorMessage" class="text-sm text-danger leading-snug">{{ errorMessage }}</p>
+    <p v-else-if="description" class="text-sm text-muted leading-snug">{{ description }}</p>
   </div>
 </template>
 
@@ -135,7 +135,7 @@ import Spinner from './Spinner.vue'
 
 defineOptions({ inheritAttrs: false })
 
-const SIZE = { sm: 'h-8 text-[13px]', md: 'h-9 text-sm', lg: 'h-10 text-sm' }
+const SIZE = { sm: 'h-8 text-base', md: 'h-9 text-sm', lg: 'h-10 text-sm' }
 
 const props = defineProps({
   modelValue:   { default: '' },        // string (single) or array (multiple)

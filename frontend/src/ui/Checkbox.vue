@@ -74,12 +74,12 @@ watchEffect(() => {
   --cb-accent: var(--accent);
   --cb-accent-hover: var(--accent-hover);
   --cb-on-fg: var(--accent-foreground);
-  font-size: 13px;
+  font-size:var(--text-base);
 }
 
 /* HeroUI's sm/md/lg ladder (16/20/24). */
-.cb-root[data-size='md'] { --cb-size: 20px; --cb-mark: 13px; --cb-radius: var(--radius-md); font-size: 14px; }
-.cb-root[data-size='lg'] { --cb-size: 24px; --cb-mark: 15px; --cb-radius: var(--radius-md); font-size: 14px; }
+.cb-root[data-size='md'] { --cb-size: 20px; --cb-mark: 13px; --cb-radius: var(--radius-md); font-size:var(--text-md); }
+.cb-root[data-size='lg'] { --cb-size: 24px; --cb-mark: 15px; --cb-radius: var(--radius-md); font-size:var(--text-md); }
 
 .cb-root[data-color='success'] { --cb-accent: var(--success); --cb-accent-hover: var(--success-hover); --cb-on-fg: var(--success-foreground); }
 .cb-root[data-color='warning'] { --cb-accent: var(--warning); --cb-accent-hover: var(--warning-hover); --cb-on-fg: var(--warning-foreground); }

@@ -42,8 +42,8 @@
       </span>
     </div>
 
-    <p v-if="isInvalid && errorMessage" class="text-[12px] text-danger leading-snug">{{ errorMessage }}</p>
-    <p v-else-if="description" class="text-[12px] text-muted leading-snug">{{ description }}</p>
+    <p v-if="isInvalid && errorMessage" class="text-sm text-danger leading-snug">{{ errorMessage }}</p>
+    <p v-else-if="description" class="text-sm text-muted leading-snug">{{ description }}</p>
   </div>
 </template>
 
@@ -82,7 +82,7 @@ const inputAttrs = computed(() => {
 
 // HeroUI v3 field heights (input.css: min-h-9 standard)
 const HEIGHT = { sm: 'h-8', md: 'h-9', lg: 'h-10' }
-const FONT   = { sm: 'text-[13px]', md: 'text-sm', lg: 'text-sm' }
+const FONT   = { sm: 'text-base', md: 'text-sm', lg: 'text-sm' }
 
 const wrapperCls = computed(() => cn(
   'hui-field flex items-center w-full',
@@ -99,7 +99,7 @@ const inputCls = computed(() => cn(
 ))
 
 const labelCls = computed(() => cn(
-  'text-[13px] font-medium leading-none',
+  'text-base font-medium leading-none',
   props.isInvalid ? 'text-danger' : 'text-foreground',
 ))
 </script>

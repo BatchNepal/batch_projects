@@ -103,7 +103,7 @@ onMounted(() => {
 }
 .cp-search {
   width: 100%;
-  font-size: 13px;
+  font-size:var(--text-base);
   font-family: inherit;
   color: var(--foreground);
   background: none;
@@ -113,7 +113,7 @@ onMounted(() => {
 .cp-search::placeholder { color: var(--muted); }
 .cp-empty {
   padding: 8px 12px;
-  font-size: 12px;
+  font-size:var(--text-sm);
   color: var(--muted);
 }
 .cp-dot {

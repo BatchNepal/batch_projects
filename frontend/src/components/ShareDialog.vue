@@ -18,7 +18,7 @@
                 <div class="size-7 rounded-lg bg-accent-soft flex items-center justify-center">
                   <Share2 class="size-3.5 text-primary" />
                 </div>
-                <span class="text-[14px] font-semibold text-foreground">
+                <span class="text-md font-semibold text-foreground">
                   {{ isTask ? 'Share task' : 'Share' }}
                 </span>
               </div>
@@ -35,14 +35,14 @@
               <div class="inline-flex p-0.5 rounded-lg bg-default">
                 <button
                   v-for="t in TABS" :key="t.value"
-                  class="px-3 h-7 rounded-md text-[12.5px] font-medium transition-colors"
+                  class="px-3 h-7 rounded-md text-sm font-medium transition-colors"
                   :class="scope === t.value ? 'bg-surface text-foreground shadow-xs' : 'text-muted hover:text-foreground'"
                   @click="setScope(t.value)"
                 >{{ t.label }}</button>
               </div>
             </div>
 
-            <p class="px-5 pt-3 text-[12px] text-muted leading-relaxed">
+            <p class="px-5 pt-3 text-sm text-muted leading-relaxed">
               {{ scopeDescription }}
             </p>
 
@@ -52,10 +52,10 @@
               <!-- Gated: needs Team+ -->
               <div v-if="!canShare" class="rounded-xl bg-default p-4 text-center">
                 <Lock class="size-5 text-muted mx-auto mb-2" />
-                <p class="text-[13px] font-medium text-foreground">
+                <p class="text-base font-medium text-foreground">
                   Public links are a {{ requiredPlan }} feature
                 </p>
-                <p class="text-[12px] text-muted mt-1 mb-3">
+                <p class="text-sm text-muted mt-1 mb-3">
                   Share read-only views with clients and stakeholders who don't have an account.
                 </p>
                 <Button size="sm" color="primary" @click="goUpgrade">Upgrade to {{ requiredPlan }}</Button>
@@ -76,13 +76,13 @@
                     <div class="flex items-center gap-2">
                       <div class="flex-1 min-w-0 flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-default">
                         <LinkIcon class="size-3.5 text-muted shrink-0" />
-                        <span class="text-[12px] text-foreground truncate font-mono">{{ l.url }}</span>
-                        <span v-if="l.access_level && l.access_level !== 'view'" class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0"
+                        <span class="text-sm text-foreground truncate font-mono">{{ l.url }}</span>
+                        <span v-if="l.access_level && l.access_level !== 'view'" class="text-xs font-semibold px-1.5 py-0.5 rounded-full shrink-0"
                           :class="l.access_level === 'edit' ? 'bg-accent-soft text-accent' : 'bg-default text-muted'"
                         >{{ l.access_level === 'edit' ? 'Edit' : 'Comment' }}</span>
                       </div>
                       <button
-                        class="shrink-0 h-8 px-3 inline-flex items-center gap-1.5 rounded-lg text-[12px] font-medium transition-colors"
+                        class="shrink-0 h-8 px-3 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium transition-colors"
                         :class="copiedName === l.name ? 'bg-success-soft text-success' : 'bg-primary text-white hover:bg-primary-hover'"
                         @click="copy(l)"
                       >
@@ -92,20 +92,20 @@
                       </button>
                     </div>
                     <div class="flex items-center justify-between mt-2 px-0.5">
-                      <span class="text-[11px] text-muted">
+                      <span class="text-xs text-muted">
                         <template v-if="l.expired">Expired</template>
                         <template v-else-if="l.expires_on">Expires {{ fmtDate(l.expires_on) }}</template>
                         <template v-else>No expiry</template>
                         <span v-if="l.access_count"> · {{ l.access_count }} view{{ l.access_count === 1 ? '' : 's' }}</span>
                       </span>
-                      <button class="text-[11px] text-muted hover:text-danger transition-colors" @click="revoke(l)">
+                      <button class="text-xs text-muted hover:text-danger transition-colors" @click="revoke(l)">
                         Revoke
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <p v-else-if="!loading" class="text-[12px] text-muted text-center py-4">
+                <p v-else-if="!loading" class="text-sm text-muted text-center py-4">
                   No active link yet. Create one below.
                 </p>
 

@@ -47,13 +47,13 @@
             class="flex flex-col items-center justify-center h-24 mt-2 border-2 border-dashed border-border-secondary rounded-lg"
             :class="isDragOver ? 'opacity-0' : 'opacity-100'"
           >
-            <span class="text-[12px] font-medium text-muted">No tasks</span>
+            <span class="text-sm font-medium text-muted">No tasks</span>
           </div>
         </Transition>
 
         <button
           v-if="hiddenCount > 0"
-          class="w-full mt-2 py-2 text-[12px] font-medium text-muted hover:text-foreground hover:bg-default rounded-md transition-colors border border-transparent hover:border-border-secondary"
+          class="w-full mt-2 py-2 text-sm font-medium text-muted hover:text-foreground hover:bg-default rounded-md transition-colors border border-transparent hover:border-border-secondary"
           @click="showAll = !showAll"
         >
           {{

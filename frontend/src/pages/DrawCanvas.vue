@@ -11,7 +11,7 @@
         </button>
         <Input v-if="canEdit" v-model="titleDraft" size="sm" class="max-w-[260px]" placeholder="Untitled drawing"
           @blur="saveTitleIfChanged" @keydown.enter="$event.target.blur()" />
-        <span v-else class="text-[13.5px] font-medium text-foreground truncate">{{ titleDraft || 'Untitled drawing' }}</span>
+        <span v-else class="text-base font-medium text-foreground truncate">{{ titleDraft || 'Untitled drawing' }}</span>
       </div>
 
       <div class="flex items-center gap-3 shrink-0">
@@ -26,13 +26,13 @@
           <span v-if="presentUsers.length > 4" class="dc-presence-overflow">+{{ presentUsers.length - 4 }}</span>
         </div>
         <Transition name="fade">
-          <span v-if="saving" key="saving" class="flex items-center gap-1.5 text-[12px] text-muted">
+          <span v-if="saving" key="saving" class="flex items-center gap-1.5 text-sm text-muted">
             <Spinner size="sm" /> Saving…
           </span>
-          <span v-else-if="staleWarning" key="stale" class="flex items-center gap-1.5 text-[12px] text-warning">
+          <span v-else-if="staleWarning" key="stale" class="flex items-center gap-1.5 text-sm text-warning">
             <Icon :icon="TriangleAlert" class="size-3.5" /> Overwrote a newer change
           </span>
-          <span v-else-if="savedFlash" key="saved" class="flex items-center gap-1.5 text-[12px] text-[var(--success-soft-foreground)]">
+          <span v-else-if="savedFlash" key="saved" class="flex items-center gap-1.5 text-sm text-[var(--success-soft-foreground)]">
             <Icon :icon="Check" class="size-3.5" /> Saved
           </span>
         </Transition>
@@ -340,7 +340,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-full);
   background: var(--default);
   color: var(--muted);
-  font-size: 9px;
+  font-size:var(--text-micro);
   font-weight: 500;
   box-shadow: 0 0 0 2px var(--surface);
 }

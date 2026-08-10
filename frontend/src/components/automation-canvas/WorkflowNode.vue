@@ -59,7 +59,7 @@
       <span
         v-if="outputPorts.length > 1 && port.label"
         :class="cn(
-          'absolute right-[-6px] z-10 text-[10px] font-medium px-1.5 py-px rounded-full whitespace-nowrap translate-x-1/2',
+          'absolute right-[-6px] z-10 text-xs font-medium px-1.5 py-px rounded-full whitespace-nowrap translate-x-1/2',
           i % 2 === 0 ? '-translate-y-full' : '',
           PORT_BADGE[port.tone] ?? PORT_BADGE.default,
         )"
@@ -82,7 +82,7 @@
         v-for="port in subPorts"
         :key="port.id"
         type="button"
-        class="text-[10px] font-medium bg-surface px-1 rounded hover:underline"
+        class="text-xs font-medium bg-surface px-1 rounded hover:underline"
         :class="attachedCredentialLabel(port) ? 'text-accent' : 'text-muted'"
         @click.stop="data.onAttachCredential?.(id, port.id)"
       >{{ attachedCredentialLabel(port) ?? port.label }}<span v-if="port.required && !attachedCredentialLabel(port)" class="text-danger">*</span></button>

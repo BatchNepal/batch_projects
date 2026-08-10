@@ -186,7 +186,7 @@ onBeforeUnmount(() => editor.value?.destroy())
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
+  font-size:var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.1s;
@@ -202,7 +202,7 @@ onBeforeUnmount(() => editor.value?.destroy())
   cursor: text;
 }
 .rte-inner {
-  font-size: 13.5px;
+  font-size:var(--text-base);
   color: var(--foreground);
   line-height: 1.65;
 }
@@ -223,9 +223,9 @@ onBeforeUnmount(() => editor.value?.destroy())
 .rte-inner em { font-style: italic; color: var(--foreground); }
 .rte-inner s { text-decoration: line-through; color: var(--muted); }
 
-.rte-inner h1 { font-size: 18px; font-weight: 700; color: var(--foreground); margin: 10px 0 6px; line-height: 1.3; }
-.rte-inner h2 { font-size: 15px; font-weight: 700; color: var(--foreground); margin: 8px 0 4px; }
-.rte-inner h3 { font-size: 13.5px; font-weight: 700; color: var(--foreground); margin: 6px 0 3px; }
+.rte-inner h1 { font-size:var(--text-metric); font-weight: 700; color: var(--foreground); margin: 10px 0 6px; line-height: 1.3; }
+.rte-inner h2 { font-size:var(--text-md); font-weight: 700; color: var(--foreground); margin: 8px 0 4px; }
+.rte-inner h3 { font-size:var(--text-base); font-weight: 700; color: var(--foreground); margin: 6px 0 3px; }
 
 .rte-inner ul { list-style: disc; padding-left: 20px; margin: 4px 0; }
 .rte-inner ol { list-style: decimal; padding-left: 20px; margin: 4px 0; }
@@ -245,7 +245,7 @@ onBeforeUnmount(() => editor.value?.destroy())
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px 14px;
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   margin: 6px 0;
   overflow-x: auto;
@@ -256,7 +256,7 @@ onBeforeUnmount(() => editor.value?.destroy())
   border: 1px solid var(--surface-secondary);
   border-radius: 3px;
   padding: 1px 5px;
-  font-size: 12px;
+  font-size:var(--text-sm);
   font-family: 'JetBrains Mono', monospace;
   color: var(--danger);
 }
@@ -274,7 +274,7 @@ onBeforeUnmount(() => editor.value?.destroy())
   padding: 5px 16px;
   background: var(--accent);
   color: var(--accent-foreground);
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   font-weight: 600;
   border-radius: 6px;
   border: none;
@@ -286,7 +286,7 @@ onBeforeUnmount(() => editor.value?.destroy())
   padding: 5px 12px;
   background: transparent;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   font-weight: 500;
   border-radius: 6px;
   border: none;

@@ -26,7 +26,7 @@
           <!-- All projects shortcut -->
           <button
             type="button"
-            class="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] font-medium text-foreground hover:bg-default transition-colors cursor-pointer"
+            class="w-full flex items-center gap-2 px-3 py-1.5 text-base font-medium text-foreground hover:bg-default transition-colors cursor-pointer"
             @click="selectAll"
           >
             <span class="w-4 h-4 rounded border border-border-secondary flex items-center justify-center shrink-0"
@@ -46,7 +46,7 @@
               v-for="p in projects"
               :key="p.name"
               type="button"
-              class="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] text-foreground hover:bg-default transition-colors cursor-pointer"
+              class="w-full flex items-center gap-2 px-3 py-1.5 text-base text-foreground hover:bg-default transition-colors cursor-pointer"
               @click="toggleProject(p.name)"
             >
               <span class="w-4 h-4 rounded border border-border-secondary flex items-center justify-center shrink-0"
@@ -63,10 +63,10 @@
           <template v-if="!isAll && selectedCount > 0">
             <div class="h-px bg-border mx-2 mt-1" />
             <div class="px-3 py-2 flex items-center justify-between">
-              <span class="text-[11px] text-[--muted]">{{ selectedCount }} selected</span>
+              <span class="text-xs text-[--muted]">{{ selectedCount }} selected</span>
               <button
                 type="button"
-                class="text-[12px] font-semibold text-primary hover:opacity-80 cursor-pointer"
+                class="text-sm font-semibold text-primary hover:opacity-80 cursor-pointer"
                 @click="open = false"
               >Apply</button>
             </div>

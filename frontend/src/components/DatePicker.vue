@@ -10,7 +10,7 @@
             modelValue ? 'text-foreground font-medium' : 'text-[var(--field-placeholder)]'
           ]"
         >
-          <div class="flex flex-1 items-center text-[13px]">
+          <div class="flex flex-1 items-center text-base">
             <span class="tracking-tight">{{ displayDate || placeholder }}</span>
           </div>
           <div class="flex items-center gap-1.5 shrink-0 ml-auto pointer-events-none">
@@ -20,7 +20,7 @@
               </svg>
             </div>
             <span class="flex items-center justify-center text-[var(--field-placeholder)] group-hover:text-foreground transition-colors">
-              <svg aria-hidden="true" aria-label="Calendar icon" fill="none" height="1em" role="presentation" viewBox="0 0 13 14" width="1em" xmlns="http://www.w3.org/2000/svg" class="text-[16px]"><path clip-rule="evenodd" d="M3.75 4.5A.75.75 0 0 1 3 3.75v-.748a1.5 1.5 0 0 0-1.5 1.5v1h10v-1a1.5 1.5 0 0 0-1.5-1.5v.75a.75.75 0 1 1-1.5 0v-.75h-4v.747a.75.75 0 0 1-.75.75ZM8.5 1.501h-4V.75a.75.75 0 0 0-1.5 0v.752a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h7a3 3 0 0 0 3-3v-6a3 3 0 0 0-3-3v-.75a.75.75 0 0 0-1.5 0v.75Zm-7 5.5v3.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5v-3.5h-10Z" fill="currentColor" fill-rule="evenodd"></path></svg>
+              <svg aria-hidden="true" aria-label="Calendar icon" fill="none" height="1em" role="presentation" viewBox="0 0 13 14" width="1em" xmlns="http://www.w3.org/2000/svg" class="text-xl"><path clip-rule="evenodd" d="M3.75 4.5A.75.75 0 0 1 3 3.75v-.748a1.5 1.5 0 0 0-1.5 1.5v1h10v-1a1.5 1.5 0 0 0-1.5-1.5v.75a.75.75 0 1 1-1.5 0v-.75h-4v.747a.75.75 0 0 1-.75.75ZM8.5 1.501h-4V.75a.75.75 0 0 0-1.5 0v.752a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h7a3 3 0 0 0 3-3v-6a3 3 0 0 0-3-3v-.75a.75.75 0 0 0-1.5 0v.75Zm-7 5.5v3.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5v-3.5h-10Z" fill="currentColor" fill-rule="evenodd"></path></svg>
             </span>
           </div>
         </button>
@@ -34,7 +34,7 @@
       <!-- Header -->
       <header class="flex items-center justify-between px-1 pb-3 shrink-0">
         <button @click="showYearPicker = !showYearPicker" style="-webkit-tap-highlight-color: transparent; outline: none !important;" class="flex items-center gap-1.5 bg-transparent hover:bg-surface-secondary rounded-lg px-2 py-1 -ml-1 transition-colors focus-visible:ring-2 focus-visible:ring-accent select-none">
-          <span class="text-[13px] font-semibold text-[var(--foreground)]">{{ monthName }} {{ currentYear }}</span>
+          <span class="text-base font-semibold text-[var(--foreground)]">{{ monthName }} {{ currentYear }}</span>
           <span class="inline-flex w-[14px] h-[14px] items-center justify-center text-[var(--accent)] transition-transform duration-200" :class="{ 'rotate-90': showYearPicker }">
             <svg aria-hidden="true" fill="none" height="1em" role="presentation" viewBox="0 0 16 16" width="1em" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="M5.47 2.97a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 1 1-1.06-1.06L9.44 8 5.47 4.03a.75.75 0 0 1 0-1.06Z" fill="currentColor" fill-rule="evenodd"></path></svg>
           </span>
@@ -54,7 +54,7 @@
       <table v-if="!showYearPicker" class="w-full h-full table-fixed border-collapse" cellpadding="0">
         <thead>
           <tr>
-            <th v-for="d in ['M','T','W','T','F','S','S']" :key="d" class="h-7 align-middle text-center text-[11px] font-medium text-[var(--muted)] uppercase select-none cursor-default">
+            <th v-for="d in ['M','T','W','T','F','S','S']" :key="d" class="h-7 align-middle text-center text-xs font-medium text-[var(--muted)] uppercase select-none cursor-default">
               {{ d }}
             </th>
           </tr>
@@ -66,7 +66,7 @@
                 @click="selectDate(dayObj)"
                 style="-webkit-tap-highlight-color: transparent; outline: none !important;"
                 :class="[
-                  'relative flex w-[30px] h-[30px] mx-auto items-center justify-center rounded-full text-center text-[13px] font-medium transition-all duration-150 cursor-pointer transform-gpu p-0 border-none select-none',
+                  'relative flex w-[30px] h-[30px] mx-auto items-center justify-center rounded-full text-center text-base font-medium transition-all duration-150 cursor-pointer transform-gpu p-0 border-none select-none',
                   'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
                   dayObj.selected 
                     ? (dayObj.isOutsideMonth ? 'bg-surface-secondary text-[var(--accent)]' : 'bg-[var(--accent)] text-white shadow-sm shadow-accent/20')
@@ -94,7 +94,7 @@
           :ref="el => { if (y === viewYear) activeYearRef = el }"
           style="-webkit-tap-highlight-color: transparent; outline: none !important;"
           :class="[
-            'flex h-8 w-full items-center justify-center rounded-full text-[13px] font-medium transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-accent select-none',
+            'flex h-8 w-full items-center justify-center rounded-full text-base font-medium transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-accent select-none',
             y === viewYear 
               ? 'bg-[var(--accent)] text-white shadow-sm shadow-accent/20' 
               : 'text-[var(--foreground)] bg-transparent hover:bg-surface-secondary hover:text-[var(--foreground)]',

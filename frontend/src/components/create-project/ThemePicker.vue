@@ -65,7 +65,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocClick))
   box-shadow: var(--overlay-shadow);
   padding: 12px;
 }
-.thp-label { font-size: 12px; font-weight: 500; color: var(--muted); margin: 0 0 8px; }
+.thp-label { font-size:var(--text-sm); font-weight: 500; color: var(--muted); margin: 0 0 8px; }
 
 .thp-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .thp-item {

@@ -891,8 +891,8 @@
     <!-- ERPNext "Connect data" modal -->
     <div v-if="showErpModal" class="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40" @click.self="closeErpModal">
       <div class="bg-surface rounded-xl shadow-overlay w-[480px] max-w-[92vw] p-5">
-        <h3 class="text-[15px] font-semibold text-foreground mb-1">Connect ERPNext data</h3>
-        <p class="text-[12px] text-muted mb-3">Pick a document type to link to your tasks.</p>
+        <h3 class="text-md font-semibold text-foreground mb-1">Connect ERPNext data</h3>
+        <p class="text-sm text-muted mb-3">Pick a document type to link to your tasks.</p>
 
         <!-- Bordered doctype cards -->
         <div class="grid grid-cols-2 gap-2 max-h-[260px] overflow-auto">
@@ -903,29 +903,29 @@
             @click="pickErpDoctype(d.name)"
           >
             <span class="lv-erp-ic">{{ dtAbbr(d.name) }}</span>
-            <span class="text-[13px] font-medium text-foreground truncate">{{ d.name }}</span>
+            <span class="text-base font-medium text-foreground truncate">{{ d.name }}</span>
           </button>
         </div>
 
         <!-- Inline config for the selected doctype -->
         <div v-if="erpPick" class="mt-4 pt-4 border-t border-separator">
-          <p class="text-[12px] font-semibold text-muted mb-2">Mirror fields · {{ erpPick }}</p>
+          <p class="text-sm font-semibold text-muted mb-2">Mirror fields · {{ erpPick }}</p>
           <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 max-h-[200px] overflow-auto">
-            <label v-for="f in (mirrorSchema[erpPick]||[])" :key="f.fieldname" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] hover:bg-default cursor-pointer">
+            <label v-for="f in (mirrorSchema[erpPick]||[])" :key="f.fieldname" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-base hover:bg-default cursor-pointer">
               <input type="checkbox" :checked="erpFieldSel.has(f.fieldname)" @change="toggleErpField(f.fieldname)"/>
               <span class="flex-1 truncate">{{ f.label }}</span>
             </label>
-            <p v-if="!(mirrorSchema[erpPick]||[]).length" class="col-span-2 text-[12px] text-muted px-2 py-3">No mirrorable fields configured for this doctype.</p>
+            <p v-if="!(mirrorSchema[erpPick]||[]).length" class="col-span-2 text-sm text-muted px-2 py-3">No mirrorable fields configured for this doctype.</p>
           </div>
-          <label class="flex items-center justify-between gap-2 mt-3 text-[13px] text-foreground">
+          <label class="flex items-center justify-between gap-2 mt-3 text-base text-foreground">
             <span>Two-way link (back-link the ERP document)</span>
             <Switch :model-value="erpTwoWaySel" @update:model-value="v=>erpTwoWaySel=v"/>
           </label>
         </div>
 
         <div class="flex justify-end gap-2 mt-4">
-          <button class="px-3 h-8 rounded-lg text-[13px] text-muted hover:bg-default" @click="closeErpModal">Cancel</button>
-          <button class="px-3 h-8 rounded-lg text-[13px] bg-accent text-white hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed" :disabled="!erpPick" @click="addErpColumn(erpPick,[...erpFieldSel],erpTwoWaySel)">Add column</button>
+          <button class="px-3 h-8 rounded-lg text-base text-muted hover:bg-default" @click="closeErpModal">Cancel</button>
+          <button class="px-3 h-8 rounded-lg text-base bg-accent text-white hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed" :disabled="!erpPick" @click="addErpColumn(erpPick,[...erpFieldSel],erpTwoWaySel)">Add column</button>
         </div>
       </div>
     </div>
@@ -1639,7 +1639,7 @@ watch(projectKey,()=>{ load() })
   overflow:hidden;
 }
 .lv-sb-count {
-  font-size:12.5px;
+  font-size:var(--text-sm);
   font-weight:400;
   color:var(--muted);
   white-space:nowrap;
@@ -1657,7 +1657,7 @@ watch(projectKey,()=>{ load() })
   gap:5px;
   height:28px;
   padding:0 10px;
-  font-size:13px;
+  font-size:var(--text-base);
   font-weight:500;
   font-family:inherit;
   color:var(--foreground);
@@ -1718,7 +1718,7 @@ watch(projectKey,()=>{ load() })
   box-shadow: var(--overlay-shadow);
 }
 .lv-bulk-n {
-  font-size:13px;
+  font-size:var(--text-base);
   font-weight:600;
   color:var(--overlay-foreground);
   white-space:nowrap;
@@ -1733,7 +1733,7 @@ watch(projectKey,()=>{ load() })
   margin: 0 4px;
 }
 .lv-bulk-btn {
-  font-size:12.5px;
+  font-size:var(--text-sm);
   font-weight:500;
   font-family:inherit;
   color:var(--muted);
@@ -1764,7 +1764,7 @@ watch(projectKey,()=>{ load() })
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size:13px;
+  font-size:var(--text-base);
   color:var(--muted);
   background:none;
   border:none;
@@ -1793,7 +1793,7 @@ watch(projectKey,()=>{ load() })
   z-index:5;
   padding:0 12px;
   height:36px;
-  font-size:11px;
+  font-size:var(--text-xs);
   font-weight:500;
   color:var(--muted);
   text-transform:uppercase;
@@ -1819,7 +1819,7 @@ watch(projectKey,()=>{ load() })
   color:var(--foreground);
 }
 .lv-arr {
-  font-size:9px;
+  font-size:var(--text-micro);
   margin-left:3px;
   color:var(--muted);
 }
@@ -1936,12 +1936,12 @@ thead .lv-sticky {
   flex-shrink:0;
 }
 .lv-glabel {
-  font-size:13.5px;
+  font-size:var(--text-base);
   font-weight:600;
   color:var(--foreground);
 }
 .lv-gcount {
-  font-size:12px;
+  font-size:var(--text-sm);
   color:var(--muted);
   margin-left:2px;
 }
@@ -1949,7 +1949,7 @@ thead .lv-sticky {
   height:32px;
   background:var(--surface-secondary);
   color:var(--muted);
-  font-size:11px;
+  font-size:var(--text-xs);
   font-weight:500;
   text-transform:uppercase;
   letter-spacing:.05em;
@@ -1988,7 +1988,7 @@ thead .lv-sticky {
 .lv-td {
   padding:0 12px;
   height:var(--rowh);
-  font-size:13px;
+  font-size:var(--text-base);
   color:var(--foreground);
   vertical-align:middle;
   overflow:hidden;
@@ -2057,7 +2057,7 @@ thead .lv-sticky {
 }
 .lv-issue-key {
   font-family:var(--font-mono);
-  font-size:11px;
+  font-size:var(--text-xs);
   font-weight:500;
   color:var(--muted);
   white-space:nowrap;
@@ -2072,7 +2072,7 @@ thead .lv-sticky {
   color:var(--muted);
 }
 .lv-title {
-  font-size:13px;
+  font-size:var(--text-base);
   font-weight:500;
   color:var(--foreground);
   overflow:hidden;
@@ -2085,7 +2085,7 @@ thead .lv-sticky {
   color:var(--foreground);
 }
 .lv-child-count {
-  font-size:11px;
+  font-size:var(--text-xs);
   font-weight:600;
   color:var(--muted);
   background:var(--surface-secondary);
@@ -2188,7 +2188,7 @@ thead .lv-sticky {
   border:none;
   border-radius:0;
   background: var(--sc,var(--muted));
-  font-size:12.5px;
+  font-size:var(--text-sm);
   font-weight:600;
   font-family:inherit;
   color: var(--st,#fff);
@@ -2223,7 +2223,7 @@ thead .lv-sticky {
   gap:6px;
   height:26px;
   padding:0 6px;
-  font-size:13px;
+  font-size:var(--text-base);
   font-family:inherit;
   color:var(--foreground);
   background:none;
@@ -2303,7 +2303,7 @@ thead .lv-sticky {
   align-items:center;
   gap:6px;
   padding:0 8px;
-  font-size:13px;
+  font-size:var(--text-base);
   color:var(--foreground);
 }
 .lv-dot {
@@ -2320,7 +2320,7 @@ thead .lv-sticky {
   align-items:center;
   justify-content:center;
   color:var(--accent-foreground);
-  font-size:10px;
+  font-size:var(--text-xs);
   font-weight:700;
   flex-shrink:0;
 }
@@ -2332,7 +2332,7 @@ thead .lv-sticky {
   align-items:center;
   justify-content:center;
   color:var(--accent-foreground);
-  font-size:9px;
+  font-size:var(--text-micro);
   font-weight:700;
   flex-shrink:0;
   border:2px solid var(--surface);
@@ -2347,7 +2347,7 @@ thead .lv-sticky {
 }
 .lv-unset {
   color:var(--muted);
-  font-size:13px;
+  font-size:var(--text-base);
 }
 .lv-date-td {
   display:inline-flex;
@@ -2358,7 +2358,7 @@ thead .lv-sticky {
 .lv-date-td :deep(button) {
   height:26px;
   padding:0 8px;
-  font-size:13px;
+  font-size:var(--text-base);
   background:transparent!important;
   border:none!important;
   box-shadow:none!important;
@@ -2393,7 +2393,7 @@ thead .lv-sticky {
   background:var(--accent-soft);
   color:var(--accent-soft-foreground);
   border-radius:2px;
-  font-size:12px;
+  font-size:var(--text-sm);
   font-weight:500;
   white-space:nowrap;
   overflow:hidden;
@@ -2408,7 +2408,7 @@ thead .lv-sticky {
   background:var(--surface-secondary);
   color:var(--foreground);
   border-radius:2px;
-  font-size:12px;
+  font-size:var(--text-sm);
   font-weight:500;
   white-space:nowrap;
   overflow:hidden;
@@ -2427,13 +2427,13 @@ thead .lv-sticky {
   height:20px;
   padding:0 7px;
   border-radius:2px;
-  font-size:11.5px;
+  font-size:var(--text-sm);
   font-weight:500;
   border:1px solid transparent;
   white-space:nowrap;
 }
 .lv-lbl-more {
-  font-size:11px;
+  font-size:var(--text-xs);
   color:var(--muted);
 }
 .lv-pts-input {
@@ -2441,7 +2441,7 @@ thead .lv-sticky {
   text-align:right;
   padding:0 6px;
   height:26px;
-  font-size:13px;
+  font-size:var(--text-base);
   font-family:inherit;
   color:var(--foreground);
   background:transparent;
@@ -2472,7 +2472,7 @@ thead .lv-sticky {
   height:18px;
   padding:0 7px;
   margin-left:6px;
-  font-size:10.5px;
+  font-size:var(--text-xs);
   font-weight:600;
   color:var(--muted);
   background:var(--surface);
@@ -2501,7 +2501,7 @@ thead .lv-sticky {
 .lv-add-btn {
   width:100%;
   text-align:left;
-  font-size:13px;
+  font-size:var(--text-base);
   color:var(--muted);
   background:none;
   border:none;
@@ -2519,7 +2519,7 @@ thead .lv-sticky {
 .lv-add-input {
   width:100%;
   height:30px;
-  font-size:13px;
+  font-size:var(--text-base);
   font-family:inherit;
   color:var(--foreground);
   background:var(--surface);
@@ -2551,14 +2551,14 @@ thead .lv-sticky {
 .lv-sum-pts {
   display:block;
   text-align:center;
-  font-size:11.5px;
+  font-size:var(--text-sm);
   font-weight:600;
   color:var(--muted);
   padding-top:2px;
 }
 .lv-qc {
   padding:8px 20px;
-  font-size:13px;
+  font-size:var(--text-base);
   color:var(--muted);
   cursor:pointer;
   display:flex;
@@ -2575,13 +2575,13 @@ thead .lv-sticky {
 .lv-empty {
   padding:56px 0;
   text-align:center;
-  font-size:14px;
+  font-size:var(--text-md);
   color:var(--muted);
   background:var(--surface);
 }
 .lv-dd-hdr {
   padding:6px 14px 2px;
-  font-size:11px;
+  font-size:var(--text-xs);
   font-weight:600;
   color:var(--muted);
   text-transform:uppercase;
@@ -2594,7 +2594,7 @@ thead .lv-sticky {
   gap:10px;
   padding:6px 14px;
   cursor:pointer;
-  font-size:13px;
+  font-size:var(--text-base);
   color:var(--foreground);
   transition:background .1s;
 }
@@ -2623,7 +2623,7 @@ thead .lv-sticky {
 }
 .lv-ddinput {
   width:100%;
-  font-size:13px;
+  font-size:var(--text-base);
   font-family:inherit;
   color:var(--foreground);
   background:none;
@@ -2643,7 +2643,7 @@ thead .lv-sticky {
 }
 .lv-dd-empty {
   padding:8px 12px;
-  font-size:12px;
+  font-size:var(--text-sm);
   color:var(--muted);
 }
 .lv-td :deep(.relative) {
@@ -2663,7 +2663,7 @@ thead .lv-sticky {
   min-width:110px;
   max-width:100%;
   padding:0 12px;
-  font-size:11.5px;
+  font-size:var(--text-sm);
   font-weight:600;
   font-family:inherit;
   letter-spacing:.01em;
@@ -2705,7 +2705,7 @@ thead .lv-sticky {
   gap:10px;
 }
 .lv-tl-lbl {
-  font-size:12px;
+  font-size:var(--text-sm);
   font-weight:500;
   color:var(--muted);
   width:36px;
@@ -2773,12 +2773,12 @@ thead .lv-sticky {
   min-width:0;
 }
 .lv-addcol-title {
-  font-size:13px;
+  font-size:var(--text-base);
   font-weight:500;
   color:var(--foreground);
 }
 .lv-addcol-sub {
-  font-size:11.5px;
+  font-size:var(--text-sm);
   color:var(--muted);
 }
 .lv-erp-opt {
@@ -2813,7 +2813,7 @@ thead .lv-sticky {
   width:100%;
   padding:0 6px;
   height:26px;
-  font-size:13px;
+  font-size:var(--text-base);
   font-family:inherit;
   color:var(--foreground);
   background:transparent;
@@ -2842,12 +2842,12 @@ thead .lv-sticky {
   border-radius:2px;
   background:var(--surface-secondary);
   color:var(--foreground);
-  font-size:11.5px;
+  font-size:var(--text-sm);
   font-weight:500;
   white-space:nowrap;
 }
 .lv-mirror-val {
-  font-size:12.5px;
+  font-size:var(--text-sm);
   color:var(--foreground);
   margin-right:6px;
   white-space:nowrap;
@@ -2865,7 +2865,7 @@ thead .lv-sticky {
   padding:0 8px;
   border-radius:2px;
   background:var(--surface-secondary);
-  font-size:11.5px;
+  font-size:var(--text-sm);
   font-weight:600;
 }
 .lv-link-chip {
@@ -2875,7 +2875,7 @@ thead .lv-sticky {
   height:22px;
   padding:0 8px;
   margin-right:4px;
-  font-size:11.5px;
+  font-size:var(--text-sm);
   font-weight:500;
   font-family:var(--font-mono);
   color:var(--foreground);
@@ -2928,7 +2928,7 @@ thead .lv-sticky {
 }
 .lv-plus-none {
   padding:6px 12px;
-  font-size:12px;
+  font-size:var(--text-sm);
   color:var(--muted);
   line-height:1.5;
   margin:0;
@@ -2953,7 +2953,7 @@ thead .lv-sticky {
   gap:8px;
   width:100%;
   padding:6px 10px;
-  font-size:13px;
+  font-size:var(--text-base);
   font-family:inherit;
   color:var(--foreground);
   background:none;

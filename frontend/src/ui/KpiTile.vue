@@ -8,7 +8,7 @@
         <p class="text-xs font-medium uppercase tracking-wider text-muted leading-none">{{ label }}</p>
 
         <div class="mt-3 flex items-baseline gap-2">
-          <p class="text-[28px] font-semibold text-foreground tabular-nums leading-none">{{ value }}</p>
+          <p class="text-metric font-semibold text-foreground tabular-nums leading-none">{{ value }}</p>
           <span
             v-if="delta !== null && delta !== undefined"
             class="inline-flex items-center gap-0.5 text-xs font-medium tabular-nums"

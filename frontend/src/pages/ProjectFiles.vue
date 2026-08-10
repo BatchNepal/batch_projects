@@ -11,7 +11,7 @@
           v-model="search"
           type="text"
           placeholder="Search files…"
-          class="h-8 w-52 pl-8 pr-3 text-[13px] bg-surface-secondary border border-border rounded-md focus:outline-none focus:shadow-focus focus:bg-overlay transition-colors"
+          class="h-8 w-52 pl-8 pr-3 text-base bg-surface-secondary border border-border rounded-md focus:outline-none focus:shadow-focus focus:bg-overlay transition-colors"
         />
       </div>
 
@@ -22,7 +22,7 @@
           :key="f.value"
           type="button"
           :class="[
-            'px-2.5 h-6 text-[12px] font-medium rounded transition-[background-color,color]',
+            'px-2.5 h-6 text-sm font-medium rounded transition-[background-color,color]',
             typeFilter === f.value
               ? 'bg-overlay text-foreground shadow-sm'
               : 'text-muted hover:text-muted'
@@ -34,7 +34,7 @@
       <div class="flex-1" />
 
       <!-- Count -->
-      <span v-if="!loading" class="text-[12px] text-muted tabular-nums">
+      <span v-if="!loading" class="text-sm text-muted tabular-nums">
         {{ filteredFiles.length }} {{ filteredFiles.length === 1 ? 'file' : 'files' }}
       </span>
 
@@ -49,7 +49,7 @@
       <button
         type="button"
         :class="[
-          'flex items-center gap-1.5 px-2.5 h-8 text-[12px] font-medium rounded-md border transition-[background-color,color,border-color]',
+          'flex items-center gap-1.5 px-2.5 h-8 text-sm font-medium rounded-md border transition-[background-color,color,border-color]',
           groupByTask
             ? 'bg-accent-soft text-accent-soft-foreground'
             : 'border-border bg-overlay text-muted hover:text-foreground hover:border-border-secondary'
@@ -133,11 +133,11 @@
           <div v-if="groupByTask" class="flex items-center gap-2 mb-3 px-0.5">
             <button
               v-if="group.task_name"
-              class="text-[13px] font-semibold text-foreground hover:text-accent transition-colors"
+              class="text-base font-semibold text-foreground hover:text-accent transition-colors"
               @click="openTask(group.task_name)"
             >{{ group.task_title }}</button>
-            <span v-else class="text-[13px] font-semibold text-foreground">Project files</span>
-            <span class="text-[11px] text-muted font-normal">
+            <span v-else class="text-base font-semibold text-foreground">Project files</span>
+            <span class="text-xs text-muted font-normal">
               {{ group.files.length }} {{ group.files.length === 1 ? 'file' : 'files' }}
             </span>
           </div>
@@ -165,7 +165,7 @@
                 />
                 <div
                   v-else
-                  class="w-14 h-14 rounded-xl flex items-center justify-center text-[13px] font-bold"
+                  class="w-14 h-14 rounded-xl flex items-center justify-center text-base font-bold"
                   :style="fileIconStyle(f.file_name)"
                 >{{ fileIconLabel(f.file_name) }}</div>
               </div>
@@ -183,15 +183,15 @@
 
               <!-- Info -->
               <div class="px-2.5 py-2 border-t border-separator">
-                <p class="text-[12px] font-medium text-foreground truncate leading-snug" :title="f.file_name">
+                <p class="text-sm font-medium text-foreground truncate leading-snug" :title="f.file_name">
                   {{ f.file_name }}
                 </p>
                 <p
                   v-if="!groupByTask"
-                  class="text-[10.5px] text-muted mt-0.5 truncate"
+                  class="text-xs text-muted mt-0.5 truncate"
                   :title="f.task_title || 'Project file'"
                 >{{ f.task_title || 'Project file' }}</p>
-                <p class="text-[10.5px] text-muted mt-0.5 tabular-nums">{{ fmtSize(f.file_size) }}</p>
+                <p class="text-xs text-muted mt-0.5 tabular-nums">{{ fmtSize(f.file_size) }}</p>
               </div>
             </div>
           </div>
@@ -201,11 +201,11 @@
             <table class="w-full border-collapse text-sm">
               <thead>
                 <tr class="border-b border-separator bg-surface-secondary">
-                  <th class="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">File</th>
-                  <th v-if="!groupByTask" class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">Task</th>
-                  <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted hidden md:table-cell">Uploaded by</th>
-                  <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">Size</th>
-                  <th class="text-right px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted hidden sm:table-cell">Date</th>
+                  <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted">File</th>
+                  <th v-if="!groupByTask" class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">Task</th>
+                  <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted hidden md:table-cell">Uploaded by</th>
+                  <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">Size</th>
+                  <th class="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted hidden sm:table-cell">Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -220,10 +220,10 @@
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2.5">
                       <div
-                        class="w-7 h-7 rounded-md flex items-center justify-center text-[9px] font-bold shrink-0"
+                        class="w-7 h-7 rounded-md flex items-center justify-center text-micro font-bold shrink-0"
                         :style="fileIconStyle(f.file_name)"
                       >{{ fileIconLabel(f.file_name) }}</div>
-                      <span class="text-[13px] font-medium text-foreground truncate max-w-[200px]" :title="f.file_name">
+                      <span class="text-base font-medium text-foreground truncate max-w-[200px]" :title="f.file_name">
                         {{ f.file_name }}
                       </span>
                     </div>
@@ -233,25 +233,25 @@
                   <td v-if="!groupByTask" class="px-4 py-3">
                     <button
                       v-if="f.task_name"
-                      class="text-[12px] text-muted hover:text-accent transition-colors truncate max-w-[180px] text-left block"
+                      class="text-sm text-muted hover:text-accent transition-colors truncate max-w-[180px] text-left block"
                       @click.stop="openTask(f.task_name)"
                     >{{ f.task_title }}</button>
-                    <span v-else class="text-[12px] text-muted truncate max-w-[180px] block">Project file</span>
+                    <span v-else class="text-sm text-muted truncate max-w-[180px] block">Project file</span>
                   </td>
 
                   <!-- Uploaded by -->
                   <td class="px-4 py-3 hidden md:table-cell">
-                    <span class="text-[12px] text-muted">{{ f.uploaded_by_name }}</span>
+                    <span class="text-sm text-muted">{{ f.uploaded_by_name }}</span>
                   </td>
 
                   <!-- Size -->
                   <td class="px-4 py-3 text-right">
-                    <span class="text-[12px] text-muted tabular-nums">{{ fmtSize(f.file_size) }}</span>
+                    <span class="text-sm text-muted tabular-nums">{{ fmtSize(f.file_size) }}</span>
                   </td>
 
                   <!-- Date -->
                   <td class="px-5 py-3 text-right hidden sm:table-cell">
-                    <span class="text-[12px] text-muted tabular-nums">{{ fmtDate(f.creation) }}</span>
+                    <span class="text-sm text-muted tabular-nums">{{ fmtDate(f.creation) }}</span>
                   </td>
                 </tr>
               </tbody>
@@ -275,12 +275,12 @@
             <!-- Lightbox header -->
             <div class="flex items-center gap-3 px-4 py-3 border-b border-separator shrink-0">
               <div
-                class="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0"
+                class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
                 :style="fileIconStyle(preview.file_name)"
               >{{ fileIconLabel(preview.file_name) }}</div>
               <div class="flex-1 min-w-0">
-                <p class="text-[13px] font-semibold text-foreground truncate leading-none">{{ preview.file_name }}</p>
-                <p class="text-[11px] text-muted mt-0.5 leading-none">
+                <p class="text-base font-semibold text-foreground truncate leading-none">{{ preview.file_name }}</p>
+                <p class="text-xs text-muted mt-0.5 leading-none">
                   {{ fmtSize(preview.file_size) }}
                   <span v-if="preview.task_title"> ·
                     <button class="hover:text-muted transition-colors" @click="openTask(preview.task_name)">
@@ -293,7 +293,7 @@
                 :href="preview.file_url"
                 target="_blank"
                 download
-                class="flex items-center gap-1.5 px-3 h-7 text-[12px] font-medium bg-surface-secondary hover:bg-surface-hover text-muted rounded-md transition-colors"
+                class="flex items-center gap-1.5 px-3 h-7 text-sm font-medium bg-surface-secondary hover:bg-surface-hover text-muted rounded-md transition-colors"
               >
                 <Download :size="12" :stroke-width="2" />
                 Download
@@ -337,12 +337,12 @@
                   class="w-20 h-20 rounded-2xl flex items-center justify-center text-xl font-bold"
                   :style="fileIconStyle(preview.file_name)"
                 >{{ fileIconLabel(preview.file_name) }}</div>
-                <p class="text-[13px] text-muted">No preview available for this file type</p>
+                <p class="text-base text-muted">No preview available for this file type</p>
                 <a
                   :href="preview.file_url"
                   target="_blank"
                   download
-                  class="flex items-center gap-2 px-4 h-9 text-[13px] font-medium bg-foreground hover:opacity-90 text-white rounded-lg transition-colors"
+                  class="flex items-center gap-2 px-4 h-9 text-base font-medium bg-foreground hover:opacity-90 text-white rounded-lg transition-colors"
                 ><Download :size="14" :stroke-width="2" /> Download file</a>
               </div>
             </div>
@@ -655,7 +655,7 @@ function fmtDate(d) {
   border-radius: var(--radius-xl);
   background: var(--overlay);
   color: var(--accent);
-  font-size: 13px;
+  font-size:var(--text-base);
   font-weight: 600;
   box-shadow: var(--overlay-shadow);
 }

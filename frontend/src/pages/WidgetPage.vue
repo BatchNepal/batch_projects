@@ -5,11 +5,11 @@
         <Icon :icon="ArrowLeft" :size="16" />
       </button>
       <div class="min-w-0">
-        <h1 class="text-[15px] font-semibold text-[--foreground] truncate">{{ widget?.title || 'Widget' }}</h1>
-        <p v-if="widget?.description" class="text-[12px] text-[--muted] truncate">{{ widget.description }}</p>
+        <h1 class="text-md font-semibold text-[--foreground] truncate">{{ widget?.title || 'Widget' }}</h1>
+        <p v-if="widget?.description" class="text-sm text-[--muted] truncate">{{ widget.description }}</p>
       </div>
       <button
-        class="ml-auto shrink-0 h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg text-[12px] text-muted hover:text-foreground hover:bg-default transition-colors cursor-pointer outline-none"
+        class="ml-auto shrink-0 h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg text-sm text-muted hover:text-foreground hover:bg-default transition-colors cursor-pointer outline-none"
         title="Refresh"
         @click="refresh"
       >

@@ -228,7 +228,7 @@ onBeforeUnmount(() => {
 }
 .cp-swatch-empty { width: 10px; height: 10px; }
 
-.cp-trigger-label { font-size: 12px; font-weight: 500; color: var(--foreground); }
+.cp-trigger-label { font-size:var(--text-sm); font-weight: 500; color: var(--foreground); }
 
 .cp-panel { display: flex; flex-direction: column; gap: 10px; padding: 4px; width: 216px; }
 
@@ -275,11 +275,11 @@ onBeforeUnmount(() => {
 .cp-hex-dot { width: 14px; height: 14px; border-radius: 999px; flex-shrink: 0; box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent) inset; }
 .cp-hex-input {
   flex: 1; min-width: 0; height: 100%; border: none; background: none; outline: none;
-  font-size: 12.5px; font-weight: 500; font-family: var(--font-mono, monospace); color: var(--foreground);
+  font-size:var(--text-sm); font-weight: 500; font-family: var(--font-mono, monospace); color: var(--foreground);
 }
 
 .cp-clear {
-  font-size: 12px; font-weight: 500; color: var(--muted); background: none; border: none;
+  font-size:var(--text-sm); font-weight: 500; color: var(--muted); background: none; border: none;
   cursor: pointer; text-align: left; padding: 2px 0;
 }
 .cp-clear:hover { color: var(--danger); }

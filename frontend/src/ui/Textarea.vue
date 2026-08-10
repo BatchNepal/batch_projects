@@ -1,6 +1,6 @@
 <template>
   <div :class="cn('flex flex-col gap-1.5', fullWidth ? 'w-full' : 'w-fit', $attrs.class)">
-    <label v-if="label" :for="id" :class="cn('text-[13px] font-medium leading-none', isInvalid ? 'text-danger' : 'text-foreground')">
+    <label v-if="label" :for="id" :class="cn('text-base font-medium leading-none', isInvalid ? 'text-danger' : 'text-foreground')">
       {{ label }}<span v-if="isRequired" class="text-danger ml-0.5" aria-hidden="true">*</span>
     </label>
 
@@ -20,8 +20,8 @@
       />
     </div>
 
-    <p v-if="isInvalid && errorMessage" class="text-[12px] text-danger leading-snug">{{ errorMessage }}</p>
-    <p v-else-if="description" class="text-[12px] text-muted leading-snug">{{ description }}</p>
+    <p v-if="isInvalid && errorMessage" class="text-sm text-danger leading-snug">{{ errorMessage }}</p>
+    <p v-else-if="description" class="text-sm text-muted leading-snug">{{ description }}</p>
   </div>
 </template>
 

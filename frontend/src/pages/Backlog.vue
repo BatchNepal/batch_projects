@@ -715,7 +715,7 @@ function onContextMenu(e, issue) {
 </script>
 
 <style scoped>
-.bl-root { height: 100%; overflow-y: auto; padding: 20px 24px 60px; background: var(--background); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; color: var(--foreground); -webkit-font-smoothing: antialiased; }
+.bl-root { height: 100%; overflow-y: auto; padding: 20px 24px 60px; background: var(--background); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size:var(--text-base); color: var(--foreground); -webkit-font-smoothing: antialiased; }
 .bl-loading { display: flex; align-items: center; justify-content: center; height: 200px; gap: 10px; color: var(--muted); }
 
 .bl-section { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; overflow: hidden; transition: border-color .15s; }
@@ -729,33 +729,33 @@ function onContextMenu(e, issue) {
 .bl-chevron { color: var(--muted); background: none; border: none; padding: 2px; cursor: pointer; flex-shrink: 0; transition: transform .15s; display: flex; align-items: center; }
 .bl-chevron--open { transform: rotate(90deg); }
 
-.bl-sprint-badge { flex-shrink: 0; padding: 2px 7px; border-radius: 3px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.bl-sprint-badge { flex-shrink: 0; padding: 2px 7px; border-radius: 3px; font-size:var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .bl-badge-planning  { background: var(--surface-secondary); color: var(--foreground); }
 .bl-badge-active    { background: var(--success-soft); color: var(--success-soft-foreground); }
 .bl-badge-completed { background: var(--accent-soft); color: var(--accent-soft-foreground); }
 
-.bl-sprint-name { font-size: 13.5px; font-weight: 700; color: var(--foreground); background: none; border: 1px solid transparent; border-radius: 3px; padding: 2px 6px; outline: none; flex-shrink: 0; min-width: 80px; max-width: 260px; transition: border-color .1s, background .1s; }
+.bl-sprint-name { font-size:var(--text-base); font-weight: 700; color: var(--foreground); background: none; border: 1px solid transparent; border-radius: 3px; padding: 2px 6px; outline: none; flex-shrink: 0; min-width: 80px; max-width: 260px; transition: border-color .1s, background .1s; }
 .bl-sprint-name:hover { border-color: var(--border); background: var(--surface-secondary); }
 .bl-sprint-name:focus { border-color: var(--accent); background: var(--surface); }
-.bl-sprint-name-static { font-size: 13.5px; font-weight: 700; color: var(--foreground); flex-shrink: 0; }
-.bl-sprint-dates-static { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.bl-sprint-name-static { font-size:var(--text-base); font-weight: 700; color: var(--foreground); flex-shrink: 0; }
+.bl-sprint-dates-static { display: flex; align-items: center; gap: 5px; font-size:var(--text-sm); color: var(--muted); flex-shrink: 0; }
 .bl-sprint-dates { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.bl-date-sep { font-size: 11px; color: var(--muted); }
+.bl-date-sep { font-size:var(--text-xs); color: var(--muted); }
 
 .bl-progress { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
 .bl-progress-bar { width: 72px; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
 .bl-progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width .3s; }
 .bl-fill-done { background: var(--success); }
-.bl-progress-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.bl-progress-label { font-size:var(--text-xs); color: var(--muted); white-space: nowrap; }
 
 .bl-col-badge {
   flex-shrink: 0; padding: 2px 7px; border-radius: 3px;
-  font-size: 10.5px; font-weight: 600; white-space: nowrap;
+  font-size:var(--text-xs); font-weight: 600; white-space: nowrap;
   background: var(--surface-secondary); color: var(--muted);
 }
 
 .bl-col-menu-label {
-  font-size: 10px; font-weight: 700; color: var(--muted);
+  font-size:var(--text-xs); font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.06em;
   padding: 5px 11px 3px;
 }
@@ -767,10 +767,10 @@ function onContextMenu(e, issue) {
 .bl-col-check--on { background: var(--accent); border-color: var(--accent); }
 
 .bl-sprint-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
-.bl-section-title { font-size: 13.5px; font-weight: 700; color: var(--foreground); }
-.bl-count { font-size: 12px; color: var(--muted); background: var(--surface-secondary); padding: 1px 7px; border-radius: 99px; }
+.bl-section-title { font-size:var(--text-base); font-weight: 700; color: var(--foreground); }
+.bl-count { font-size:var(--text-sm); color: var(--muted); background: var(--surface-secondary); padding: 1px 7px; border-radius: 99px; }
 
-.bl-btn { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; font-size: 12px; font-weight: 600; font-family: inherit; border-radius: 3px; cursor: pointer; white-space: nowrap; transition: background .1s, border-color .1s; border: 1.5px solid transparent; text-decoration: none; }
+.bl-btn { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; font-size:var(--text-sm); font-weight: 600; font-family: inherit; border-radius: 3px; cursor: pointer; white-space: nowrap; transition: background .1s, border-color .1s; border: 1.5px solid transparent; text-decoration: none; }
 .bl-btn--primary  { color: var(--accent-foreground); background: var(--accent); border-color: var(--accent); }
 .bl-btn--primary:hover  { background: var(--accent-hover); }
 .bl-btn--primary:disabled { opacity: .5; cursor: not-allowed; }
@@ -790,28 +790,28 @@ function onContextMenu(e, issue) {
 .bl-kebab { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: none; border: 1px solid transparent; border-radius: 3px; color: var(--muted); cursor: pointer; flex-shrink: 0; transition: background .08s; }
 .bl-kebab:hover { background: var(--surface-secondary); border-color: var(--border); color: var(--foreground); }
 
-.bl-sprint-goal { display: flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 12px; color: var(--muted); font-style: italic; border-bottom: 1px solid var(--surface-secondary); }
+.bl-sprint-goal { display: flex; align-items: center; gap: 6px; padding: 7px 14px; font-size:var(--text-sm); color: var(--muted); font-style: italic; border-bottom: 1px solid var(--surface-secondary); }
 
 .bl-drop-zone { min-height: 48px; transition: background .12s; }
 .bl-drop-zone--over { background: var(--accent-soft); }
-.bl-drop-hint { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 18px; font-size: 12.5px; color: var(--muted); font-style: italic; }
+.bl-drop-hint { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 18px; font-size:var(--text-sm); color: var(--muted); font-style: italic; }
 
 /* Task row styling now lives in BacklogTaskRow.vue (extracted so the same
    row + its optional columns render consistently across all 4 sections). */
 
-.bl-add-row { display: flex; align-items: center; gap: 7px; width: 100%; padding: 8px 14px; font-size: 12.5px; font-weight: 500; font-family: inherit; color: var(--muted); background: none; border: none; border-top: 1px solid var(--surface-secondary); cursor: pointer; text-align: left; transition: color .1s, background .1s; }
+.bl-add-row { display: flex; align-items: center; gap: 7px; width: 100%; padding: 8px 14px; font-size:var(--text-sm); font-weight: 500; font-family: inherit; color: var(--muted); background: none; border: none; border-top: 1px solid var(--surface-secondary); cursor: pointer; text-align: left; transition: color .1s, background .1s; }
 .bl-add-row:hover { color: var(--accent); background: var(--accent-soft); }
 
-.bl-empty-sprint { padding: 20px 14px; text-align: center; font-size: 13px; color: var(--muted); }
+.bl-empty-sprint { padding: 20px 14px; text-align: center; font-size:var(--text-base); color: var(--muted); }
 .bl-inline-link { color: var(--accent); background: none; border: none; font: inherit; cursor: pointer; text-decoration: underline; }
 
 .bl-completed-toggle { margin: 4px 0 8px; }
-.bl-toggle-completed { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 6px; border-radius: 3px; transition: color .1s, background .1s; }
+.bl-toggle-completed { display: inline-flex; align-items: center; gap: 6px; font-size:var(--text-sm); font-weight: 600; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px 6px; border-radius: 3px; transition: color .1s, background .1s; }
 .bl-toggle-completed:hover { color: var(--foreground); background: var(--surface-secondary); }
 
 .bl-create-sprint { margin-top: 12px; }
 .bl-create-form { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-.bl-create-input { height: 34px; padding: 0 10px; width: 100%; font-size: 13px; font-family: inherit; color: var(--foreground); background: var(--surface-secondary); border: 1.5px solid var(--border); border-radius: 4px; outline: none; transition: border-color .1s, background .1s; }
+.bl-create-input { height: 34px; padding: 0 10px; width: 100%; font-size:var(--text-base); font-family: inherit; color: var(--foreground); background: var(--surface-secondary); border: 1.5px solid var(--border); border-radius: 4px; outline: none; transition: border-color .1s, background .1s; }
 .bl-create-input:focus { background: var(--surface); border-color: var(--accent); }
 .bl-create-dates { display: flex; align-items: center; gap: 8px; }
 .bl-create-actions { display: flex; align-items: center; gap: 8px; }
@@ -824,16 +824,16 @@ function onContextMenu(e, issue) {
 .bl-modal { background: var(--overlay); border-radius: 6px; width: 440px; max-width: calc(100vw - 32px); box-shadow: var(--overlay-shadow); }
 .bl-modal--sm { width: 380px; }
 .bl-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 14px; border-bottom: 1px solid var(--border); }
-.bl-modal-title { font-size: 15px; font-weight: 700; color: var(--foreground); }
+.bl-modal-title { font-size:var(--text-md); font-weight: 700; color: var(--foreground); }
 .bl-modal-body  { padding: 18px 20px; }
 .bl-modal-foot  { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); }
-.bl-modal-text  { font-size: 13.5px; color: var(--foreground); margin: 0 0 14px; line-height: 1.5; }
-.bl-modal-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
+.bl-modal-text  { font-size:var(--text-base); color: var(--foreground); margin: 0 0 14px; line-height: 1.5; }
+.bl-modal-label { font-size:var(--text-sm); font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
 .bl-radio-group { display: flex; flex-direction: column; gap: 8px; }
-.bl-radio { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--foreground); cursor: pointer; }
+.bl-radio { display: flex; align-items: center; gap: 9px; font-size:var(--text-base); color: var(--foreground); cursor: pointer; }
 .bl-radio input { accent-color: var(--accent); cursor: pointer; }
-.bl-radio-sub { font-size: 11.5px; color: var(--muted); }
-.bl-goal-textarea { width: 100%; resize: vertical; min-height: 76px; padding: 9px 10px; font-size: 13px; font-family: inherit; color: var(--foreground); background: var(--surface-secondary); border: 1.5px solid var(--border); border-radius: 4px; outline: none; line-height: 1.5; transition: border-color .1s, background .1s; }
+.bl-radio-sub { font-size:var(--text-sm); color: var(--muted); }
+.bl-goal-textarea { width: 100%; resize: vertical; min-height: 76px; padding: 9px 10px; font-size:var(--text-base); font-family: inherit; color: var(--foreground); background: var(--surface-secondary); border: 1.5px solid var(--border); border-radius: 4px; outline: none; line-height: 1.5; transition: border-color .1s, background .1s; }
 .bl-goal-textarea:focus { background: var(--surface); border-color: var(--accent); }
 
 .bl-modal-enter-active { transition: opacity .15s, transform .15s; }

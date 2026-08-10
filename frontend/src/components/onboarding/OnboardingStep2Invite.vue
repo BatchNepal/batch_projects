@@ -54,7 +54,7 @@
          "this slot is empty and that's fine" affordance. -->
     <div v-else class="ob-empty">
       <UserPlus :size="18" :stroke-width="1.5" class="text-muted-tertiary" />
-      <p class="text-[12.5px] text-muted">No invites yet — this step is optional.</p>
+      <p class="text-sm text-muted">No invites yet — this step is optional.</p>
     </div>
   </div>
 </template>

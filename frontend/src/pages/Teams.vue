@@ -5,7 +5,7 @@
       <!-- ── Header ─────────────────────────────────────────────────── -->
       <header class="flex items-center justify-between mb-6 gap-4">
         <div>
-          <h1 class="text-2xl font-bold text-foreground leading-7">Teams</h1>
+          <h1 class="text-3xl font-bold text-foreground leading-7">Teams</h1>
           <p class="mt-0.5 text-sm text-muted">
             Manage teams, members, and projects in one place.
           </p>
@@ -121,19 +121,19 @@
         <table class="w-full border-collapse text-sm">
           <thead>
             <tr class="border-b border-separator bg-surface-secondary">
-              <th class="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                 Team
               </th>
-              <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                 Members
               </th>
-              <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                 Projects
               </th>
-              <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                 Open tasks
               </th>
-              <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                 Department
               </th>
               <th class="w-24" />
@@ -150,15 +150,15 @@
               <td class="px-5 py-3.5">
                 <div class="flex items-center gap-3">
                   <div
-                    class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                    class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
                     :style="{ background: team.team_color || 'var(--accent)' }"
                   >
                     <span v-if="team.team_icon">{{ team.team_icon }}</span>
                     <span v-else>{{ (team.team_name || '').slice(0, 2).toUpperCase() }}</span>
                   </div>
                   <div>
-                    <p class="text-[13px] font-semibold text-foreground leading-none">{{ team.team_name }}</p>
-                    <p class="text-[10.5px] font-mono text-muted mt-0.5">{{ team.team_key }}</p>
+                    <p class="text-base font-semibold text-foreground leading-none">{{ team.team_name }}</p>
+                    <p class="text-xs font-mono text-muted mt-0.5">{{ team.team_key }}</p>
                   </div>
                 </div>
               </td>
@@ -176,10 +176,10 @@
                     />
                     <span
                       v-if="(team.member_count || 0) > 4"
-                      class="-ml-1.5 w-5 h-5 rounded-full bg-surface-secondary text-muted text-[8px] font-bold flex items-center justify-center ring-2 ring-overlay"
+                      class="-ml-1.5 w-5 h-5 rounded-full bg-surface-secondary text-muted text-micro font-bold flex items-center justify-center ring-2 ring-overlay"
                     >+{{ (team.member_count || 0) - 4 }}</span>
                   </div>
-                  <span class="text-[12px] text-muted tabular-nums">{{ team.member_count || 0 }}</span>
+                  <span class="text-sm text-muted tabular-nums">{{ team.member_count || 0 }}</span>
                 </div>
               </td>
 
@@ -189,21 +189,21 @@
                   <span
                     v-for="p in (team.projects || []).slice(0, 2)"
                     :key="p.name"
-                    class="inline-flex h-5 items-center px-2 rounded text-[10.5px] font-medium cursor-pointer hover:opacity-80"
+                    class="inline-flex h-5 items-center px-2 rounded text-xs font-medium cursor-pointer hover:opacity-80"
                     :style="{ background: `color-mix(in oklab, ${p.project_color || 'var(--accent)'} 9%, transparent)`, color: p.project_color || 'var(--accent)' }"
                     @click.stop="$router.push('/workspace/' + p.key + '/board')"
                   >{{ p.project_name }}</span>
                   <span
                     v-if="(team.projects || []).length > 2"
-                    class="inline-flex h-5 items-center px-1.5 rounded text-[10.5px] text-muted bg-surface-secondary"
+                    class="inline-flex h-5 items-center px-1.5 rounded text-xs text-muted bg-surface-secondary"
                   >+{{ team.projects.length - 2 }}</span>
-                  <span v-if="!(team.projects || []).length" class="text-[12px] text-muted">—</span>
+                  <span v-if="!(team.projects || []).length" class="text-sm text-muted">—</span>
                 </div>
               </td>
 
               <!-- Open tasks — the load signal the index ranks by -->
               <td class="px-4 py-3.5">
-                <span class="text-[12px] tabular-nums" :class="loadScore(team) > 8 ? 'text-danger font-semibold' : 'text-foreground'">
+                <span class="text-sm tabular-nums" :class="loadScore(team) > 8 ? 'text-danger font-semibold' : 'text-foreground'">
                   {{ team.open_task_count || 0 }}
                 </span>
               </td>
@@ -212,9 +212,9 @@
               <td class="px-4 py-3.5">
                 <span
                   v-if="team.department"
-                  class="inline-flex items-center h-5 px-2 rounded text-[11px] font-medium text-muted bg-surface-secondary"
+                  class="inline-flex items-center h-5 px-2 rounded text-xs font-medium text-muted bg-surface-secondary"
                 >{{ team.department }}</span>
-                <span v-else class="text-[12px] text-muted">—</span>
+                <span v-else class="text-sm text-muted">—</span>
               </td>
 
               <!-- Actions -->
@@ -274,11 +274,11 @@
                 :style="{ background: team.team_color || 'var(--accent)' }"
               >
                 <span v-if="team.team_icon" class="text-base leading-none">{{ team.team_icon }}</span>
-                <span v-else class="text-[11px] font-bold">{{ (team.team_name || '').slice(0, 2).toUpperCase() }}</span>
+                <span v-else class="text-xs font-bold">{{ (team.team_name || '').slice(0, 2).toUpperCase() }}</span>
               </div>
               <div class="flex-1 min-w-0">
-                <p class="text-[13.5px] font-semibold text-foreground truncate leading-none">{{ team.team_name }}</p>
-                <p class="text-[10.5px] font-mono text-muted mt-0.5">{{ team.team_key }}</p>
+                <p class="text-base font-semibold text-foreground truncate leading-none">{{ team.team_name }}</p>
+                <p class="text-xs font-mono text-muted mt-0.5">{{ team.team_key }}</p>
               </div>
               <div class="relative shrink-0" data-team-ctx>
                 <button
@@ -315,12 +315,12 @@
             </div>
 
             <!-- Description -->
-            <p v-if="team.description" class="text-[12px] text-muted leading-relaxed mb-3 line-clamp-2">
+            <p v-if="team.description" class="text-sm text-muted leading-relaxed mb-3 line-clamp-2">
               {{ team.description }}
             </p>
 
             <!-- Stats row -->
-            <div class="flex items-center gap-3 text-[12px] text-muted mb-3">
+            <div class="flex items-center gap-3 text-sm text-muted mb-3">
               <span>
                 <strong class="text-foreground font-semibold">{{ team.project_count || 0 }}</strong>
                 project{{ (team.project_count || 0) !== 1 ? 's' : '' }}
@@ -335,7 +335,7 @@
                 <strong :class="loadScore(team) > 8 ? 'text-danger' : 'text-foreground'" class="font-semibold">{{ team.open_task_count || 0 }}</strong>
                 open
               </span>
-              <span v-if="team.department" class="ml-auto inline-flex h-5 items-center px-2 rounded bg-surface-secondary text-[10.5px] font-medium text-muted">
+              <span v-if="team.department" class="ml-auto inline-flex h-5 items-center px-2 rounded bg-surface-secondary text-xs font-medium text-muted">
                 {{ team.department }}
               </span>
             </div>
@@ -351,7 +351,7 @@
               />
               <span
                 v-if="(team.members || []).length > 5"
-                class="-ml-2 w-7 h-7 rounded-full bg-surface-secondary text-muted text-[10px] font-bold flex items-center justify-center ring-2 ring-overlay"
+                class="-ml-2 w-7 h-7 rounded-full bg-surface-secondary text-muted text-xs font-bold flex items-center justify-center ring-2 ring-overlay"
               >+{{ team.members.length - 5 }}</span>
             </div>
 
@@ -360,13 +360,13 @@
               <span
                 v-for="p in (team.projects || []).slice(0, 3)"
                 :key="p.name"
-                class="inline-flex h-5 items-center px-2 rounded text-[10.5px] font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                class="inline-flex h-5 items-center px-2 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
                 :style="{ background: `color-mix(in oklab, ${p.project_color || 'var(--accent)'} 9%, transparent)`, color: p.project_color || 'var(--accent)' }"
                 @click.stop="$router.push('/workspace/' + p.key + '/board')"
               >{{ p.project_name }}</span>
               <span
                 v-if="(team.projects || []).length > 3"
-                class="inline-flex h-5 items-center px-1.5 rounded text-[10.5px] text-muted bg-surface-secondary"
+                class="inline-flex h-5 items-center px-1.5 rounded text-xs text-muted bg-surface-secondary"
               >+{{ team.projects.length - 3 }}</span>
             </div>
           </div>
@@ -479,7 +479,7 @@ onMounted(load)
   width: 100%;
   padding: 5px 8px;
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   font-weight: 500;
   color: var(--foreground);
   text-align: left;

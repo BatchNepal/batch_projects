@@ -32,7 +32,7 @@
           <div class="flex items-center gap-2 mb-2">
             <span class="jv-section-title" style="margin-bottom:0">Start from template</span>
             <span v-if="!templatesUnlocked"
-              class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
+              class="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded
                      bg-[var(--surface-secondary)] text-muted uppercase tracking-wider">
               <Icon :icon="Lock" class="size-3" /> {{ templatesRequiredPlan }}
             </span>
@@ -106,7 +106,7 @@
         </div>
 <!-- Attachments -->
     <div style="padding-top: 20px; background:var(--overlay);">
-      <div class="jv-section-title" style="font-weight:600;color:var(--foreground);font-size:13px;margin-bottom:8px;border:none;padding-bottom:0;text-transform:none;letter-spacing:normal;">Attachments</div>
+      <div class="jv-section-title" style="font-weight:600;color:var(--foreground);font-size:var(--text-base);margin-bottom:8px;border:none;padding-bottom:0;text-transform:none;letter-spacing:normal;">Attachments</div>
       <TaskAttachments
         :modelValue="pendingAttachments"
         :issue-name="null"
@@ -728,7 +728,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideParent))
 /* Inherit all jv-* base styles inline — exact copy from TaskDetail */
 .jv-root {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  font-size: 14px; color: var(--foreground); -webkit-font-smoothing: antialiased;
+  font-size:var(--text-md); color: var(--foreground); -webkit-font-smoothing: antialiased;
 }
 .jv-backdrop {
   position: fixed; inset: 0; z-index: 48;
@@ -750,9 +750,9 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideParent))
 /* Header */
 .jv-header { display: flex; align-items: center; justify-content: space-between; height: 50px; padding: 0 16px; background: var(--overlay); border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .jv-crumb { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
-.jv-crumb-project { font-size: 13px; font-weight: 500; color: var(--muted); }
-.jv-crumb-sep { color: var(--border); font-size: 14px; }
-.jv-crumb-key { font-size: 13px; font-weight: 500; color: var(--foreground); }
+.jv-crumb-project { font-size:var(--text-base); font-weight: 500; color: var(--muted); }
+.jv-crumb-sep { color: var(--border); font-size:var(--text-md); }
+.jv-crumb-key { font-size:var(--text-base); font-weight: 500; color: var(--foreground); }
 .jv-header-actions { display: flex; align-items: center; gap: 4px; }
 .jv-hbtn { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: none; background: none; cursor: pointer; color: var(--muted); border-radius: 6px; transition: background 0.1s, color 0.1s; }
 .jv-hbtn:hover { background: var(--surface-secondary); color: var(--foreground); }
@@ -766,13 +766,13 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideParent))
 .jv-main { overflow-y: auto; padding: 20px 24px 48px; background: var(--overlay); border-right: 1px solid var(--border); scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 .jv-title-block { margin-bottom: 16px; }
 .jv-type-row { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
-.jv-type-badge { width: 14px; height: 14px; border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent-foreground); font-size: 7px; font-weight: 700; flex-shrink: 0; }
-.jv-type-label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.jv-type-badge { width: 14px; height: 14px; border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent-foreground); font-size:var(--text-micro); font-weight: 700; flex-shrink: 0; }
+.jv-type-label { font-size:var(--text-xs); font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .jv-team-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
 /* Title as textarea */
 .jv-title--input {
-  width: 100%; font-size: 15px; font-weight: 600; color: var(--foreground);
+  width: 100%; font-size:var(--text-md); font-weight: 600; color: var(--foreground);
   letter-spacing: -0.02em; line-height: 1.35;
   background: var(--surface-secondary); border: none;
   outline: none; resize: none; overflow: hidden;
@@ -784,12 +784,12 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideParent))
 
 /* Section */
 .jv-section { margin-bottom: 24px; }
-.jv-section-title { font-size: 13px; font-weight: 600; color: var(--foreground); margin-bottom: 8px; }
+.jv-section-title { font-size:var(--text-base); font-weight: 600; color: var(--foreground); margin-bottom: 8px; }
 .jv-desc-wrap { min-height: 40px; padding: 10px 12px; border-radius: 6px; background: var(--surface-secondary); cursor: text; transition: background 0.1s; border: none; }
 .jv-desc-wrap:hover { background: var(--border); }
 .jv-desc-wrap:has(.ql-editor) { background: transparent; cursor: default; padding: 0; }
-.jv-desc-placeholder { font-size: 14px; color: var(--muted); }
-.jv-desc-preview { font-size: 14px; color: var(--foreground); line-height: 1.6; }
+.jv-desc-placeholder { font-size:var(--text-md); color: var(--muted); }
+.jv-desc-preview { font-size:var(--text-md); color: var(--foreground); line-height: 1.6; }
 .jv-desc-preview :deep(p) { margin: 0 0 8px; }
 .jv-desc-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
@@ -797,27 +797,27 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideParent))
 .jv-add-row--link { background: var(--surface-secondary); }
 .jv-add-row--link:hover { background: var(--border); }
 .jv-add-row--link:focus-within { background: var(--border); }
-.jv-add-input { flex: 1; min-width: 160px; font-size: 13px; font-family: inherit; color: var(--foreground); background: transparent; border: none; outline: none; }
+.jv-add-input { flex: 1; min-width: 160px; font-size:var(--text-base); font-family: inherit; color: var(--foreground); background: transparent; border: none; outline: none; }
 .jv-add-input::placeholder { color: var(--muted); }
-.jv-parent-resolved { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--success); margin-top: 6px; font-weight: 500; }
+.jv-parent-resolved { display: flex; align-items: center; gap: 5px; font-size:var(--text-sm); color: var(--success); margin-top: 6px; font-weight: 500; }
 
 /* Sidebar */
 .jv-sidebar { background: var(--overlay); overflow-y: auto; padding: 0 0 32px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; display: flex; flex-direction: column; }
 .jv-sb-field { padding: 9px 16px; border: none; }
 .jv-sb-field--status { padding-top: 12px; }
-.jv-sb-label { font-size: 12px; font-weight: 500; color: var(--foreground); margin-bottom: 6px; }
+.jv-sb-label { font-size:var(--text-sm); font-weight: 500; color: var(--foreground); margin-bottom: 6px; }
 .jv-sb-val { display: flex; flex-direction: column; }
 .jv-sb-val--date { display: flex; width: 100%; }
 .jv-sb-pill-wrap { display: block; width: 100%; }
 .jv-sb-pill-wrap :deep(.relative) { display: block !important; width: 100% !important; }
 .jv-sb-pill-wrap :deep(.relative > div) { display: block !important; width: 100% !important; }
-.jv-sb-inline-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 0 10px; height: 34px; font-size: 13px; font-family: 'Inter', sans-serif; font-weight: 500; color: var(--foreground); background: var(--surface-secondary); border: none; border-radius: 6px; cursor: pointer; text-align: left; transition: background 0.15s; outline: none; }
+.jv-sb-inline-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 0 10px; height: 34px; font-size:var(--text-base); font-family: 'Inter', sans-serif; font-weight: 500; color: var(--foreground); background: var(--surface-secondary); border: none; border-radius: 6px; cursor: pointer; text-align: left; transition: background 0.15s; outline: none; }
 .jv-sb-inline-btn:hover { background: var(--surface-secondary); }
 .jv-sb-inline-btn-content { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .jv-sb-inline-btn-chevron { width: 13px; height: 13px; flex-shrink: 0; opacity: 0.35; color: var(--muted); transition: opacity 0.15s; }
 .jv-sb-inline-btn:hover .jv-sb-inline-btn-chevron { opacity: 0.7; }
-.jv-sb-unset { color: var(--muted); font-size: 13px; font-weight: 400; }
-.jv-status-btn { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 11px; min-height: 32px; font-size: 11.5px; font-weight: 700; font-family: inherit; border: 1px solid; border-radius: 4px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em; transition: opacity 0.1s; }
+.jv-sb-unset { color: var(--muted); font-size:var(--text-base); font-weight: 400; }
+.jv-status-btn { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 11px; min-height: 32px; font-size:var(--text-sm); font-weight: 700; font-family: inherit; border: 1px solid; border-radius: 4px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em; transition: opacity 0.1s; }
 .jv-status-btn:hover { opacity: 0.9; }
 .jv-status-btn svg { margin-left: auto; opacity: 0.6; }
 .jv-status-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
@@ -825,33 +825,33 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideParent))
 .jv-av-stack { display: flex; align-items: center; flex-shrink: 0; }
 .jv-av-stacked { border: 1.5px solid var(--surface); margin-left: -5px; }
 .jv-av-stacked:first-child { margin-left: 0; }
-.jv-av-trigger-label { font-size: 13px; color: var(--foreground); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.jv-av-extra { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+.jv-av-trigger-label { font-size:var(--text-base); color: var(--foreground); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jv-av-extra { font-size:var(--text-xs); color: var(--muted); font-weight: 400; margin-left: 2px; }
 .jv-av { display: inline-flex; align-items: center; justify-content: center; color: var(--accent-foreground); font-weight: 600; border-radius: 50%; flex-shrink: 0; }
-.jv-av-sm { width: 22px; height: 22px; font-size: 10px; }
+.jv-av-sm { width: 22px; height: 22px; font-size:var(--text-xs); }
 .jv-av-empty { width: 18px; height: 18px; border-radius: 50%; border: 2px dashed var(--border); flex-shrink: 0; }
 .jv-labels-wrap { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.jv-lbl-tag { display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid; border-radius: 6px; font-size: 12px; font-weight: 500; }
+.jv-lbl-tag { display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid; border-radius: 6px; font-size:var(--text-sm); font-weight: 500; }
 .jv-lbl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.jv-add-label-btn { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; font-size: 11.5px; font-family: inherit; color: var(--muted); background: transparent; border: 1px dashed var(--border); border-radius: 6px; cursor: pointer; transition: background 0.1s; }
+.jv-add-label-btn { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; font-size:var(--text-sm); font-family: inherit; color: var(--muted); background: transparent; border: 1px dashed var(--border); border-radius: 6px; cursor: pointer; transition: background 0.1s; }
 .jv-add-label-btn:hover { background: var(--surface-secondary); }
 .jv-dd-search { padding: 8px 11px; border-bottom: 1px solid var(--border); }
-.jv-dd-input { width: 100%; font-size: 13px; font-family: inherit; color: var(--foreground); background: transparent; border: none; outline: none; }
+.jv-dd-input { width: 100%; font-size:var(--text-base); font-family: inherit; color: var(--foreground); background: transparent; border: none; outline: none; }
 .jv-dd-input::placeholder { color: var(--muted); }
 .jv-dd-sep { height: 1px; background: var(--border); margin: 4px 8px; }
-.jv-dd-empty { padding: 8px 12px; font-size: 13px; color: var(--muted); text-align: center; }
+.jv-dd-empty { padding: 8px 12px; font-size:var(--text-base); color: var(--muted); text-align: center; }
 
 /* On-spot creation */
 .jv-inline-create { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
-.jv-ic-input { width: 100%; height: 32px; padding: 0 10px; font-size: 13px; font-family: inherit; color: var(--foreground); background: transparent; border: 1px solid var(--border); border-radius: 6px; outline: none; transition: border-color 0.1s; }
+.jv-ic-input { width: 100%; height: 32px; padding: 0 10px; font-size:var(--text-base); font-family: inherit; color: var(--foreground); background: transparent; border: 1px solid var(--border); border-radius: 6px; outline: none; transition: border-color 0.1s; }
 .jv-ic-input:focus { background: var(--surface); border-color: var(--muted); }
 .jv-ic-colors { display: flex; gap: 6px; flex-wrap: wrap; }
 .jv-ic-swatch { width: 18px; height: 18px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: transform .1s; }
 .jv-ic-swatch:hover { transform: scale(1.15); }
 .jv-ic-swatch.active { border-color: var(--foreground); }
 .jv-ic-row { display: flex; align-items: center; gap: 6px; }
-.jv-ic-select { flex: 1; height: 32px; padding: 0 8px; font-size: 13px; font-family: inherit; background: transparent; border: 1px solid var(--border); border-radius: 6px; outline: none; }
-.jv-ic-save { height: 30px; padding: 0 12px; font-size: 12px; font-weight: 500; font-family: inherit; color: var(--background); background: var(--foreground); border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.1s; }
+.jv-ic-select { flex: 1; height: 32px; padding: 0 8px; font-size:var(--text-base); font-family: inherit; background: transparent; border: 1px solid var(--border); border-radius: 6px; outline: none; }
+.jv-ic-save { height: 30px; padding: 0 12px; font-size:var(--text-sm); font-weight: 500; font-family: inherit; color: var(--background); background: var(--foreground); border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.1s; }
 .jv-ic-save:hover { opacity: 0.85; }
 .jv-ic-save:disabled { opacity: .45; cursor: not-allowed; }
 
@@ -863,21 +863,21 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideParent))
   background: var(--surface-secondary);
   flex-shrink: 0;
 }
-.jv-btn-save { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; font-size: 13px; font-weight: 500; font-family: inherit; background: var(--accent); color: var(--accent-foreground); border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.1s; }
+.jv-btn-save { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; font-size:var(--text-base); font-weight: 500; font-family: inherit; background: var(--accent); color: var(--accent-foreground); border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.1s; }
 .jv-btn-save:hover { opacity: 0.85; background: var(--accent); }
 .jv-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
-.jv-btn-cancel { display: inline-flex; align-items: center; height: 36px; padding: 0 16px; font-size: 13px; font-weight: 500; font-family: inherit; background: transparent; color: var(--foreground); border: none; border-radius: 6px; cursor: pointer; transition: background 0.1s; }
+.jv-btn-cancel { display: inline-flex; align-items: center; height: 36px; padding: 0 16px; font-size:var(--text-base); font-weight: 500; font-family: inherit; background: transparent; color: var(--foreground); border: none; border-radius: 6px; cursor: pointer; transition: background 0.1s; }
 .jv-btn-cancel:hover { background: var(--surface-secondary); }
 
 /* Parent issue */
 .jv-parent-chip { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; background: var(--surface-secondary); border: none; border-radius: 6px; }
-.jv-parent-chip-title { font-size: 12.5px; color: var(--foreground); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-parent-chip-title { font-size:var(--text-sm); color: var(--foreground); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jv-parent-results { border: 1px solid var(--border); border-radius: 8px; background: var(--overlay); overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,.08); margin-top: 4px; }
 .jv-parent-result { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; transition: background .08s; }
 .jv-parent-result:hover { background: var(--surface-secondary); }
-.jv-parent-result-title { flex: 1; font-size: 13px; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.jv-parent-empty { padding: 10px 12px; font-size: 13px; color: var(--muted); }
-.jv-st-key { font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; font-family: monospace; }
-.jv-st-status { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.jv-parent-result-title { flex: 1; font-size:var(--text-base); color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-parent-empty { padding: 10px 12px; font-size:var(--text-base); color: var(--muted); }
+.jv-st-key { font-size:var(--text-sm); font-weight: 500; color: var(--muted); white-space: nowrap; font-family: monospace; }
+.jv-st-status { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 4px; font-size:var(--text-xs); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 
 </style>

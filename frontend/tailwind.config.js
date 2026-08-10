@@ -13,15 +13,22 @@ export default {
         mono: ["JetBrains Mono", "Fira Code", "ui-monospace", "monospace"],
       },
       borderWidth: { DEFAULT: 'var(--border-width)' },
+      /* Mirrors tokens.css --text-* exactly (see the law note there):
+         11 · 12.5 · 13 · 14 · 16+. `sm` moved 12 -> 12.5 so Tailwind's
+         text-sm and the design law's "secondary" step are the same thing
+         instead of two sizes half a pixel apart. */
       fontSize: {
-        xs:    ["0.6875rem", { lineHeight: "1.2" }],
-        sm:    ["0.75rem",   { lineHeight: "1.35" }],
+        xs:    ["0.6875rem",  { lineHeight: "1.2" }],
+        sm:    ["0.78125rem", { lineHeight: "1.35" }],
         base:  ["0.8125rem", { lineHeight: "1.5" }],
         md:    ["0.875rem",  { lineHeight: "1.5" }],
         lg:    ["0.9375rem", { lineHeight: "1.5" }],
         xl:    ["1rem",      { lineHeight: "1.4" }],
         "2xl": ["1.125rem",  { lineHeight: "1.35" }],
         "3xl": ["1.25rem",   { lineHeight: "1.25" }],
+        /* Closed data tiers — see tokens.css. */
+        micro:  ["0.5625rem", { lineHeight: "1" }],
+        metric: ["1.75rem",   { lineHeight: "1" }],
       },
 
       /* All colors reference CSS vars — OKLCH values live in tokens.css */

@@ -62,22 +62,22 @@
           <table class="w-full border-collapse text-sm">
             <thead>
               <tr class="border-b border-separator bg-surface-secondary">
-                <th class="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Person
                 </th>
-                <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Role
                 </th>
-                <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Active Projects
                 </th>
-                <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   This Week
                 </th>
-                <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Util (30D)
                 </th>
-                <th class="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted w-44">
+                <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted w-44">
                   <!-- bar -->
                 </th>
               </tr>
@@ -102,16 +102,16 @@
                         style="border: 1.5px solid var(--surface)" />
                     </span>
                     <div class="min-w-0 flex-1">
-                      <p class="text-[13px] font-medium text-foreground truncate leading-none">
+                      <p class="text-base font-medium text-foreground truncate leading-none">
                         {{ p.full_name }}
                       </p>
-                      <p class="text-[10.5px] text-muted mt-0.5 leading-none truncate">
+                      <p class="text-xs text-muted mt-0.5 leading-none truncate">
                         {{ p.user }}
                       </p>
                     </div>
                     <button
                       v-if="p.projects.length"
-                      class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 inline-flex items-center gap-1 h-6 px-2 text-[11px] font-medium text-muted bg-default hover:bg-default hover:text-foreground rounded-md"
+                      class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 inline-flex items-center gap-1 h-6 px-2 text-xs font-medium text-muted bg-default hover:bg-default hover:text-foreground rounded-md"
                       @click.stop="openFirstProject(p)">
                       Tasks
                       <svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
@@ -122,14 +122,14 @@
                 <!-- Role / Designation -->
                 <td class="px-4 py-3">
                   <div v-if="p.designation || p.department" class="min-w-0">
-                    <p v-if="p.designation" class="text-[13px] text-foreground truncate leading-none">
+                    <p v-if="p.designation" class="text-base text-foreground truncate leading-none">
                       {{ p.designation }}
                     </p>
-                    <p v-if="p.department" class="text-[10.5px] text-muted mt-0.5 leading-none truncate">
+                    <p v-if="p.department" class="text-xs text-muted mt-0.5 leading-none truncate">
                       {{ p.department }}
                     </p>
                   </div>
-                  <span v-else class="text-[13px] text-muted">—</span>
+                  <span v-else class="text-base text-muted">—</span>
                 </td>
 
                 <!-- Active Projects -->
@@ -138,7 +138,7 @@
                     <span
                       v-for="proj in p.projects.slice(0, 3)"
                       :key="proj.name"
-                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-default text-muted"
+                      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-default text-muted"
                     >
                       <span
                         class="w-1.5 h-1.5 rounded-full shrink-0"
@@ -148,26 +148,26 @@
                     </span>
                     <span
                       v-if="p.projects.length > 3"
-                      class="px-1.5 py-0.5 text-[11px] text-muted"
+                      class="px-1.5 py-0.5 text-xs text-muted"
                     >
                       +{{ p.projects.length - 3 }}
                     </span>
                   </div>
-                  <span v-else class="text-[13px] text-muted">—</span>
+                  <span v-else class="text-base text-muted">—</span>
                 </td>
 
                 <!-- This Week allocation -->
                 <td class="px-4 py-3 text-right">
-                  <span class="text-[13px] font-medium tabular-nums text-foreground">
+                  <span class="text-base font-medium tabular-nums text-foreground">
                     {{ p.week_allocation }}h
                   </span>
-                  <span class="text-[11px] text-muted ml-1">/ {{ p.week_capacity }}h</span>
+                  <span class="text-xs text-muted ml-1">/ {{ p.week_capacity }}h</span>
                 </td>
 
                 <!-- Util % -->
                 <td class="px-4 py-3 text-right">
                   <span
-                    class="text-[13px] font-semibold tabular-nums"
+                    class="text-base font-semibold tabular-nums"
                     :class="utilColor(p.utilization_pct)"
                   >
                     {{ p.utilization_pct }}%
@@ -183,7 +183,7 @@
                       :style="{ width: Math.min(p.utilization_pct, 100) + '%' }"
                     />
                   </div>
-                  <p class="text-[10px] text-muted mt-0.5 tabular-nums text-right">
+                  <p class="text-xs text-muted mt-0.5 tabular-nums text-right">
                     {{ Math.min(p.utilization_pct, 100) }}% of capacity
                   </p>
                 </td>
@@ -193,16 +193,16 @@
 
           <!-- Footer legend -->
           <div class="flex items-center gap-4 px-5 py-3 border-t border-separator bg-surface-secondary">
-            <div class="flex items-center gap-1.5 text-[11px] text-muted">
+            <div class="flex items-center gap-1.5 text-xs text-muted">
               <span class="w-3 h-1.5 rounded-full bg-accent" />Under 70%
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] text-muted">
+            <div class="flex items-center gap-1.5 text-xs text-muted">
               <span class="w-3 h-1.5 rounded-full bg-success" />Healthy 70–95%
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] text-muted">
+            <div class="flex items-center gap-1.5 text-xs text-muted">
               <span class="w-3 h-1.5 rounded-full bg-warning" />At capacity 95–110%
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] text-muted">
+            <div class="flex items-center gap-1.5 text-xs text-muted">
               <span class="w-3 h-1.5 rounded-full bg-danger" />Overloaded
             </div>
           </div>

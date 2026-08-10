@@ -40,23 +40,23 @@
 
       <!-- ── Legend ────────────────────────────────────────────────── -->
       <div class="flex items-center gap-4 mb-4">
-        <div class="flex items-center gap-1.5 text-[11px] text-muted">
+        <div class="flex items-center gap-1.5 text-xs text-muted">
           <span class="w-3 h-3 rounded-sm bg-surface-secondary border border-border" />
           No tasks
         </div>
-        <div class="flex items-center gap-1.5 text-[11px] text-muted">
+        <div class="flex items-center gap-1.5 text-xs text-muted">
           <span class="w-3 h-3 rounded-sm bg-accent-soft border border-accent" />
           Under &lt;70%
         </div>
-        <div class="flex items-center gap-1.5 text-[11px] text-muted">
+        <div class="flex items-center gap-1.5 text-xs text-muted">
           <span class="w-3 h-3 rounded-sm bg-success-soft border border-success" />
           Healthy 70–95%
         </div>
-        <div class="flex items-center gap-1.5 text-[11px] text-muted">
+        <div class="flex items-center gap-1.5 text-xs text-muted">
           <span class="w-3 h-3 rounded-sm bg-warning-soft border border-warning" />
           At capacity 95–110%
         </div>
-        <div class="flex items-center gap-1.5 text-[11px] text-muted">
+        <div class="flex items-center gap-1.5 text-xs text-muted">
           <span class="w-3 h-3 rounded-sm bg-danger-soft border border-danger" />
           Overloaded &gt;110%
         </div>
@@ -82,7 +82,7 @@
         <!-- No allocation callout (members exist but 0 tasks with hours) -->
         <div
           v-if="noAllocationData"
-          class="flex items-start gap-3 mb-4 px-4 py-3 rounded-md bg-warning-soft border border-warning text-warning-soft-foreground text-[13px]"
+          class="flex items-start gap-3 mb-4 px-4 py-3 rounded-md bg-warning-soft border border-warning text-warning-soft-foreground text-base"
         >
           <span class="text-warning mt-0.5 shrink-0">⚠</span>
           <span>
@@ -99,17 +99,17 @@
             <thead>
               <tr class="border-b border-separator bg-surface-secondary">
                 <th
-                  class="sticky left-0 z-10 bg-surface-secondary text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted w-52 min-w-52"
+                  class="sticky left-0 z-10 bg-surface-secondary text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted w-52 min-w-52"
                 >
                   Member
                 </th>
                 <th
                   v-for="(wb, wi) in weekBuckets" :key="wi"
-                  class="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted min-w-[120px]"
+                  class="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted min-w-[120px]"
                 >
                   {{ wb.label }}
                 </th>
-                <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted min-w-[80px]">
+                <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted min-w-[80px]">
                   Total
                 </th>
               </tr>
@@ -129,10 +129,10 @@
                       size="sm"
                     />
                     <div class="min-w-0">
-                      <p class="text-[13px] font-medium text-foreground truncate leading-none">
+                      <p class="text-base font-medium text-foreground truncate leading-none">
                         {{ m.full_name }}
                       </p>
-                      <p class="text-[10.5px] text-muted mt-0.5 leading-none truncate">
+                      <p class="text-xs text-muted mt-0.5 leading-none truncate">
                         {{ m.user }}
                       </p>
                     </div>
@@ -153,11 +153,11 @@
                     <!-- Hours — always shown; grey when 0 -->
                     <p
                       :class="wk.allocated > 0 ? cellText(wk.load_pct) : 'text-muted'"
-                      class="text-[13px] font-semibold tabular-nums leading-none"
+                      class="text-base font-semibold tabular-nums leading-none"
                     >
                       {{ wk.allocated > 0 ? wk.allocated + 'h' : '0h' }}
                     </p>
-                    <p class="text-[10.5px] text-muted mt-0.5 leading-none">
+                    <p class="text-xs text-muted mt-0.5 leading-none">
                       / {{ wk.capacity }}h
                     </p>
                     <!-- Project color dots (up to 4 distinct projects) -->
@@ -182,10 +182,10 @@
 
                 <!-- Total -->
                 <td class="px-4 py-3 text-right">
-                  <p class="text-[13px] font-semibold tabular-nums text-muted">
+                  <p class="text-base font-semibold tabular-nums text-muted">
                     {{ m.total_allocated }}h
                   </p>
-                  <p class="text-[10.5px] text-muted mt-0.5">
+                  <p class="text-xs text-muted mt-0.5">
                     / {{ m.total_capacity }}h
                   </p>
                 </td>
@@ -219,10 +219,10 @@
               size="sm"
             />
             <div class="flex-1 min-w-0">
-              <p class="text-[13px] font-semibold text-foreground leading-none truncate">
+              <p class="text-base font-semibold text-foreground leading-none truncate">
                 {{ drawer.member?.full_name }}
               </p>
-              <p class="text-[11px] text-muted mt-0.5 leading-none">
+              <p class="text-xs text-muted mt-0.5 leading-none">
                 {{ weekBuckets[drawer.weekIndex]?.label }}
                 — {{ drawerWeek?.allocated || 0 }}h / {{ drawerWeek?.capacity || 40 }}h
               </p>
@@ -249,7 +249,7 @@
                     class="w-2.5 h-2.5 rounded-full shrink-0"
                     :style="{ background: grp.color || '#888' }"
                   />
-                  <p class="text-[11px] font-semibold uppercase tracking-wider text-muted truncate">
+                  <p class="text-xs font-semibold uppercase tracking-wider text-muted truncate">
                     {{ grp.title }}
                   </p>
                 </div>
@@ -261,17 +261,17 @@
                     @click="openTask(t)"
                   >
                     <div class="flex-1 min-w-0">
-                      <p class="text-[13px] font-medium text-foreground truncate leading-snug group-hover:text-foreground">
+                      <p class="text-base font-medium text-foreground truncate leading-snug group-hover:text-foreground">
                         {{ t.title || t.name }}
                       </p>
                       <div class="flex items-center gap-2 mt-1">
                         <span
                           v-if="t.due_date"
-                          class="text-[11px] text-muted"
+                          class="text-xs text-muted"
                         >Due {{ formatDate(t.due_date) }}</span>
                         <span
                           v-if="t.estimated_hours"
-                          class="text-[11px] tabular-nums text-muted"
+                          class="text-xs tabular-nums text-muted"
                         >{{ t.estimated_hours }}h est.</span>
                       </div>
                     </div>

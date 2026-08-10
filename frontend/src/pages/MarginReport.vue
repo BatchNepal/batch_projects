@@ -5,7 +5,7 @@
       <!-- Header -->
       <header class="flex items-center justify-between mb-6 gap-4">
         <div>
-          <h1 class="text-[15px] font-semibold text-foreground leading-6">Margin Report</h1>
+          <h1 class="text-md font-semibold text-foreground leading-6">Margin Report</h1>
           <p class="mt-0.5 text-base text-muted">
             Revenue vs cost — {{ fromLabel }} to {{ toLabel }}
           </p>
@@ -253,7 +253,7 @@ onMounted(load)
 
 <style scoped>
 .rp-seg { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
-.rp-seg-btn { height: 28px; padding: 0 11px; font-size: 12px; font-weight: 500; color: var(--muted); background: transparent; cursor: pointer; transition: all .12s; white-space: nowrap; }
+.rp-seg-btn { height: 28px; padding: 0 11px; font-size:var(--text-sm); font-weight: 500; color: var(--muted); background: transparent; cursor: pointer; transition: all .12s; white-space: nowrap; }
 .rp-seg-btn.on { background: var(--surface-secondary); color: var(--foreground); font-weight: 600; }
 .rp-seg-btn + .rp-seg-btn { border-left: 1px solid var(--border); }
 </style>

@@ -231,7 +231,7 @@ function setValue(i, v) { rows.value[i].value = v; emitRows() }
 .fb-value { flex: 1.2; min-width: 0; }
 
 .fb-range { display: flex; align-items: center; gap: 4px; }
-.fb-range-sep { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.fb-range-sep { font-size:var(--text-xs); color: var(--muted); flex-shrink: 0; }
 
 .fb-remove {
   flex-shrink: 0; width: 28px; height: 28px; border-radius: 6px;
@@ -241,7 +241,7 @@ function setValue(i, v) { rows.value[i].value = v; emitRows() }
 .fb-remove:hover { background: var(--surface-secondary); color: var(--danger); }
 .fb-add {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 600; color: var(--accent); padding: 4px 2px;
+  font-size:var(--text-sm); font-weight: 600; color: var(--accent); padding: 4px 2px;
 }
 .fb-add:hover { opacity: 0.8; }
 </style>

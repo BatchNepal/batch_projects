@@ -281,9 +281,9 @@ defineExpose({ load })
 /* header */
 .qw-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-shrink: 0; }
 .qw-meta { min-width: 0; }
-.qw-title { font-size: 13px; font-weight: 600; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qw-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.qw-err-sub { font-size: 11px; color: var(--danger); margin-top: 2px; }
+.qw-title { font-size:var(--text-base); font-weight: 600; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qw-sub { font-size:var(--text-xs); color: var(--muted); margin-top: 2px; }
+.qw-err-sub { font-size:var(--text-xs); color: var(--danger); margin-top: 2px; }
 .qw-btn {
   width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
   color: var(--muted); border: 1px solid transparent; background: transparent;
@@ -295,21 +295,21 @@ defineExpose({ load })
 /* editor */
 .qw-editor-wrap { flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface-secondary); }
 .qw-editor {
-  width: 100%; display: block; padding: 8px 10px; font-size: 12px; font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  width: 100%; display: block; padding: 8px 10px; font-size:var(--text-sm); font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
   line-height: 1.6; color: var(--foreground); background: transparent; border: none; resize: none; outline: none;
 }
 .qw-editor-foot { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-top: 1px solid var(--border); background: var(--surface-secondary); }
-.qw-hint { font-size: 11px; color: var(--muted); }
+.qw-hint { font-size:var(--text-xs); color: var(--muted); }
 .qw-run-btn {
-  height: 26px; padding: 0 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+  height: 26px; padding: 0 12px; border-radius: 6px; font-size:var(--text-sm); font-weight: 600;
   background: var(--accent); color: var(--accent-foreground); border: none; cursor: pointer; transition: opacity .12s;
 }
 .qw-run-btn:hover { opacity: .88; }
 .qw-run-btn:disabled { opacity: .45; cursor: not-allowed; }
 .qw-examples { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 10px 8px; }
-.qw-ex-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.qw-ex-label { font-size:var(--text-xs); color: var(--muted); white-space: nowrap; }
 .qw-ex-pill {
-  font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);
+  font-size:var(--text-xs); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);
   background: var(--surface); color: var(--muted); cursor: pointer; white-space: nowrap; transition: all .1s;
 }
 .qw-ex-pill:hover { background: var(--surface-secondary); }
@@ -323,8 +323,8 @@ defineExpose({ load })
 
 /* table */
 .qw-table-wrap { flex: 1; min-height: 0; overflow: auto; }
-.qw-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
-.qw-th { padding: 6px 10px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--surface-secondary); position: sticky; top: 0; z-index: 1; }
+.qw-tbl { width: 100%; border-collapse: collapse; font-size:var(--text-sm); }
+.qw-th { padding: 6px 10px; text-align: left; font-size:var(--text-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--surface-secondary); position: sticky; top: 0; z-index: 1; }
 .qw-tr:hover { background: var(--surface-secondary); }
 .qw-td { padding: 7px 10px; color: var(--foreground); border-bottom: 1px solid var(--border); vertical-align: middle; }
 .qw-td:first-child { color: var(--accent); font-weight: 600; white-space: nowrap; }
@@ -334,13 +334,13 @@ defineExpose({ load })
 /* empty / error */
 .qw-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 16px; }
 .qw-empty-icon { width: 40px; height: 40px; border-radius: 8px; background: var(--surface-secondary); display: grid; place-items: center; color: var(--muted); }
-.qw-empty-title { font-size: 13px; font-weight: 600; color: var(--foreground); }
-.qw-empty-sub { font-size: 12px; color: var(--muted); max-width: 280px; line-height: 1.5; }
-.qw-code { font-family: ui-monospace, monospace; font-size: 11px; background: var(--surface-secondary); padding: 1px 4px; border-radius: 4px; color: var(--accent); }
+.qw-empty-title { font-size:var(--text-base); font-weight: 600; color: var(--foreground); }
+.qw-empty-sub { font-size:var(--text-sm); color: var(--muted); max-width: 280px; line-height: 1.5; }
+.qw-code { font-family: ui-monospace, monospace; font-size:var(--text-xs); background: var(--surface-secondary); padding: 1px 4px; border-radius: 4px; color: var(--accent); }
 
 .qw-muted { color: var(--muted); }
 .qw-overdue { color: var(--danger); font-weight: 600; }
-.qw-pri { font-size: 12px; font-weight: 600; }
+.qw-pri { font-size:var(--text-sm); font-weight: 600; }
 .qw-pri-urgent { color: var(--danger); }
 .qw-pri-high { color: var(--warning); }
 .qw-pri-med { color: var(--warning); }

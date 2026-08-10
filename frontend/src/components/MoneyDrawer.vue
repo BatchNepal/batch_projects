@@ -6,7 +6,7 @@
           <Icon :icon="ChevronLeft" class="size-4" />
         </button>
         <Chip size="sm" variant="soft">{{ current.doctype }}</Chip>
-        <span class="font-mono text-[13px] font-semibold text-foreground truncate">{{ current.name }}</span>
+        <span class="font-mono text-base font-semibold text-foreground truncate">{{ current.name }}</span>
         <Chip v-if="summary?.status" size="sm" :color="statusColor(summary.status)">{{ summary.status }}</Chip>
         <a :href="erpUrl" target="_blank" rel="noopener noreferrer" class="md-erp-link ml-auto">
           Open in ERPNext <ExternalLink class="size-3 inline" />
@@ -27,8 +27,8 @@
         <span class="size-10 rounded-lg bg-[var(--surface-secondary)] flex items-center justify-center mb-3">
           <Icon :icon="FileX" class="size-5 text-muted" />
         </span>
-        <p class="text-[13px] font-medium text-foreground">Can't open this document</p>
-        <p class="text-[12.5px] text-muted mt-1 max-w-xs">{{ error }}</p>
+        <p class="text-base font-medium text-foreground">Can't open this document</p>
+        <p class="text-sm text-muted mt-1 max-w-xs">{{ error }}</p>
       </div>
 
       <div v-else-if="summary" class="p-5">
@@ -43,13 +43,13 @@
           <p class="md-section-label">{{ isTimesheet ? 'Time logs' : isExpenseClaim ? 'Expense lines' : 'Items' }}</p>
           <DataTable :columns="columns" :rows="children">
             <template #cell-item_name="{ row }">
-              <span class="text-[13px]">{{ row.item_name }}</span>
-              <span v-if="row.description && row.description !== row.item_name" class="block text-[11.5px] text-muted mt-0.5">
+              <span class="text-base">{{ row.item_name }}</span>
+              <span v-if="row.description && row.description !== row.item_name" class="block text-sm text-muted mt-0.5">
                 {{ row.description }}
               </span>
             </template>
             <template #cell-task="{ row }">
-              <span v-if="row.task_key" class="text-[12px] whitespace-nowrap">
+              <span v-if="row.task_key" class="text-sm whitespace-nowrap">
                 <span class="font-mono font-semibold text-accent">{{ row.task_key }}</span>
                 <span class="text-muted"> — {{ row.task_title }}</span>
               </span>
@@ -73,7 +73,7 @@
             </template>
             <template #cell-committed="{ row }">{{ fmtMoney((row.amount || 0) - (row.billed_amt || 0) - (row.rate || 0) * (row.returned_qty || 0)) }}</template>
             <template #empty>
-              <p class="text-[12.5px] text-muted text-center py-8">
+              <p class="text-sm text-muted text-center py-8">
                 {{ isTimesheet ? 'No time logs on this timesheet.'
                  : isExpenseClaim ? 'No expense lines on this claim.'
                  : 'No line items.' }}
@@ -92,14 +92,14 @@
           <div v-if="summary.timesheets.length" class="md-ts-list">
             <button v-for="t in summary.timesheets" :key="t.timesheet" type="button"
               class="md-ts-row" @click="navigate('Timesheet', t.timesheet)">
-              <span class="font-mono text-[12.5px] font-semibold text-accent">{{ t.timesheet }}</span>
-              <span class="text-[12px] text-muted">{{ t.hours }}h</span>
-              <span class="ml-auto text-[12.5px] font-medium text-foreground tabular-nums">{{ fmtMoney(t.amount) }}</span>
+              <span class="font-mono text-sm font-semibold text-accent">{{ t.timesheet }}</span>
+              <span class="text-sm text-muted">{{ t.hours }}h</span>
+              <span class="ml-auto text-sm font-medium text-foreground tabular-nums">{{ fmtMoney(t.amount) }}</span>
               <ChevronRight class="size-3 text-muted shrink-0" />
             </button>
           </div>
           <div v-else class="md-ts-list">
-            <p class="text-[12.5px] text-muted text-center py-6 m-0 w-full">
+            <p class="text-sm text-muted text-center py-6 m-0 w-full">
               No timesheets — this invoice wasn't billed from tracked hours.
             </p>
           </div>
@@ -344,12 +344,12 @@ async function onSubmit() {
 <style scoped>
 .md-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
 .md-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.md-field-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
-.md-field-value { font-size: 13px; font-weight: 500; color: var(--foreground); overflow-wrap: break-word; }
-.md-section-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 8px; }
+.md-field-label { font-size:var(--text-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
+.md-field-value { font-size:var(--text-base); font-weight: 500; color: var(--foreground); overflow-wrap: break-word; }
+.md-section-label { font-size:var(--text-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 8px; }
 .md-erp-link {
   display: inline-flex; align-items: center; gap: 4px;
-  font-size: 12px; font-weight: 600; color: var(--accent);
+  font-size:var(--text-sm); font-weight: 600; color: var(--accent);
   text-decoration: none; white-space: nowrap;
 }
 .md-erp-link:hover { text-decoration: underline; }

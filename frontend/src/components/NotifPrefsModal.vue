@@ -22,7 +22,7 @@
             </span>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-foreground leading-snug">In-app</p>
-              <p class="text-[13px] text-muted leading-snug">Inbox bell + live updates inside BatchProjects</p>
+              <p class="text-base text-muted leading-snug">Inbox bell + live updates inside BatchProjects</p>
             </div>
             <Switch :is-selected="!!prefs.inapp_enabled" @update:is-selected="toggle('inapp_enabled')" />
           </div>
@@ -44,7 +44,7 @@
             </span>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-foreground leading-snug">Desktop push</p>
-              <p class="text-[13px] text-muted leading-snug">Native notifications via ERPDesktop — instant even when this tab is closed</p>
+              <p class="text-base text-muted leading-snug">Native notifications via ERPDesktop — instant even when this tab is closed</p>
             </div>
             <Switch :is-selected="!!prefs.desktop_enabled" @update:is-selected="toggle('desktop_enabled')" />
           </div>
@@ -58,7 +58,7 @@
             </span>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-foreground leading-snug">Email</p>
-              <p class="text-[13px] text-muted leading-snug">Delivered to your inbox</p>
+              <p class="text-base text-muted leading-snug">Delivered to your inbox</p>
             </div>
             <Switch :is-selected="!!prefs.email_enabled" @update:is-selected="toggle('email_enabled')" />
           </div>
@@ -66,7 +66,7 @@
           <!-- Children only when the channel is on — no confusing dimmed toggles. -->
           <div v-if="prefs.email_enabled" class="px-4 py-4 space-y-5">
             <div>
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-muted mb-3">Notify me about</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Notify me about</p>
               <div class="space-y-3">
                 <PrefRow label="Assigned to you" description="When someone assigns a task to you" :value="prefs.email_assignment" @toggle="toggle('email_assignment')" />
                 <PrefRow label="Comments" description="When someone comments on a task you're watching" :value="prefs.email_comment" @toggle="toggle('email_comment')" />
@@ -77,14 +77,14 @@
             </div>
             <div class="border-t border-separator" />
             <div>
-              <p class="text-[11px] font-semibold uppercase tracking-wide text-muted mb-3">Digests</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Digests</p>
               <div class="space-y-3">
                 <PrefRow label="Daily digest" description="Morning summary of your open and overdue tasks" :value="prefs.email_digest" @toggle="toggle('email_digest')" />
                 <PrefRow label="Weekly project summary" description="Mondays: project progress for leads and managers" :value="prefs.email_weekly_summary" @toggle="toggle('email_weekly_summary')" />
               </div>
             </div>
           </div>
-          <div v-else class="px-4 py-3 text-[13px] text-muted">
+          <div v-else class="px-4 py-3 text-base text-muted">
             Email notifications are off. Turn this on to choose which emails you receive.
           </div>
         </section>
@@ -93,7 +93,7 @@
 
     <ModalFooter>
       <div class="flex items-center justify-between w-full">
-        <p v-if="saved" class="text-[12px] text-success">Preferences saved.</p>
+        <p v-if="saved" class="text-sm text-success">Preferences saved.</p>
         <span v-else />
         <Button variant="solid" color="primary" size="sm" :isLoading="saving" @click="save">Save</Button>
       </div>
@@ -168,7 +168,7 @@ const PrefRow = defineComponent({
         h('div', { class: 'flex-1 min-w-0' }, [
           h('p', { class: 'text-sm text-foreground font-medium leading-snug' }, props.label),
           props.description
-            ? h('p', { class: 'text-[13px] text-muted leading-snug mt-0.5' }, props.description)
+            ? h('p', { class: 'text-base text-muted leading-snug mt-0.5' }, props.description)
             : null,
         ]),
         h(Switch, {

@@ -73,8 +73,8 @@ async function onStop() {
   animation: gti-pulse 1.6s ease-in-out infinite;
   flex-shrink: 0;
 }
-.gti-key { font-size: 12px; font-weight: 600; color: var(--foreground); }
-.gti-elapsed { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gti-key { font-size:var(--text-sm); font-weight: 600; color: var(--foreground); }
+.gti-elapsed { font-size:var(--text-sm); font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 .gti-stop {
   display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border-radius: 50%;

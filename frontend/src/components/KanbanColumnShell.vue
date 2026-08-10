@@ -11,13 +11,13 @@
       <ChevronRight class="size-3.5" />
     </button>
     <span
-      class="text-[11px] font-semibold text-muted uppercase tracking-[0.15em]"
+      class="text-xs font-semibold text-muted uppercase tracking-[0.15em]"
       style="writing-mode: vertical-rl; transform: rotate(180deg)"
     >
       {{ title }}
     </span>
     <span
-      class="mt-3 text-[10px] font-bold text-muted bg-overlay border border-border shadow-sm rounded-full w-5 h-5 flex items-center justify-center"
+      class="mt-3 text-xs font-bold text-muted bg-overlay border border-border shadow-sm rounded-full w-5 h-5 flex items-center justify-center"
     >
       {{ count }}
     </span>
@@ -32,7 +32,7 @@
       <div class="flex items-center gap-2.5">
         <div class="flex items-center gap-2">
           <span v-if="color" class="inline-block size-2 rounded-full shrink-0" :style="{ background: color }" />
-          <p class="text-[13px] font-semibold text-foreground uppercase">
+          <p class="text-base font-semibold text-foreground uppercase">
             {{ title }}
           </p>
         </div>
@@ -40,7 +40,7 @@
         <Transition name="kc-count" mode="out-in">
           <span
             :key="count"
-            class="text-[11px] font-medium text-muted px-2 py-0.5 rounded-full bg-default min-w-[20px] text-center"
+            class="text-xs font-medium text-muted px-2 py-0.5 rounded-full bg-default min-w-[20px] text-center"
           >
             {{ count }}
           </span>

@@ -19,7 +19,7 @@
           />
           <span class="text-sm text-foreground flex-1 min-w-0 truncate">{{ fmtDate(run.started_at) }}</span>
           <span
-            :class="cn('text-[11px] font-medium px-1.5 py-0.5 rounded-full',
+            :class="cn('text-xs font-medium px-1.5 py-0.5 rounded-full',
                        run.status === 'Failed' ? 'bg-danger-soft text-danger-soft-foreground' : 'bg-success-soft text-success-soft-foreground')"
           >{{ run.status }}</span>
           <Button size="sm" variant="light" @click.stop="emit('view-run', run)">View on canvas</Button>
@@ -32,14 +32,14 @@
                            n.status === 'Failed' ? 'bg-danger' : n.status === 'Skipped' ? 'bg-muted-tertiary' : 'bg-success')"
               />
               <span class="text-xs text-foreground flex-1 min-w-0 truncate">{{ labelFor(n.node_id) }}</span>
-              <span class="text-[11px] text-muted shrink-0">{{ n.status }}</span>
+              <span class="text-xs text-muted shrink-0">{{ n.status }}</span>
             </div>
             <!-- Full message, not truncated — this used to be a 160px-clipped
                  span (title-tooltip only), which is exactly the "where did
                  the error actually come from" the audit flagged as missing.
                  Retry-attempt info (see api/automation.py/graph.go) already
                  rides inside this same message string. -->
-            <p v-if="n.message" class="text-[11px] pl-4" :class="n.status === 'Failed' ? 'text-danger' : 'text-muted'">
+            <p v-if="n.message" class="text-xs pl-4" :class="n.status === 'Failed' ? 'text-danger' : 'text-muted'">
               {{ n.message }}
             </p>
           </div>

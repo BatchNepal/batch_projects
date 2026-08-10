@@ -12,10 +12,10 @@
       </span>
       <!-- Title -->
       <input v-if="titleEditing" ref="titleInput" v-model="titleVal"
-        class="text-[15px] font-semibold text-[--foreground] bg-transparent outline-none border-b border-accent min-w-[140px] max-w-[260px]"
+        class="text-md font-semibold text-[--foreground] bg-transparent outline-none border-b border-accent min-w-[140px] max-w-[260px]"
         @blur="commitTitle" @keydown.enter="commitTitle" @keydown.esc="titleEditing = false" />
       <h1 v-else
-        class="text-[15px] font-semibold text-[--foreground] truncate max-w-[260px] cursor-pointer rounded-md px-2 py-1 -mx-1 hover:bg-default transition-colors"
+        class="text-md font-semibold text-[--foreground] truncate max-w-[260px] cursor-pointer rounded-md px-2 py-1 -mx-1 hover:bg-default transition-colors"
         title="Click to rename"
         @click="startTitleEdit"
       >{{ report?.name || 'Report' }}</h1>
@@ -38,7 +38,7 @@
 
         <!-- Freshness + manual refresh -->
         <button
-          class="shrink-0 h-8 pl-2 pr-2.5 inline-flex items-center gap-1.5 rounded-lg text-[12px] text-muted hover:text-foreground hover:bg-default transition-colors cursor-pointer outline-none focus-visible:shadow-focus"
+          class="shrink-0 h-8 pl-2 pr-2.5 inline-flex items-center gap-1.5 rounded-lg text-sm text-muted hover:text-foreground hover:bg-default transition-colors cursor-pointer outline-none focus-visible:shadow-focus"
           :title="`Updated ${lastUpdatedLabel} — click to refresh`"
           @click="refreshAll"
         >
@@ -118,7 +118,7 @@
             <template #startContent><Icon :icon="CalendarClock" :size="14" class="text-muted shrink-0" /></template>
             Schedule delivery
             <template #endContent>
-              <span v-if="report?.schedule_enabled" class="text-[10px] font-semibold text-[--accent]">On</span>
+              <span v-if="report?.schedule_enabled" class="text-xs font-semibold text-[--accent]">On</span>
             </template>
           </DropdownItem>
           <DropdownItem @click="exportTemplate">
@@ -145,9 +145,9 @@
 
     <!-- Canvas -->
     <div class="flex-1 overflow-y-auto px-5 pt-5 pb-5 bg-background">
-      <div v-if="renderError" class="mb-4 rounded-lg border border-danger/40 bg-danger-soft px-4 py-3 text-[13px] text-danger">
+      <div v-if="renderError" class="mb-4 rounded-lg border border-danger/40 bg-danger-soft px-4 py-3 text-base text-danger">
         <p class="font-semibold mb-0.5">This report hit an error while rendering</p>
-        <p class="text-[12px] opacity-90 break-words">{{ renderError }}</p>
+        <p class="text-sm opacity-90 break-words">{{ renderError }}</p>
       </div>
 
       <!-- Loading skeleton — prevents the "Empty report" flash before the
@@ -240,29 +240,29 @@
     <Modal :open="catalogOpen" @update:open="v => !v && (catalogOpen = false)" size="md" radius="lg" hideCloseButton>
       <ModalHeader class="px-5 pt-5">
         <div>
-          <p class="text-[15px] font-semibold text-[--foreground]">Add widget</p>
-          <p class="text-[12px] text-[--muted] mt-0.5">Choose a widget type to add</p>
+          <p class="text-md font-semibold text-[--foreground]">Add widget</p>
+          <p class="text-sm text-[--muted] mt-0.5">Choose a widget type to add</p>
         </div>
       </ModalHeader>
       <ModalBody class="px-5 py-3 max-h-[60vh] overflow-y-auto">
-        <p class="text-[10px] font-semibold uppercase tracking-wider text-[--muted] mb-1.5">Basic</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-[--muted] mb-1.5">Basic</p>
         <div class="flex flex-col gap-1.5">
           <button v-for="c in CATALOGUE" :key="c.type" class="flex items-center gap-3 p-3 border rounded-lg text-left hover:bg-[--surface-secondary] transition-colors" @click="addWidget(c.type)">
             <Icon :icon="c.icon" :size="18" class="shrink-0 text-[--muted]" />
             <span class="flex-1 min-w-0">
-              <span class="block text-[13px] font-semibold text-[--foreground]">{{ c.label }}</span>
-              <span class="block text-[12px] text-[--muted] mt-0.5 leading-snug">{{ c.desc }}</span>
+              <span class="block text-base font-semibold text-[--foreground]">{{ c.label }}</span>
+              <span class="block text-sm text-[--muted] mt-0.5 leading-snug">{{ c.desc }}</span>
             </span>
             <Icon :icon="Plus" :size="14" class="text-[--muted] shrink-0" />
           </button>
         </div>
-        <p class="text-[10px] font-semibold uppercase tracking-wider text-[--muted] mt-4 mb-1.5">Report templates</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-[--muted] mt-4 mb-1.5">Report templates</p>
         <div class="flex flex-col gap-1.5">
           <button v-for="p in PRESETS_LIST" :key="p.key" class="flex items-center gap-3 p-3 border rounded-lg text-left hover:bg-[--surface-secondary] transition-colors" @click="addPreset(p)">
             <Icon :icon="p.icon" :size="18" class="shrink-0 text-[--muted]" />
             <span class="flex-1 min-w-0">
-              <span class="block text-[13px] font-semibold text-[--foreground]">{{ p.label }}</span>
-              <span class="block text-[12px] text-[--muted] mt-0.5 leading-snug">{{ p.desc }}</span>
+              <span class="block text-base font-semibold text-[--foreground]">{{ p.label }}</span>
+              <span class="block text-sm text-[--muted] mt-0.5 leading-snug">{{ p.desc }}</span>
             </span>
             <Icon :icon="Plus" :size="14" class="text-[--muted] shrink-0" />
           </button>
@@ -278,8 +278,8 @@
       <template v-if="cfg">
         <ModalHeader class="px-5 pt-5">
           <div>
-            <p class="text-[15px] font-semibold text-[--foreground]">Configure widget</p>
-            <p class="text-[12px] text-[--muted] mt-0.5 capitalize">{{ configTypeLabel }}</p>
+            <p class="text-md font-semibold text-[--foreground]">Configure widget</p>
+            <p class="text-sm text-[--muted] mt-0.5 capitalize">{{ configTypeLabel }}</p>
           </div>
         </ModalHeader>
         <ModalBody class="px-5 py-4">
@@ -323,9 +323,9 @@
             <!-- scope: all types except query (uses BQL project= clause) and text (no data) -->
             <!-- scope: all types except query (BQL project= clause) and text (no data) -->
             <div v-if="cfg.type !== 'query' && cfg.type !== 'text'" class="col-span-2 flex flex-col gap-1">
-              <label class="text-[12px] font-medium text-[--foreground]">
+              <label class="text-sm font-medium text-[--foreground]">
                 Scope
-                <span class="ml-1 text-[11px] text-[--muted] font-normal">— select one, multiple, or inherit from report</span>
+                <span class="ml-1 text-xs text-[--muted] font-normal">— select one, multiple, or inherit from report</span>
               </label>
               <div class="flex items-center gap-2">
                 <button
@@ -347,35 +347,35 @@
             <!-- BQL query editor -->
             <div v-if="cfg.type === 'query'" class="col-span-2">
               <div class="flex items-center justify-between mb-1.5">
-                <p class="text-[12px] font-medium text-[--foreground]">Batch Query Language (BQL)</p>
-                <button class="flex items-center gap-1 text-[11px] text-[--accent] hover:opacity-80 transition-opacity" @click.prevent="bqlDocsOpen = !bqlDocsOpen">
+                <p class="text-sm font-medium text-[--foreground]">Batch Query Language (BQL)</p>
+                <button class="flex items-center gap-1 text-xs text-[--accent] hover:opacity-80 transition-opacity" @click.prevent="bqlDocsOpen = !bqlDocsOpen">
                   <Icon :icon="BookOpen" :size="12" />{{ bqlDocsOpen ? 'Hide' : 'Field reference' }}
                 </button>
               </div>
               <textarea
                 v-model="cfg.bql"
                 rows="4"
-                class="w-full text-[12px] font-mono leading-relaxed rounded-md border px-3 py-2.5 outline-none resize-none transition-colors bg-[--surface-secondary] text-[--foreground]"
+                class="w-full text-sm font-mono leading-relaxed rounded-md border px-3 py-2.5 outline-none resize-none transition-colors bg-[--surface-secondary] text-[--foreground]"
                 :class="bqlError ? 'border-[--danger]' : ' focus:border-[--accent]'"
                 placeholder='project = "PROJ" AND status = "Open" AND assignee = "me"'
                 @input="bqlError = ''"
               />
-              <p v-if="bqlError" class="text-[11px] text-[--danger] mt-1">{{ bqlError }}</p>
-              <p v-else class="text-[11px] text-[--muted] mt-1">Combine filters with AND. Use quotes around values.</p>
+              <p v-if="bqlError" class="text-xs text-[--danger] mt-1">{{ bqlError }}</p>
+              <p v-else class="text-xs text-[--muted] mt-1">Combine filters with AND. Use quotes around values.</p>
 
               <!-- BQL quick examples -->
               <div class="flex flex-wrap gap-1.5 mt-2">
                 <button
                   v-for="ex in BQL_EXAMPLES" :key="ex.label"
                   type="button"
-                  class="h-6 px-2 rounded text-[11px] border bg-[--surface] text-[--muted] hover:bg-[--surface-secondary] transition-colors"
+                  class="h-6 px-2 rounded text-xs border bg-[--surface] text-[--muted] hover:bg-[--surface-secondary] transition-colors"
                   @click="cfg.bql = ex.bql; bqlError = ''"
                 >{{ ex.label }}</button>
               </div>
 
               <!-- field reference -->
               <div v-if="bqlDocsOpen" class="mt-3 rounded-md border overflow-hidden">
-                <table class="w-full text-[11px]">
+                <table class="w-full text-xs">
                   <thead><tr class="bg-[--surface-secondary]"><th class="px-3 py-1.5 text-left font-semibold text-[--muted] border-b ">Field</th><th class="px-3 py-1.5 text-left font-semibold text-[--muted] border-b ">Example</th></tr></thead>
                   <tbody>
                     <tr v-for="f in BQL_FIELD_DOCS" :key="f.field" class="border-b last:border-0 hover:bg-[--surface-secondary]">
@@ -389,22 +389,22 @@
 
             <!-- text / note content -->
             <div v-if="cfg.type === 'text'" class="col-span-2">
-              <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Content</p>
+              <p class="text-sm font-medium text-[--foreground] mb-1.5">Content</p>
               <textarea
                 v-model="cfg.text"
                 rows="6"
-                class="w-full text-[13px] leading-relaxed rounded-md border bg-[--surface-secondary] text-[--foreground] px-3 py-2.5 outline-none resize-none focus:border-[--accent] transition-colors"
+                class="w-full text-base leading-relaxed rounded-md border bg-[--surface-secondary] text-[--foreground] px-3 py-2.5 outline-none resize-none focus:border-[--accent] transition-colors"
                 placeholder="Write your note or annotation here…"
               />
             </div>
 
             <!-- table columns -->
             <div v-if="cfg.type === 'table' || cfg.type === 'query'" class="col-span-2">
-              <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Columns</p>
+              <p class="text-sm font-medium text-[--foreground] mb-1.5">Columns</p>
               <div class="flex flex-wrap gap-1.5">
                 <button
                   v-for="c in COLUMN_OPTIONS" :key="c.v" type="button"
-                  class="h-7 px-2.5 rounded-md text-[12px] font-medium border transition-colors"
+                  class="h-7 px-2.5 rounded-md text-sm font-medium border transition-colors"
                   :class="(cfg.columns || []).includes(c.v)
                     ? 'bg-[--accent-soft] border-[--accent-soft] text-[--accent-soft-foreground]'
                     : 'bg-[--surface]  text-[--muted] hover:bg-[--surface-secondary]'"
@@ -413,7 +413,7 @@
               </div>
             </div>
             <div v-if="cfg.type === 'metric'" class="col-span-2">
-              <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Accent</p>
+              <p class="text-sm font-medium text-[--foreground] mb-1.5">Accent</p>
               <div class="flex gap-2">
                 <button v-for="(p, k) in PILL" :key="k" class="w-6 h-6 rounded-md border-2 transition-colors" :class="cfg.colorScheme === k ? 'border-[--foreground]' : 'border-transparent'" :style="{ background: p.color }" @click="cfg.colorScheme = k" />
               </div>
@@ -435,15 +435,15 @@
             <Icon :icon="CalendarClock" :size="16" />
           </span>
           <div>
-            <p class="text-[15px] font-semibold text-[--foreground]">Schedule delivery</p>
-            <p class="text-[12px] text-[--muted] mt-0.5">Email a KPI snapshot + link on a recurring schedule.</p>
+            <p class="text-md font-semibold text-[--foreground]">Schedule delivery</p>
+            <p class="text-sm text-[--muted] mt-0.5">Email a KPI snapshot + link on a recurring schedule.</p>
           </div>
         </div>
       </ModalHeader>
       <ModalBody class="px-5 py-4 flex flex-col gap-3.5">
         <!-- master toggle -->
         <label class="flex items-center justify-between gap-3 cursor-pointer">
-          <span class="text-[13px] font-medium text-[--foreground]">Enable scheduled email</span>
+          <span class="text-base font-medium text-[--foreground]">Enable scheduled email</span>
           <button type="button" role="switch" :aria-checked="sched.enabled"
             class="relative w-9 h-5 rounded-full transition-colors shrink-0"
             :class="sched.enabled ? 'bg-[--accent]' : 'bg-[--border]'"
@@ -455,7 +455,7 @@
         <template v-if="sched.enabled">
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Frequency</p>
+              <p class="text-sm font-medium text-[--foreground] mb-1.5">Frequency</p>
               <Select v-model="sched.frequency" size="sm" fullWidth>
                 <SelectItem value="Daily">Daily</SelectItem>
                 <SelectItem value="Weekly">Weekly</SelectItem>
@@ -463,26 +463,26 @@
               </Select>
             </div>
             <div v-if="sched.frequency === 'Weekly'">
-              <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Day</p>
+              <p class="text-sm font-medium text-[--foreground] mb-1.5">Day</p>
               <Select v-model="sched.day" size="sm" fullWidth>
                 <SelectItem v-for="d in WEEKDAYS" :key="d" :value="d">{{ d }}</SelectItem>
               </Select>
             </div>
             <div>
-              <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Hour (0–23)</p>
+              <p class="text-sm font-medium text-[--foreground] mb-1.5">Hour (0–23)</p>
               <Select v-model="sched.hour" size="sm" fullWidth>
                 <SelectItem v-for="h in 24" :key="h-1" :value="h-1">{{ String(h-1).padStart(2,'0') }}:00</SelectItem>
               </Select>
             </div>
           </div>
           <div>
-            <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Recipients</p>
+            <p class="text-sm font-medium text-[--foreground] mb-1.5">Recipients</p>
             <textarea v-model="sched.recipients" rows="3"
-              class="w-full text-[12px] rounded-lg border border-[--border] bg-[--surface-secondary] px-3 py-2 outline-none focus:border-[--accent] resize-none text-[--foreground]"
+              class="w-full text-sm rounded-lg border border-[--border] bg-[--surface-secondary] px-3 py-2 outline-none focus:border-[--accent] resize-none text-[--foreground]"
               placeholder="alice@acme.com, bob@acme.com" />
-            <p class="text-[11px] text-[--muted] mt-1">Comma or newline separated. Delivery runs hourly server-side.</p>
+            <p class="text-xs text-[--muted] mt-1">Comma or newline separated. Delivery runs hourly server-side.</p>
           </div>
-          <p v-if="report?.last_sent" class="text-[11px] text-[--muted]">Last sent: {{ fmtSent(report.last_sent) }}</p>
+          <p v-if="report?.last_sent" class="text-xs text-[--muted]">Last sent: {{ fmtSent(report.last_sent) }}</p>
         </template>
       </ModalBody>
       <ModalFooter class="px-5 pb-5 justify-end gap-2">
@@ -493,9 +493,9 @@
 
     <!-- Delete confirm -->
     <Modal :open="deleting" @update:open="v => !v && (deleting = false)" size="sm" radius="lg" hideCloseButton>
-      <ModalHeader class="px-5 pt-5"><p class="text-[15px] font-semibold text-[--foreground]">Delete report?</p></ModalHeader>
+      <ModalHeader class="px-5 pt-5"><p class="text-md font-semibold text-[--foreground]">Delete report?</p></ModalHeader>
       <ModalBody class="px-5 py-4">
-        <p class="text-[13px] text-[--muted]">"{{ report?.name }}" and its {{ widgets.length }} widget{{ widgets.length === 1 ? '' : 's' }} will be permanently removed.</p>
+        <p class="text-base text-[--muted]">"{{ report?.name }}" and its {{ widgets.length }} widget{{ widgets.length === 1 ? '' : 's' }} will be permanently removed.</p>
       </ModalBody>
       <ModalFooter class="px-5 pb-5 justify-end gap-2">
         <Button variant="bordered" size="sm" @click="deleting = false">Cancel</Button>
@@ -956,12 +956,12 @@ watch(reportId, init)
 }
 .menu-i {
   display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 7px 9px; border-radius: 7px; font-size: 13px; color: var(--foreground); cursor: pointer;
+  padding: 7px 9px; border-radius: 7px; font-size:var(--text-base); color: var(--foreground); cursor: pointer;
 }
 .menu-i:hover { background: var(--surface-secondary); }
 
 .rv-date-input {
-  height: 30px; padding: 0 8px; border-radius: 8px; font-size: 12px;
+  height: 30px; padding: 0 8px; border-radius: 8px; font-size:var(--text-sm);
   border: 1px solid var(--border); background: var(--surface); color: var(--foreground);
   cursor: pointer; outline: none; transition: border-color .15s;
 }

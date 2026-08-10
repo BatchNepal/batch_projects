@@ -68,19 +68,19 @@ function cancelEdit() {
 }
 .tw-view:hover .tw-placeholder { opacity: 0.7; }
 
-.tw-title { font-size: 13px; font-weight: 600; color: var(--foreground); margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tw-body { font-size: 13px; color: var(--foreground); line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
-.tw-placeholder { font-size: 13px; color: var(--border); line-height: 1.7; user-select: none; }
+.tw-title { font-size:var(--text-base); font-weight: 600; color: var(--foreground); margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tw-body { font-size:var(--text-base); color: var(--foreground); line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.tw-placeholder { font-size:var(--text-base); color: var(--border); line-height: 1.7; user-select: none; }
 
 .tw-edit { flex: 1; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--accent); border-radius: 8px; overflow: hidden; background: var(--surface-secondary); }
 .tw-area {
   flex: 1; min-height: 0; resize: none; outline: none; border: none;
-  padding: 10px 12px; font-size: 13px; color: var(--foreground); background: transparent;
+  padding: 10px 12px; font-size:var(--text-base); color: var(--foreground); background: transparent;
   line-height: 1.7; font-family: inherit;
 }
 .tw-edit-foot { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--border); background: var(--surface-secondary); }
-.tw-hint { font-size: 11px; color: var(--muted); }
-.tw-btn { height: 26px; padding: 0 12px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid transparent; cursor: pointer; transition: all .12s; }
+.tw-hint { font-size:var(--text-xs); color: var(--muted); }
+.tw-btn { height: 26px; padding: 0 12px; border-radius: 6px; font-size:var(--text-sm); font-weight: 600; border: 1px solid transparent; cursor: pointer; transition: all .12s; }
 .tw-btn-ghost   { background: transparent; color: var(--muted); border-color: var(--border); }
 .tw-btn-ghost:hover { background: var(--surface-secondary); }
 .tw-btn-primary { background: var(--accent); color: var(--accent-foreground); }

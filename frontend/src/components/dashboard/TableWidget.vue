@@ -206,18 +206,18 @@ async function exportCsv() {
 <style scoped>
 .tw { height: 100%; display: flex; flex-direction: column; min-height: 0; }
 .tw-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-shrink: 0; margin-bottom: 8px; }
-.tw-title { font-size: 13px; font-weight: 600; color: var(--foreground); }
-.tw-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.tw-title { font-size:var(--text-base); font-weight: 600; color: var(--foreground); }
+.tw-sub { font-size:var(--text-xs); color: var(--muted); margin-top: 2px; }
 .tw-actions { display: flex; align-items: center; gap: 6px; }
 .tw-search { position: relative; display: flex; align-items: center; }
 .tw-search-ic { position: absolute; left: 8px; color: var(--muted); pointer-events: none; }
-.tw-search-in { height: 30px; width: 150px; padding: 0 10px 0 28px; font-size: 13px; border-radius: 6px; background: var(--surface-secondary); color: var(--foreground); outline: none; border: 1px solid transparent; transition: all .12s; }
+.tw-search-in { height: 30px; width: 150px; padding: 0 10px 0 28px; font-size:var(--text-base); border-radius: 6px; background: var(--surface-secondary); color: var(--foreground); outline: none; border: 1px solid transparent; transition: all .12s; }
 .tw-search-in:focus { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent); }
 .tw-table { flex: 1; min-height: 0; overflow: auto; }
 .tw-foot { flex-shrink: 0; display: flex; justify-content: flex-end; padding-top: 8px; }
 .tw-muted { color: var(--muted); }
 .tw-overdue { color: var(--danger); font-weight: 600; }
-.tw-pri { font-size: 12px; font-weight: 600; }
+.tw-pri { font-size:var(--text-sm); font-weight: 600; }
 .pri-urgent { color: var(--danger); }
 .pri-high { color: var(--warning); }
 .pri-med { color: var(--warning); }

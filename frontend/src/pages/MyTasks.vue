@@ -10,7 +10,7 @@
         <div class="flex items-center gap-3">
           <Avatar :name="userLabel" size="sm" :color="avatarColor" class="ring-1 ring-border" />
           <div>
-            <h1 class="text-[15px] font-semibold text-foreground leading-tight">My Tasks</h1>
+            <h1 class="text-md font-semibold text-foreground leading-tight">My Tasks</h1>
             <p v-if="!loading" class="text-xs text-muted mt-0.5 tabular-nums">
               {{ counts.open }} open
               <template v-if="counts.completed"> · {{ counts.completed }} done</template>
@@ -44,7 +44,7 @@
       <!-- Group by -->
       <FieldDropdown width="w-44">
         <template #trigger>
-          <button class="h-7 px-2 inline-flex items-center gap-1.5 text-[11px] bg-overlay border border-border rounded text-muted hover:bg-surface-secondary transition-colors whitespace-nowrap">
+          <button class="h-7 px-2 inline-flex items-center gap-1.5 text-xs bg-overlay border border-border rounded text-muted hover:bg-surface-secondary transition-colors whitespace-nowrap">
             Group:
             <span class="font-semibold text-foreground">{{ GROUP_OPTIONS.find(g => g.v === groupBy)?.label }}</span>
             <svg class="w-3 h-3 text-muted" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
@@ -58,7 +58,7 @@
       <!-- Sort by -->
       <FieldDropdown width="w-44">
         <template #trigger>
-          <button class="h-7 px-2 inline-flex items-center gap-1.5 text-[11px] bg-overlay border border-border rounded text-muted hover:bg-surface-secondary transition-colors whitespace-nowrap">
+          <button class="h-7 px-2 inline-flex items-center gap-1.5 text-xs bg-overlay border border-border rounded text-muted hover:bg-surface-secondary transition-colors whitespace-nowrap">
             Sort:
             <span class="font-semibold text-foreground">{{ SORT_OPTIONS.find(s => s.v === sortBy)?.label }}</span>
             <svg class="w-3 h-3 text-muted" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
@@ -72,7 +72,7 @@
       <!-- Project filter (multi-project only) -->
       <FieldDropdown v-if="allProjects.length > 1" width="w-52">
         <template #trigger>
-          <button class="h-7 px-2 inline-flex items-center gap-1.5 text-[11px] bg-overlay border border-border rounded text-muted hover:bg-surface-secondary transition-colors whitespace-nowrap">
+          <button class="h-7 px-2 inline-flex items-center gap-1.5 text-xs bg-overlay border border-border rounded text-muted hover:bg-surface-secondary transition-colors whitespace-nowrap">
             <span v-if="!projectFilter" class="font-semibold text-foreground">All projects</span>
             <span v-else class="font-semibold text-foreground">{{ allProjects.find(p => p.name === projectFilter)?.project_name }}</span>
             <svg class="w-3 h-3 text-muted" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
@@ -86,7 +86,7 @@
       </FieldDropdown>
 
       <!-- Right: task count -->
-      <div class="ml-auto text-[11px] text-muted tabular-nums pr-1">
+      <div class="ml-auto text-xs text-muted tabular-nums pr-1">
         {{ counts.open + counts.completed }} tasks
       </div>
     </div>
@@ -171,12 +171,12 @@
                       <span v-if="groupBy === 'status'"  class="w-1.5 h-1.5 rounded-full shrink-0" :style="{ background: sectionStatusColor(gkey) }" />
                       <span v-if="groupBy === 'project'" class="w-1.5 h-1.5 rounded-full shrink-0" :style="{ background: projectColor(gkey) }" />
                       <PriorityIndicator v-if="groupBy === 'priority'" :priority="gkey" />
-                      <span class="text-[11px] font-medium uppercase tracking-wider text-muted">{{ gkey }}</span>
+                      <span class="text-xs font-medium uppercase tracking-wider text-muted">{{ gkey }}</span>
                       <span v-if="groupBy === 'due_date' && gkey === 'Overdue'"
-                        class="text-[10px] font-semibold text-danger-soft-foreground bg-danger-soft px-1.5 py-px rounded">
+                        class="text-xs font-semibold text-danger-soft-foreground bg-danger-soft px-1.5 py-px rounded">
                         Overdue
                       </span>
-                      <span class="text-[10px] text-muted tabular-nums">({{ group.length }})</span>
+                      <span class="text-xs text-muted tabular-nums">({{ group.length }})</span>
                     </div>
                   </td>
                 </tr>
@@ -196,7 +196,7 @@
 
                      <!-- Task key -->
                     <td v-if="cols.id" class="px-3 w-[76px] text-right pr-4">
-                      <span class="font-mono text-[11px] text-muted hover:text-muted transition-colors tabular-nums">
+                      <span class="font-mono text-xs text-muted hover:text-muted transition-colors tabular-nums">
                         {{ task.task_key }}
                       </span>
                     </td>
@@ -205,29 +205,29 @@
                     <td class="px-3 max-w-0">
                       <div class="flex items-center gap-2 overflow-hidden">
                         <span
-                          class="shrink-0 w-[18px] h-[18px] rounded flex items-center justify-center text-[9px] font-bold"
+                          class="shrink-0 w-[18px] h-[18px] rounded flex items-center justify-center text-micro font-bold"
                           :style="{ background: typeColor(task) + '1C', color: typeColor(task) }"
                           :title="task.task_type">
                           {{ (task.task_type || 'T').charAt(0).toUpperCase() }}
                         </span>
                         <span
-                          class="text-[13px] font-medium text-foreground truncate leading-none"
+                          class="text-base font-medium text-foreground truncate leading-none"
                           :class="{ 'line-through text-muted font-normal': task.status_category === 'completed' }">
                           {{ task.title }}
                         </span>
                         <span v-if="task.is_reporter && !task.is_assigned"
-                          class="shrink-0 text-[10px] text-muted bg-surface-secondary px-1.5 py-px rounded whitespace-nowrap">
+                          class="shrink-0 text-xs text-muted bg-surface-secondary px-1.5 py-px rounded whitespace-nowrap">
                           reported
                         </span>
                         <button
                           v-for="g in erpBadges(task)" :key="g.doctype"
-                          class="shrink-0 inline-flex items-center h-[16px] px-1.5 rounded text-[9.5px] font-bold text-accent-soft-foreground bg-accent-soft"
+                          class="shrink-0 inline-flex items-center h-[16px] px-1.5 rounded text-micro font-bold text-accent-soft-foreground bg-accent-soft"
                           :title="g.items.map(r => r.ref_label || r.ref_name).join(', ')"
                           @click.stop="openTaskErpDoc(task, g.items[0].ref_doctype, g.items[0].ref_name)"
                         >{{ g.abbr }}<template v-if="g.n > 1">×{{ g.n }}</template></button>
                         <span
                           v-if="task.billable && task.estimated_hours"
-                          class="shrink-0 inline-flex items-center justify-center w-[16px] h-[16px] rounded text-[9.5px] font-extrabold text-success-soft-foreground bg-success-soft"
+                          class="shrink-0 inline-flex items-center justify-center w-[16px] h-[16px] rounded text-micro font-extrabold text-success-soft-foreground bg-success-soft"
                           :title="`${task.estimated_hours}h billable`"
                         >$</span>
                       </div>
@@ -238,7 +238,7 @@
                       <FieldDropdown width="w-52">
                         <template #trigger>
                           <button
-                            class="inline-flex items-center gap-2 h-6 px-1.5 -ml-1 rounded-md text-[12px] font-medium text-foreground max-w-[140px] hover:bg-surface-secondary transition-colors">
+                            class="inline-flex items-center gap-2 h-6 px-1.5 -ml-1 rounded-md text-sm font-medium text-foreground max-w-[140px] hover:bg-surface-secondary transition-colors">
                             <span class="w-2.5 h-2.5 rounded-[3px] shrink-0" :style="{ background: task.status_color || 'var(--muted)' }" />
                             <span class="truncate">{{ task.status }}</span>
                           </button>
@@ -256,7 +256,7 @@
                     <!-- Project pill -->
                     <td v-if="showProjectCol" class="px-3 w-32">
                       <span
-                        class="text-[11px] font-medium px-2 py-0.5 rounded truncate block max-w-[116px]"
+                        class="text-xs font-medium px-2 py-0.5 rounded truncate block max-w-[116px]"
                         :style="{
                           background: projectColor(task.project_name) + '18',
                           color: projectColor(task.project_name),
@@ -307,7 +307,7 @@
 
           <!-- Panel header -->
           <div class="flex items-center justify-between px-4 py-3 border-b border-separator flex-shrink-0">
-            <span class="text-[13px] font-semibold text-foreground">Customize</span>
+            <span class="text-base font-semibold text-foreground">Customize</span>
             <button
               @click="showCustomize = false"
               class="w-6 h-6 flex items-center justify-center rounded hover:bg-surface-secondary text-muted hover:text-muted transition-colors">
@@ -322,7 +322,7 @@
 
             <!-- ── Fields ─────────────────────────────────── -->
             <section>
-              <p class="text-[10px] font-semibold uppercase tracking-widest text-muted mb-2">Fields</p>
+              <p class="text-xs font-semibold uppercase tracking-widest text-muted mb-2">Fields</p>
               <div class="flex flex-col gap-0.5">
                 <div
                   v-for="field in FIELD_DEFS" :key="field.key"
@@ -332,8 +332,8 @@
                     <span class="w-5 h-5 flex items-center justify-center text-muted">
                       <component :is="field.icon" class="w-3.5 h-3.5" />
                     </span>
-                    <span class="text-[13px] text-muted">{{ field.label }}</span>
-                    <span v-if="field.note" class="text-[10px] text-muted">({{ field.note }})</span>
+                    <span class="text-base text-muted">{{ field.label }}</span>
+                    <span v-if="field.note" class="text-xs text-muted">({{ field.note }})</span>
                   </div>
                   <!-- Toggle -->
                   <button
@@ -351,12 +351,12 @@
 
             <!-- ── Group by ────────────────────────────────── -->
             <section>
-              <p class="text-[10px] font-semibold uppercase tracking-widest text-muted mb-2">Group by</p>
+              <p class="text-xs font-semibold uppercase tracking-widest text-muted mb-2">Group by</p>
               <div class="flex flex-wrap gap-1.5">
                 <button
                   v-for="g in GROUP_OPTIONS" :key="g.v"
                   @click="groupBy = g.v"
-                  class="px-2.5 py-1 text-[12px] font-medium rounded-full border transition-colors"
+                  class="px-2.5 py-1 text-sm font-medium rounded-full border transition-colors"
                   :class="groupBy === g.v
                     ? 'bg-primary text-white border-primary'
                     : 'bg-overlay text-muted border-border hover:border-border-secondary hover:bg-surface-secondary'">
@@ -367,12 +367,12 @@
 
             <!-- ── Sort ──────────────────────────────────────── -->
             <section>
-              <p class="text-[10px] font-semibold uppercase tracking-widest text-muted mb-2">Sort by</p>
+              <p class="text-xs font-semibold uppercase tracking-widest text-muted mb-2">Sort by</p>
               <div class="flex flex-wrap gap-1.5 mb-3">
                 <button
                   v-for="s in SORT_OPTIONS" :key="s.v"
                   @click="sortBy = s.v"
-                  class="px-2.5 py-1 text-[12px] font-medium rounded-full border transition-colors"
+                  class="px-2.5 py-1 text-sm font-medium rounded-full border transition-colors"
                   :class="sortBy === s.v
                     ? 'bg-primary text-white border-primary'
                     : 'bg-overlay text-muted border-border hover:border-border-secondary hover:bg-surface-secondary'">
@@ -383,7 +383,7 @@
               <div class="flex rounded-lg border border-border overflow-hidden">
                 <button
                   @click="sortOrder = 'asc'"
-                  class="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium transition-colors"
+                  class="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-sm font-medium transition-colors"
                   :class="sortOrder === 'asc'
                     ? 'bg-primary text-white'
                     : 'bg-overlay text-muted hover:bg-surface-secondary'">
@@ -394,7 +394,7 @@
                 </button>
                 <button
                   @click="sortOrder = 'desc'"
-                  class="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-medium transition-colors border-l border-border"
+                  class="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-sm font-medium transition-colors border-l border-border"
                   :class="sortOrder === 'desc'
                     ? 'bg-primary text-white'
                     : 'bg-overlay text-muted hover:bg-surface-secondary'">
@@ -408,12 +408,12 @@
 
             <!-- ── Row density ─────────────────────────────── -->
             <section>
-              <p class="text-[10px] font-semibold uppercase tracking-widest text-muted mb-2">Row density</p>
+              <p class="text-xs font-semibold uppercase tracking-widest text-muted mb-2">Row density</p>
               <div class="flex rounded-lg border border-border overflow-hidden">
                 <button
                   v-for="(d, i) in DENSITIES" :key="d.v"
                   @click="density = d.v"
-                  class="flex-1 py-1.5 text-[12px] font-medium transition-colors"
+                  class="flex-1 py-1.5 text-sm font-medium transition-colors"
                   :class="[
                     density === d.v
                       ? 'bg-primary text-white'
@@ -439,7 +439,7 @@
             <div class="pt-1 border-t border-separator">
               <button
                 @click="resetPrefs"
-                class="w-full py-2 text-[12px] text-muted hover:text-muted hover:bg-surface-secondary rounded-md transition-colors">
+                class="w-full py-2 text-sm text-muted hover:text-muted hover:bg-surface-secondary rounded-md transition-colors">
                 Reset to defaults
               </button>
             </div>
@@ -783,7 +783,7 @@ function sectionStatusColor(name) {
 
 <style scoped>
 .th {
-  @apply px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider
+  @apply px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider
          text-muted border-b border-border bg-overlay;
   border-right: 1px solid var(--separator);
 }
@@ -805,7 +805,7 @@ function sectionStatusColor(name) {
 .th-rh:hover::after { height: 60%; }
 
 :deep(tbody td) {
-  @apply text-[13px];
+  @apply text-base;
   border-right: 1px solid var(--separator);
 }
 :deep(tbody td:last-child) { border-right: none; }

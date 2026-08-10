@@ -3,7 +3,7 @@
     <div class="px-6 pt-5 pb-0 border-b border-border flex-shrink-0">
       <div class="flex items-center justify-between mb-3">
         <div>
-          <h1 class="text-[15px] font-semibold text-foreground leading-tight">Triage</h1>
+          <h1 class="text-md font-semibold text-foreground leading-tight">Triage</h1>
           <p class="text-xs text-muted mt-0.5">Tasks that need review and assignment</p>
         </div>
       </div>
@@ -24,13 +24,13 @@
         <div v-for="t in tasks" :key="t.name"
           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-secondary cursor-pointer transition-colors"
           @click="store.openTaskDetail(t.name)">
-          <span class="flex items-center justify-center size-6 rounded text-[10px] font-bold shrink-0"
+          <span class="flex items-center justify-center size-6 rounded text-xs font-bold shrink-0"
             :style="{ background: typeColor(t.task_type) + '20', color: typeColor(t.task_type) }">
             {{ (t.task_type || 'T').charAt(0) }}
           </span>
           <div class="flex-1 min-w-0">
-            <div class="text-[13px] font-medium text-foreground truncate">{{ t.title }}</div>
-            <div class="flex items-center gap-2 text-[11px] text-muted mt-0.5">
+            <div class="text-base font-medium text-foreground truncate">{{ t.title }}</div>
+            <div class="flex items-center gap-2 text-xs text-muted mt-0.5">
               <span class="font-mono font-semibold">{{ t.task_key }}</span>
               <span>{{ t.project_name }}</span>
               <template v-if="t.assignees?.length">
@@ -40,7 +40,7 @@
             </div>
           </div>
           <PriorityIcon :priority="t.priority" />
-          <button class="text-[11px] font-semibold text-accent hover:underline shrink-0"
+          <button class="text-xs font-semibold text-accent hover:underline shrink-0"
             @click.stop="doTriaged(t)">Mark triaged</button>
         </div>
       </div>

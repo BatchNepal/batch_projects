@@ -3,7 +3,7 @@
 
     <!-- ── Top bar: breadcrumb + save state ─────────────────────────── -->
     <header class="shrink-0 h-12 flex items-center justify-between gap-4 px-6 bg-surface border-b border-separator">
-      <nav class="flex items-center gap-1 text-[13px] min-w-0">
+      <nav class="flex items-center gap-1 text-base min-w-0">
         <button type="button"
           class="flex items-center gap-1.5 text-muted hover:text-foreground transition-colors shrink-0 -ml-1.5 px-1.5 py-1 rounded-md hover:bg-[var(--surface-hover)]"
           @click="goBack">
@@ -16,10 +16,10 @@
         <span class="text-foreground font-medium">Settings</span>
       </nav>
       <Transition name="fade">
-        <span v-if="isSaving" key="saving" class="flex items-center gap-1.5 text-[12px] text-muted shrink-0">
+        <span v-if="isSaving" key="saving" class="flex items-center gap-1.5 text-sm text-muted shrink-0">
           <Spinner size="sm" /> Saving…
         </span>
-        <span v-else-if="savedFlash" key="saved" class="flex items-center gap-1.5 text-[12px] text-[var(--success-soft-foreground)] shrink-0">
+        <span v-else-if="savedFlash" key="saved" class="flex items-center gap-1.5 text-sm text-[var(--success-soft-foreground)] shrink-0">
           <Icon :icon="Check" class="size-3.5" /> Saved
         </span>
       </Transition>
@@ -30,7 +30,7 @@
 
       <!-- Settings nav (desktop) -->
       <aside class="hidden md:flex flex-col w-[228px] shrink-0 bg-surface border-r border-separator overflow-y-auto py-5 px-3">
-        <p class="px-3 mb-2 text-[11px] font-semibold text-muted uppercase tracking-wider">Settings</p>
+        <p class="px-3 mb-2 text-xs font-semibold text-muted uppercase tracking-wider">Settings</p>
         <button
           v-for="tab in TABS" :key="tab.id"
           type="button"
@@ -52,7 +52,7 @@
           <!-- Settings nav (mobile) -->
           <nav class="md:hidden tabs-scroll flex items-center gap-1 mb-7 overflow-x-auto pb-3 border-b border-separator">
             <button v-for="tab in TABS" :key="tab.id" type="button"
-              class="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-medium whitespace-nowrap shrink-0 transition-colors"
+              class="flex items-center gap-1.5 h-8 px-3 rounded-lg text-base font-medium whitespace-nowrap shrink-0 transition-colors"
               :class="activeTab === tab.id ? 'bg-accent-soft text-[var(--accent-soft-foreground)]' : 'text-muted hover:text-foreground'"
               @click="setTab(tab.id)">
               <Icon :icon="tab.icon" :size="13" /> {{ tab.label }}
@@ -63,8 +63,8 @@
           <!-- ══ GENERAL ══ -->
           <template v-if="activeTab === 'general'">
             <div class="mb-4">
-              <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">General</h1>
-              <p class="text-[13px] text-muted mt-1">Manage project profile and metadata.</p>
+              <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">General</h1>
+              <p class="text-base text-muted mt-1">Manage project profile and metadata.</p>
             </div>
 
             <div class="bp-set-card">
@@ -72,8 +72,8 @@
               <!-- Name -->
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                 <div class="pt-1">
-                  <p class="text-[13px] font-medium text-foreground">Name</p>
-                  <p class="text-[12px] text-muted mt-0.5 leading-relaxed">The display name for this project.</p>
+                  <p class="text-base font-medium text-foreground">Name</p>
+                  <p class="text-sm text-muted mt-0.5 leading-relaxed">The display name for this project.</p>
                 </div>
                 <Input v-model="generalDraft.project_name" size="sm"
                   placeholder="My project" @blur="autoSave" />
@@ -82,8 +82,8 @@
               <!-- Identifier -->
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                 <div class="pt-1">
-                  <p class="text-[13px] font-medium text-foreground">Identifier</p>
-                  <p class="text-[12px] text-muted mt-0.5 leading-relaxed">Prefix for {{ taskWord.toLowerCase() }} IDs ({{ generalDraft.key || 'KEY' }}-123).</p>
+                  <p class="text-base font-medium text-foreground">Identifier</p>
+                  <p class="text-sm text-muted mt-0.5 leading-relaxed">Prefix for {{ taskWord.toLowerCase() }} IDs ({{ generalDraft.key || 'KEY' }}-123).</p>
                 </div>
                 <div class="max-w-[110px]">
                   <Input v-model="generalDraft.key" size="sm" placeholder="KEY" maxlength="6"
@@ -96,8 +96,8 @@
               <!-- Avatar -->
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                 <div class="pt-1">
-                  <p class="text-[13px] font-medium text-foreground">Avatar</p>
-                  <p class="text-[12px] text-muted mt-0.5 leading-relaxed">Shown in the sidebar and project cards.</p>
+                  <p class="text-base font-medium text-foreground">Avatar</p>
+                  <p class="text-sm text-muted mt-0.5 leading-relaxed">Shown in the sidebar and project cards.</p>
                 </div>
                 <ThemePicker :theme="generalDraft.theme" @update:theme="generalDraft.theme = $event; autoSave()" />
               </div>
@@ -105,8 +105,8 @@
               <!-- Color -->
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                 <div class="pt-1">
-                  <p class="text-[13px] font-medium text-foreground">Color</p>
-                  <p class="text-[12px] text-muted mt-0.5 leading-relaxed">Accent color in the sidebar and boards.</p>
+                  <p class="text-base font-medium text-foreground">Color</p>
+                  <p class="text-sm text-muted mt-0.5 leading-relaxed">Accent color in the sidebar and boards.</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 pt-0.5">
                   <button v-for="c in PRESET_COLORS" :key="c" type="button"
@@ -130,8 +130,8 @@
               <!-- Description -->
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                 <div class="pt-1">
-                  <p class="text-[13px] font-medium text-foreground">Description</p>
-                  <p class="text-[12px] text-muted mt-0.5 leading-relaxed">A short summary shown in project listings.</p>
+                  <p class="text-base font-medium text-foreground">Description</p>
+                  <p class="text-sm text-muted mt-0.5 leading-relaxed">A short summary shown in project listings.</p>
                 </div>
                 <Textarea v-model="generalDraft.description" rows="3"
                   placeholder="What this project is about…" @blur="autoSave" />
@@ -140,14 +140,14 @@
             </div>
 
             <!-- Team section -->
-            <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-12 mb-3">Team</p>
+            <p class="text-xs font-semibold text-muted uppercase tracking-wider mt-12 mb-3">Team</p>
             <div class="bp-set-card">
 
               <!-- Lead -->
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                 <div>
-                  <p class="text-[13px] font-medium text-foreground">Lead</p>
-                  <p class="text-[12px] text-muted mt-0.5">Primary person responsible for this project.</p>
+                  <p class="text-base font-medium text-foreground">Lead</p>
+                  <p class="text-sm text-muted mt-0.5">Primary person responsible for this project.</p>
                 </div>
                 <Select v-model="generalDraft.lead" size="sm" placeholder="No lead" @update:modelValue="autoSave">
                   <SelectItem value="__none__">No lead</SelectItem>
@@ -158,8 +158,8 @@
               <!-- Default assignee -->
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                 <div>
-                  <p class="text-[13px] font-medium text-foreground">Default assignee</p>
-                  <p class="text-[12px] text-muted mt-0.5">Auto-assigned to new tasks without an owner.</p>
+                  <p class="text-base font-medium text-foreground">Default assignee</p>
+                  <p class="text-sm text-muted mt-0.5">Auto-assigned to new tasks without an owner.</p>
                 </div>
                 <Select v-model="generalDraft.default_assignee" size="sm" placeholder="Unassigned" @update:modelValue="autoSave">
                   <SelectItem value="__none__">Unassigned</SelectItem>
@@ -170,8 +170,8 @@
               <!-- Status -->
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                 <div>
-                  <p class="text-[13px] font-medium text-foreground">Status</p>
-                  <p class="text-[12px] text-muted mt-0.5">Lifecycle state visible in project listings.</p>
+                  <p class="text-base font-medium text-foreground">Status</p>
+                  <p class="text-sm text-muted mt-0.5">Lifecycle state visible in project listings.</p>
                 </div>
                 <Select v-model="generalDraft.status" size="sm" @update:modelValue="autoSave">
                   <SelectItem v-for="s in STATUS_OPTIONS" :key="s.value" :value="s.value">{{ s.label }}</SelectItem>
@@ -181,8 +181,8 @@
               <!-- Default view -->
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                 <div>
-                  <p class="text-[13px] font-medium text-foreground">Default view</p>
-                  <p class="text-[12px] text-muted mt-0.5">The tab opened when anyone enters this project.</p>
+                  <p class="text-base font-medium text-foreground">Default view</p>
+                  <p class="text-sm text-muted mt-0.5">The tab opened when anyone enters this project.</p>
                 </div>
                 <Select v-model="generalDraft.default_view" size="sm" @update:modelValue="autoSave">
                   <SelectItem v-for="v in defaultViewOptions" :key="v.value" :value="v.value">{{ v.label }}</SelectItem>
@@ -193,13 +193,13 @@
 
             <!-- Project-level custom fields (task-level fields live in the Custom fields tab) -->
             <template v-if="projectLevelFields.length">
-              <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-10 mb-2">Custom fields</p>
+              <p class="text-xs font-semibold text-muted uppercase tracking-wider mt-10 mb-2">Custom fields</p>
               <div class="bp-set-card">
                 <div v-for="field in projectLevelFields" :key="field.id"
                   class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                   <div class="pt-1">
-                    <p class="text-[13px] font-medium text-foreground">{{ field.label }}</p>
-                    <p v-if="field.description" class="text-[12px] text-muted mt-0.5 leading-relaxed">{{ field.description }}</p>
+                    <p class="text-base font-medium text-foreground">{{ field.label }}</p>
+                    <p v-if="field.description" class="text-sm text-muted mt-0.5 leading-relaxed">{{ field.description }}</p>
                   </div>
                   <CustomFieldInput :field="field" :model-value="projectFieldValues[field.id]"
                     :members="allUsers" :project-name="store.currentProject?.name" :disabled="!field.can_edit"
@@ -209,19 +209,19 @@
             </template>
 
             <!-- Save as template -->
-            <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-10 mb-2">Template</p>
+            <p class="text-xs font-semibold text-muted uppercase tracking-wider mt-10 mb-2">Template</p>
             <div class="bp-set-card">
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                 <div>
-                  <p class="text-[13px] font-medium text-foreground flex items-center gap-2">
+                  <p class="text-base font-medium text-foreground flex items-center gap-2">
                     Save as template
                     <span v-if="!templatesUnlocked"
-                      class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
+                      class="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded
                              bg-[var(--surface-secondary)] text-muted uppercase tracking-wider">
                       <Icon :icon="Lock" class="size-3" /> {{ templatesRequiredPlan }}
                     </span>
                   </p>
-                  <p class="text-[12px] text-muted mt-0.5">
+                  <p class="text-sm text-muted mt-0.5">
                     Snapshot this project's shape (states, types, labels, custom fields, tasks,
                     automations) to reuse for the next similar project. Members, client and ERP
                     links never carry over.
@@ -236,12 +236,12 @@
             </div>
 
             <!-- Danger section -->
-            <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-10 mb-2">Danger</p>
+            <p class="text-xs font-semibold text-muted uppercase tracking-wider mt-10 mb-2">Danger</p>
             <div class="bp-set-card">
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                 <div>
-                  <p class="text-[13px] font-medium text-foreground">Archive project</p>
-                  <p class="text-[12px] text-muted mt-0.5">Hides from sidebar. All data is preserved.</p>
+                  <p class="text-base font-medium text-foreground">Archive project</p>
+                  <p class="text-sm text-muted mt-0.5">Hides from sidebar. All data is preserved.</p>
                 </div>
                 <div>
                   <Button color="danger" size="sm" @click="archiveProject">Archive</Button>
@@ -253,8 +253,8 @@
           <!-- ══ VIEWS ══ -->
           <template v-else-if="activeTab === 'views'">
             <div class="mb-4">
-              <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Views</h1>
-              <p class="text-[13px] text-muted mt-1">
+              <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Views</h1>
+              <p class="text-base text-muted mt-1">
                 Drag to reorder. The first {{ MAX_INLINE_VIEWS }} show inline in the header; the rest live behind "More views".
               </p>
             </div>
@@ -273,8 +273,8 @@
                   <span class="flex items-center justify-center size-7 rounded-md bg-[var(--surface-secondary)] text-muted shrink-0">
                     <Icon :icon="v.icon" class="size-4" />
                   </span>
-                  <span class="flex-1 text-[13px] font-medium text-foreground">{{ v.label }}</span>
-                  <span v-if="i === 0" class="text-[11px] text-muted mr-1">Always shown</span>
+                  <span class="flex-1 text-base font-medium text-foreground">{{ v.label }}</span>
+                  <span v-if="i === 0" class="text-xs text-muted mr-1">Always shown</span>
                   <div class="flex items-center shrink-0">
                     <IconButton size="sm" variant="ghost" :isDisabled="i <= 1" @click="moveView(i, -1)">
                       <Icon :icon="ChevronUp" />
@@ -286,7 +286,7 @@
                 </div>
                 <div v-if="i === MAX_INLINE_VIEWS - 1 && i < viewsDraft.length - 1" class="flex items-center gap-2 py-1">
                   <div class="flex-1 h-px bg-[var(--separator)]" />
-                  <span class="text-[10px] font-semibold text-muted uppercase tracking-wider shrink-0">Behind "More views"</span>
+                  <span class="text-xs font-semibold text-muted uppercase tracking-wider shrink-0">Behind "More views"</span>
                   <div class="flex-1 h-px bg-[var(--separator)]" />
                 </div>
               </template>
@@ -297,11 +297,11 @@
           <template v-else-if="activeTab === 'intake'">
             <div class="mb-4 flex items-center gap-2">
               <div>
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Intake Forms</h1>
-                <p class="text-[13px] text-muted mt-1">Create public forms that submit tasks to this project.</p>
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Intake Forms</h1>
+                <p class="text-base text-muted mt-1">Create public forms that submit tasks to this project.</p>
               </div>
               <span v-if="!intakeFormsUnlocked"
-                class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
+                class="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded
                        bg-[var(--surface-secondary)] text-muted uppercase tracking-wider">
                 <Icon :icon="Lock" class="size-3" /> {{ intakeFormsRequiredPlan }}
               </span>
@@ -320,8 +320,8 @@
               <div v-for="f in intakeForms" :key="f.name" class="bp-set-card">
                 <div class="flex items-center justify-between py-1">
                   <div>
-                    <p class="text-[13px] font-medium text-foreground">{{ f.form_title }}</p>
-                    <p class="text-[11px] text-muted mt-0.5">
+                    <p class="text-base font-medium text-foreground">{{ f.form_title }}</p>
+                    <p class="text-xs text-muted mt-0.5">
                       Active · {{ f.task_type || 'Task' }}
                       <span v-if="f.default_status">→ {{ f.default_status }}</span>
                     </p>
@@ -344,7 +344,7 @@
 
             <!-- Create form -->
             <div class="bp-set-card">
-              <p class="text-[13px] font-medium text-foreground mb-3">New intake form</p>
+              <p class="text-base font-medium text-foreground mb-3">New intake form</p>
               <div class="flex items-center gap-2 mb-4">
                 <Input v-model="newFormTitle" placeholder="Form title…" size="sm" class="flex-1" />
                 <Select v-model="newFormTaskType" size="sm" class="w-28">
@@ -355,7 +355,7 @@
                 </Select>
               </div>
 
-              <p class="text-[10px] font-semibold text-muted uppercase tracking-wider mb-2">Fields</p>
+              <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Fields</p>
               <div class="space-y-2 mb-3">
                 <div v-for="(field, i) in newFormFieldsList" :key="field._id" class="flex flex-col gap-1.5">
                   <div class="flex items-center gap-2">
@@ -392,7 +392,7 @@
             <!-- Edit form modal -->
             <Modal :open="!!editingForm" @update:open="v => !v && (editingForm = null)" size="md" hideCloseButton>
               <ModalHeader class="px-5 pt-5">
-                <p class="text-[15px] font-semibold text-foreground">Edit form fields</p>
+                <p class="text-md font-semibold text-foreground">Edit form fields</p>
               </ModalHeader>
               <ModalBody>
                 <div class="space-y-2 mb-3">
@@ -434,8 +434,8 @@
           <!-- ══ BILLING ══ -->
           <template v-else-if="activeTab === 'billing'">
             <div class="mb-4">
-              <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Billing</h1>
-              <p class="text-[13px] text-muted mt-1">Configure engagement type, rates, and client information.</p>
+              <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Billing</h1>
+              <p class="text-base text-muted mt-1">Configure engagement type, rates, and client information.</p>
             </div>
 
             <div class="bp-set-card">
@@ -443,8 +443,8 @@
               <!-- Engagement type -->
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                 <div>
-                  <p class="text-[13px] font-medium text-foreground">Engagement type</p>
-                  <p class="text-[12px] text-muted mt-0.5">Controls billing structures and reporting formats.</p>
+                  <p class="text-base font-medium text-foreground">Engagement type</p>
+                  <p class="text-sm text-muted mt-0.5">Controls billing structures and reporting formats.</p>
                 </div>
                 <Select v-model="generalDraft.project_type" size="sm" @update:modelValue="autoSave">
                   <SelectItem v-for="pt in PROJECT_TYPES" :key="pt.value" :value="pt.value">{{ pt.label }}</SelectItem>
@@ -463,8 +463,8 @@
                      against actual records is the fix, not just a UI nicety. -->
                 <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                   <div class="pt-1">
-                    <p class="text-[13px] font-medium text-foreground">Client</p>
-                    <p class="text-[12px] text-muted mt-0.5">Shown on invoices and reports.</p>
+                    <p class="text-base font-medium text-foreground">Client</p>
+                    <p class="text-sm text-muted mt-0.5">Shown on invoices and reports.</p>
                   </div>
                   <!-- Explicit :model-value/@update:model-value, not v-model —
                        v-model here PLUS this @update:model-value handler both
@@ -494,8 +494,8 @@
                      Data, not a Link) for anything exotic outside the list. -->
                 <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                   <div class="pt-1">
-                    <p class="text-[13px] font-medium text-foreground">Currency</p>
-                    <p class="text-[12px] text-muted mt-0.5">Used for all rates, budgets and invoices on this project.</p>
+                    <p class="text-base font-medium text-foreground">Currency</p>
+                    <p class="text-sm text-muted mt-0.5">Used for all rates, budgets and invoices on this project.</p>
                   </div>
                   <div class="max-w-[220px]">
                     <Combobox
@@ -511,8 +511,8 @@
                 <div v-if="['tm','retainer'].includes(generalDraft.project_type)"
                   class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                   <div class="pt-1">
-                    <p class="text-[13px] font-medium text-foreground">Hourly rate</p>
-                    <p class="text-[12px] text-muted mt-0.5">Per-hour billing rate for tracked time.</p>
+                    <p class="text-base font-medium text-foreground">Hourly rate</p>
+                    <p class="text-sm text-muted mt-0.5">Per-hour billing rate for tracked time.</p>
                   </div>
                   <div class="max-w-[160px]">
                     <Input v-model.number="generalDraft.hourly_rate" size="sm"
@@ -524,10 +524,10 @@
                 <div v-if="['fixed','tm'].includes(generalDraft.project_type)"
                   class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                   <div class="pt-1">
-                    <p class="text-[13px] font-medium text-foreground">
+                    <p class="text-base font-medium text-foreground">
                       {{ generalDraft.project_type === 'fixed' ? 'Fixed budget' : 'Budget cap' }}
                     </p>
-                    <p class="text-[12px] text-muted mt-0.5">
+                    <p class="text-sm text-muted mt-0.5">
                       {{ generalDraft.project_type === 'fixed' ? 'Total agreed contract value.' : 'Optional spend ceiling.' }}
                     </p>
                   </div>
@@ -541,8 +541,8 @@
                 <div v-if="generalDraft.project_type === 'retainer'"
                   class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                   <div class="pt-1">
-                    <p class="text-[13px] font-medium text-foreground">Monthly hours</p>
-                    <p class="text-[12px] text-muted mt-0.5">Contracted hours included per billing cycle.</p>
+                    <p class="text-base font-medium text-foreground">Monthly hours</p>
+                    <p class="text-sm text-muted mt-0.5">Contracted hours included per billing cycle.</p>
                   </div>
                   <div class="max-w-[100px]">
                     <Input v-model.number="generalDraft.retainer_hours" size="sm"
@@ -554,7 +554,7 @@
 
               <template v-else>
                 <div class="py-4">
-                  <p class="text-[13px] text-muted leading-relaxed">
+                  <p class="text-base text-muted leading-relaxed">
                     Internal projects do not bill to clients. Time tracking and hour logging are available regardless of type.
                   </p>
                 </div>
@@ -566,15 +566,15 @@
           <!-- ══ MEMBERS ══ -->
           <template v-else-if="activeTab === 'members'">
             <div class="mb-4">
-              <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Members</h1>
-              <p class="text-[13px] text-muted mt-1">Grant workspace access to team members.</p>
+              <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Members</h1>
+              <p class="text-base text-muted mt-1">Grant workspace access to team members.</p>
             </div>
 
             <div class="bp-set-card">
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start">
                 <div class="pt-1">
-                  <p class="text-[13px] font-medium text-foreground">Add member</p>
-                  <p class="text-[12px] text-muted mt-0.5">Invite an org member to this project.</p>
+                  <p class="text-base font-medium text-foreground">Add member</p>
+                  <p class="text-sm text-muted mt-0.5">Invite an org member to this project.</p>
                 </div>
                 <div class="flex items-end gap-2">
                   <div class="flex-1">
@@ -598,8 +598,8 @@
 
               <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-start border-t border-separator">
                 <div class="pt-1">
-                  <p class="text-[13px] font-medium text-foreground">Invite by email</p>
-                  <p class="text-[12px] text-muted mt-0.5">Send an invitation to anyone — they'll get a link to join.</p>
+                  <p class="text-base font-medium text-foreground">Invite by email</p>
+                  <p class="text-sm text-muted mt-0.5">Send an invitation to anyone — they'll get a link to join.</p>
                 </div>
                 <div class="flex items-end gap-2">
                   <div class="flex-1">
@@ -621,7 +621,7 @@
 
             <!-- Pending invitations -->
             <template v-if="pendingInvitations.length">
-              <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-12 mb-3">
+              <p class="text-xs font-semibold text-muted uppercase tracking-wider mt-12 mb-3">
                 {{ pendingInvitations.length }} pending {{ pendingInvitations.length === 1 ? 'invitation' : 'invitations' }}
               </p>
               <div class="bp-set-card">
@@ -632,8 +632,8 @@
                       <Icon :icon="Mail" :size="12" class="text-muted" />
                     </span>
                     <div class="min-w-0">
-                      <p class="text-[13px] font-medium text-foreground truncate">{{ inv.email }}</p>
-                      <p class="text-[11px] text-muted">Invited as {{ inv.role }}</p>
+                      <p class="text-base font-medium text-foreground truncate">{{ inv.email }}</p>
+                      <p class="text-xs text-muted">Invited as {{ inv.role }}</p>
                     </div>
                   </div>
                   <div class="flex items-center gap-2 shrink-0">
@@ -652,7 +652,7 @@
               </div>
             </template>
 
-            <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-12 mb-3">
+            <p class="text-xs font-semibold text-muted uppercase tracking-wider mt-12 mb-3">
               {{ projectMembers.length }} {{ projectMembers.length === 1 ? 'member' : 'members' }}
             </p>
 
@@ -665,8 +665,8 @@
                 <div class="flex items-center gap-3 min-w-0">
                   <Avatar :name="m.full_name" :color="avatarColor(m.user)" size="sm" />
                   <div class="min-w-0">
-                    <p class="text-[13px] font-medium text-foreground truncate">{{ m.full_name }}</p>
-                    <p class="text-[11px] text-muted truncate">{{ m.user }}</p>
+                    <p class="text-base font-medium text-foreground truncate">{{ m.full_name }}</p>
+                    <p class="text-xs text-muted truncate">{{ m.user }}</p>
                   </div>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
@@ -688,8 +688,8 @@
           <template v-else-if="activeTab === 'workflow'">
             <div class="flex items-start justify-between gap-4 mb-5">
               <div>
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Project Workflow</h1>
-                <p class="text-[13px] text-muted mt-1">Define board columns and state categories. Drag to reorder.</p>
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Project Workflow</h1>
+                <p class="text-base text-muted mt-1">Define board columns and state categories. Drag to reorder.</p>
               </div>
               <div class="flex items-center gap-2 shrink-0">
                 <div class="w-44">
@@ -709,7 +709,7 @@
               <span class="size-11 rounded-md bg-[var(--surface-secondary)] flex items-center justify-center mb-3">
                 <Icon :icon="GitBranch" class="size-5 text-muted" />
               </span>
-              <p class="text-[13px] font-medium text-foreground">No statuses yet</p>
+              <p class="text-base font-medium text-foreground">No statuses yet</p>
             </div>
 
             <div v-else class="bp-set-card">
@@ -736,7 +736,7 @@
                 <Dropdown placement="bottom-start" :side-offset="4" :min-width="220">
                   <template #trigger="{ toggle }">
                     <button
-                      class="h-[26px] px-2 inline-flex items-center gap-1 rounded-md text-[11px] font-medium border border-border text-muted hover:text-foreground hover:bg-default transition-colors shrink-0"
+                      class="h-[26px] px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium border border-border text-muted hover:text-foreground hover:bg-default transition-colors shrink-0"
                       title="Allowed transitions"
                       @click="toggle"
                     >
@@ -758,7 +758,7 @@
                     {{ other.name || 'Untitled' }}
                     <template v-if="isAllowedTarget(s, other.name)" #endContent>
                       <button
-                        class="text-[10px] font-semibold px-1.5 py-0.5 rounded border border-border text-muted hover:text-foreground hover:border-foreground transition-colors"
+                        class="text-xs font-semibold px-1.5 py-0.5 rounded border border-border text-muted hover:text-foreground hover:border-foreground transition-colors"
                         title="Click to require a minimum role for this move"
                         @click.stop="cycleTransitionRole(s, other.name)"
                       >{{ minRoleFor(s, other.name) || 'Any role' }}</button>
@@ -779,9 +779,9 @@
               </div>
             </div>
  <div v-if="workflowDraft.length" class="mt-5 flex items-center gap-2 flex-wrap">
-              <span class="text-[10px] font-semibold text-muted uppercase tracking-wider shrink-0 mr-1">Preview</span>
+              <span class="text-xs font-semibold text-muted uppercase tracking-wider shrink-0 mr-1">Preview</span>
               <span v-for="s in workflowDraft" :key="s.name"
-                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-sm text-[11px] font-medium border"
+                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-sm text-xs font-medium border"
                 :style="{ background: s.color + '15', color: s.color, borderColor: s.color + '25' }">
                 <span class="size-1.5 rounded-full" :style="{ background: s.color }" />
                 {{ s.name || 'Untitled' }}
@@ -794,8 +794,8 @@
           <template v-else-if="activeTab === 'types'">
             <div class="flex items-start justify-between gap-4 mb-5">
               <div>
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Task types</h1>
-                <p class="text-[13px] text-muted mt-1">Categorize work items by kind. Drag to reorder.</p>
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Task types</h1>
+                <p class="text-base text-muted mt-1">Categorize work items by kind. Drag to reorder.</p>
               </div>
               <Button size="sm" color="primary" class="shrink-0" @click="addIssueType">
                 <Icon :icon="Plus" class="mr-1" /> Add type
@@ -807,7 +807,7 @@
               <span class="size-11 rounded-md bg-[var(--surface-secondary)] flex items-center justify-center mb-3">
                 <Icon :icon="Layers" class="size-5 text-muted" />
               </span>
-              <p class="text-[13px] font-medium text-foreground">No types defined yet</p>
+              <p class="text-base font-medium text-foreground">No types defined yet</p>
             </div>
 
             <div v-else class="bp-set-card">
@@ -820,9 +820,9 @@
                 </div>
                 <Input v-model="t.name" size="sm" class="flex-1"
                   placeholder="Type name" @blur="saveTypes" />
-                <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border shrink-0"
+                <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border shrink-0"
                   :style="{ background: t.color + '15', color: t.color, borderColor: t.color + '25' }">
-                  <span class="size-3.5 rounded-sm flex items-center justify-center text-white text-[8px] font-bold"
+                  <span class="size-3.5 rounded-sm flex items-center justify-center text-white text-micro font-bold"
                     :style="{ background: t.color }">
                     {{ t.name?.charAt(0)?.toUpperCase() || '?' }}
                   </span>
@@ -848,8 +848,8 @@
           <template v-else-if="activeTab === 'epics'">
             <div class="flex items-start justify-between gap-4 mb-5">
               <div>
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Epics</h1>
-                <p class="text-[13px] text-muted mt-1">Group related tasks under a larger initiative.</p>
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Epics</h1>
+                <p class="text-base text-muted mt-1">Group related tasks under a larger initiative.</p>
               </div>
               <Button size="sm" color="primary" class="shrink-0" @click="addEpic">
                 <Icon :icon="Plus" class="mr-1" /> Add epic
@@ -869,7 +869,7 @@
                 </div>
                 <Input v-model="ep.title" size="sm" class="flex-1"
                   placeholder="Epic title" @blur="saveEpicField(ep, 'title', ep.title)" />
-                <span class="text-[11.5px] text-muted shrink-0 tabular-nums">{{ ep.done_issues }}/{{ ep.total_issues }}</span>
+                <span class="text-sm text-muted shrink-0 tabular-nums">{{ ep.done_issues }}/{{ ep.total_issues }}</span>
                 <IconButton size="sm" variant="light" color="danger" class="shrink-0" @click="askRemoveEpic(ep)">
                   <Icon :icon="Trash2" />
                 </IconButton>
@@ -880,8 +880,8 @@
           <template v-else-if="activeTab === 'labels'">
             <div class="flex items-start justify-between gap-4 mb-5">
               <div>
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Labels</h1>
-                <p class="text-[13px] text-muted mt-1">Tag tasks with quick classification markers.</p>
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Labels</h1>
+                <p class="text-base text-muted mt-1">Tag tasks with quick classification markers.</p>
               </div>
               <Button size="sm" color="primary" class="shrink-0" @click="addLabel">
                 <Icon :icon="Plus" class="mr-1" /> Add label
@@ -893,7 +893,7 @@
               <span class="size-11 rounded-md bg-[var(--surface-secondary)] flex items-center justify-center mb-3">
                 <Icon :icon="Tag" class="size-5 text-muted" />
               </span>
-              <p class="text-[13px] font-medium text-foreground">No labels yet</p>
+              <p class="text-base font-medium text-foreground">No labels yet</p>
             </div>
 
             <div v-else class="bp-set-card">
@@ -906,7 +906,7 @@
                 </div>
                 <Input v-model="lbl.label" size="sm" class="flex-1"
                   placeholder="Label name" @blur="saveLabels" />
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border shrink-0"
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border shrink-0"
                   :style="{ background: lbl.color + '15', color: lbl.color, borderColor: lbl.color + '25' }">
                   <span class="size-1.5 rounded-full" :style="{ background: lbl.color }" />
                   {{ lbl.label || 'Preview' }}
@@ -922,8 +922,8 @@
           <template v-else-if="activeTab === 'fields'">
             <div class="flex items-start justify-between mb-5">
               <div>
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Custom fields</h1>
-                <p class="text-[13px] text-muted mt-1">
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Custom fields</h1>
+                <p class="text-base text-muted mt-1">
                   Fields private to this project, or attached from the
                   <RouterLink to="/workspace/settings/customFields" class="text-primary hover:underline">
                     workspace library
@@ -942,7 +942,7 @@
                   <Transition name="pop">
                     <div v-if="fieldPickerOpen"
                       class="absolute right-0 top-10 z-50 w-[300px] bg-overlay rounded-lg shadow-overlay p-2 max-h-[360px] overflow-y-auto">
-                      <p v-if="!attachableFields.length" class="px-2 py-3 text-[12.5px] text-muted italic">
+                      <p v-if="!attachableFields.length" class="px-2 py-3 text-sm text-muted italic">
                         No library fields yet — create one in Workspace Settings.
                       </p>
                       <button v-for="ft in attachableFields" :key="ft.name" type="button"
@@ -953,8 +953,8 @@
                           <component :is="cfIcon(ft.field_type)" class="size-4" :stroke-width="1.8" />
                         </span>
                         <span class="min-w-0">
-                          <span class="block text-[13px] font-medium text-foreground truncate">{{ ft.field_label }}</span>
-                          <span class="block text-[11.5px] text-muted truncate">{{ fieldMeta(ft.field_type)?.label }} · {{ ft.applies_to }}</span>
+                          <span class="block text-base font-medium text-foreground truncate">{{ ft.field_label }}</span>
+                          <span class="block text-sm text-muted truncate">{{ fieldMeta(ft.field_type)?.label }} · {{ ft.applies_to }}</span>
                         </span>
                       </button>
                     </div>
@@ -969,8 +969,8 @@
               <span class="size-11 rounded-md bg-[var(--surface-secondary)] flex items-center justify-center mb-3">
                 <Icon :icon="SlidersHorizontal" class="size-5 text-muted" />
               </span>
-              <p class="text-[13px] font-medium text-foreground">No fields yet</p>
-              <p class="text-[12px] text-muted mt-1 max-w-[260px] leading-relaxed">Create a field private to this project, or attach one from the workspace library.</p>
+              <p class="text-base font-medium text-foreground">No fields yet</p>
+              <p class="text-sm text-muted mt-1 max-w-[260px] leading-relaxed">Create a field private to this project, or attach one from the workspace library.</p>
             </div>
 
             <!-- Fields (private + attached-shared) -->
@@ -983,17 +983,17 @@
                     <component :is="cfIcon(field.type)" class="size-4" :stroke-width="1.8" />
                   </span>
                   <div class="flex-1 min-w-0">
-                    <p class="text-[13.5px] font-semibold text-foreground truncate">{{ field.label }}</p>
-                    <p class="text-[11.5px] text-muted truncate">{{ field.description || '—' }}</p>
+                    <p class="text-base font-semibold text-foreground truncate">{{ field.label }}</p>
+                    <p class="text-sm text-muted truncate">{{ field.description || '—' }}</p>
                   </div>
-                  <span v-if="!field.is_shared" class="inline-flex items-center px-2 py-0.5 bg-accent-soft rounded text-[10.5px] font-semibold text-[var(--accent-soft-foreground)] uppercase tracking-wider shrink-0">
+                  <span v-if="!field.is_shared" class="inline-flex items-center px-2 py-0.5 bg-accent-soft rounded text-xs font-semibold text-[var(--accent-soft-foreground)] uppercase tracking-wider shrink-0">
                     Private
                   </span>
-                  <span class="inline-flex items-center px-2 py-0.5 bg-[var(--surface-secondary)] rounded text-[10.5px] font-semibold text-muted uppercase tracking-wider shrink-0">
+                  <span class="inline-flex items-center px-2 py-0.5 bg-[var(--surface-secondary)] rounded text-xs font-semibold text-muted uppercase tracking-wider shrink-0">
                     {{ fieldMeta(field.type)?.label || field.type }}
                   </span>
                   <label class="flex items-center gap-1.5 shrink-0 cursor-pointer">
-                    <span class="text-[12px] text-muted">Required</span>
+                    <span class="text-sm text-muted">Required</span>
                     <Switch :isSelected="field.required"
                       @update:isSelected="val => setFieldRequired(field, val)" />
                   </label>
@@ -1023,15 +1023,15 @@
           <!-- ══ TASK TEMPLATES ══ -->
           <template v-else-if="activeTab === 'templates'">
             <div class="mb-4">
-              <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em] flex items-center gap-2">
+              <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em] flex items-center gap-2">
                 Task templates
                 <span v-if="!templatesUnlocked"
-                  class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
+                  class="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded
                          bg-[var(--surface-secondary)] text-muted uppercase tracking-wider">
                   <Icon :icon="Lock" class="size-3" /> {{ templatesRequiredPlan }}
                 </span>
               </h1>
-              <p class="text-[13px] text-muted mt-1">
+              <p class="text-base text-muted mt-1">
                 Reusable task blueprints. Save one from a task's context menu, then start new tasks from it.
               </p>
             </div>
@@ -1041,8 +1041,8 @@
               <span class="size-11 rounded-md bg-[var(--surface-secondary)] flex items-center justify-center mb-3">
                 <Icon :icon="FileText" class="size-5 text-muted" />
               </span>
-              <p class="text-[13px] font-medium text-foreground">No templates yet</p>
-              <p class="text-[12.5px] text-muted mt-1 max-w-sm">
+              <p class="text-base font-medium text-foreground">No templates yet</p>
+              <p class="text-sm text-muted mt-1 max-w-sm">
                 Right-click any task and choose "Save as template…" to see it here.
               </p>
             </div>
@@ -1053,8 +1053,8 @@
                   <Icon :icon="FileText" class="size-4 text-foreground" />
                 </span>
                 <div class="min-w-0 flex-1">
-                  <p class="text-[13px] font-medium text-foreground truncate">{{ t.template_name }}</p>
-                  <p class="text-[12px] text-muted truncate">
+                  <p class="text-base font-medium text-foreground truncate">{{ t.template_name }}</p>
+                  <p class="text-sm text-muted truncate">
                     {{ t.task_type || 'Task' }}<span v-if="t.items?.length"> · {{ t.items.length }} subtask{{ t.items.length === 1 ? '' : 's' }}</span>
                   </p>
                 </div>
@@ -1080,7 +1080,7 @@
     <!-- Save as template drawer -->
     <Drawer :open="saveTplOpen" @update:open="saveTplOpen = $event" size="md" placement="right">
       <DrawerHeader @close="saveTplOpen = false">
-        <span class="text-[14px] font-semibold text-foreground">Save as template</span>
+        <span class="text-md font-semibold text-foreground">Save as template</span>
       </DrawerHeader>
       <DrawerBody>
         <div class="flex flex-col gap-4">
@@ -1088,13 +1088,13 @@
           <Input v-model="saveTplForm.category" label="Category" placeholder="e.g. Services" />
           <Textarea v-model="saveTplForm.description" label="Description" rows="2" placeholder="What this template is for…" />
           <div class="flex flex-col gap-2.5 pt-1">
-            <label class="flex items-center gap-2 text-[13px] text-foreground">
+            <label class="flex items-center gap-2 text-base text-foreground">
               <Switch size="sm" v-model="saveTplForm.include_tasks" /> Include tasks (with dates as offsets, subtasks, dependencies)
             </label>
-            <label class="flex items-center gap-2 text-[13px] text-foreground">
+            <label class="flex items-center gap-2 text-base text-foreground">
               <Switch size="sm" v-model="saveTplForm.include_custom_fields" /> Include custom fields
             </label>
-            <label class="flex items-center gap-2 text-[13px] text-foreground">
+            <label class="flex items-center gap-2 text-base text-foreground">
               <Switch size="sm" v-model="saveTplForm.include_automations" /> Include automation rules
             </label>
           </div>
@@ -1125,7 +1125,7 @@
     <!-- Toast -->
     <Transition name="toast">
       <div v-if="toast.show"
-        class="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2.5 px-4 py-2.5 rounded-md text-[13px] font-medium text-white z-50"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2.5 px-4 py-2.5 rounded-md text-base font-medium text-white z-50"
         :class="toast.type === 'success' ? 'bg-foreground' : 'bg-danger'"
         style="box-shadow:0 4px 20px rgba(0,0,0,0.18)">
         <Icon v-if="toast.type === 'success'" :icon="Check" class="size-4" />
@@ -2250,7 +2250,7 @@ function goBack() {
   height: 34px;
   padding: 0 10px;
   border-radius: 6px;
-  font-size: 13.5px;
+  font-size:var(--text-base);
   font-weight: 500;
   color: #505258;
   background: none;

@@ -5,7 +5,7 @@
       <!-- ── Page Header ─────────────────────────────────────────────── -->
       <header class="flex items-start justify-between mb-6 gap-4">
         <div>
-          <h1 class="text-[26px] font-semibold text-foreground leading-8 tracking-tight">{{ greeting }}, {{ firstName }}</h1>
+          <h1 class="text-3xl font-semibold text-foreground leading-8 tracking-tight">{{ greeting }}, {{ firstName }}</h1>
           <p class="mt-1 text-sm text-muted leading-none">
             <template v-for="(seg, i) in smartContext" :key="i">
               <a href="#" class="hover:text-muted transition-colors" @click.prevent="scrollTo(seg.anchor)">{{ seg.text }}</a>
@@ -527,7 +527,7 @@
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-foreground leading-5">{{ risk.title }}</p>
                     <div class="flex items-center gap-1.5 mt-1">
-                      <div v-if="risk.owner" class="size-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0" :style="{ backgroundColor: risk.owner_color }">{{ risk.owner_initial }}</div>
+                      <div v-if="risk.owner" class="size-5 rounded-full flex items-center justify-center text-white text-micro font-bold shrink-0" :style="{ backgroundColor: risk.owner_color }">{{ risk.owner_initial }}</div>
                       <span class="text-xs font-medium text-muted capitalize">{{ risk.severity }}</span>
                       <span class="text-xs text-muted">· {{ risk.project_name }}</span>
                     </div>

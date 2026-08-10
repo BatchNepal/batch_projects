@@ -37,7 +37,7 @@ const displayContent = computed(() => {
   return (!isNaN(n) && n > props.max) ? `${props.max}+` : props.content
 })
 
-const SIZE_MAP = { sm: 'min-h-[14px] min-w-[14px] text-[9px]', md: 'min-h-4 min-w-4 text-[10px]', lg: 'min-h-5 min-w-5 text-xs' }
+const SIZE_MAP = { sm: 'min-h-[14px] min-w-[14px] text-micro', md: 'min-h-4 min-w-4 text-xs', lg: 'min-h-5 min-w-5 text-xs' }
 const DOT_SIZE = { sm: 'size-1.5', md: 'size-2', lg: 'size-2.5' }
 
 const COLOR_MAP = {

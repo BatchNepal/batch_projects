@@ -39,7 +39,7 @@
   <div v-else-if="!widget.data" class="wv-state">
     <div class="flex flex-col items-center gap-1.5 text-center">
       <Inbox :size="18" class="text-[--muted] opacity-60" />
-      <span class="text-[12px] text-[--muted]">No data for this scope</span>
+      <span class="text-sm text-[--muted]">No data for this scope</span>
     </div>
   </div>
 
@@ -64,7 +64,7 @@
     </div>
     <div class="wv-chart-body">
       <div v-if="!items.length" class="wv-state h-full">
-        <span class="text-[12px] text-[--muted]">No data for this scope</span>
+        <span class="text-sm text-[--muted]">No data for this scope</span>
       </div>
       <ApexBar        v-else-if="ct === 'bar'"     :items="items" :height="chartH" :format="fmt" />
       <ApexBar        v-else-if="ct === 'hbar'"    :items="items" horizontal :height="chartH" :format="fmt" />
@@ -121,19 +121,19 @@ const chartH = computed(() => Math.max(80, props.height - 44))
 </script>
 
 <style scoped>
-.wv-state { height: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.wv-state { height: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size:var(--text-sm); color: var(--muted); }
 
 .wv-titles { min-width: 0; }
-.wv-title { font-size: 13px; font-weight: 600; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wv-sub { font-size: 11px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wv-title { font-size:var(--text-base); font-weight: 600; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wv-sub { font-size:var(--text-xs); color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* metric */
 .wv-metric { height: 100%; display: flex; flex-direction: column; }
 .wv-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .wv-pill { padding: 6px; border-radius: 6px; display: grid; place-items: center; flex-shrink: 0; }
 .wv-num-wrap { flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 12px; }
-.wv-num { font-size: 30px; line-height: 1; font-weight: 700; letter-spacing: -0.02em; color: var(--foreground); font-variant-numeric: tabular-nums; }
-.wv-foot { margin-top: auto; padding-top: 10px; font-size: 11px; color: var(--muted); }
+.wv-num { font-size:var(--text-metric); line-height: 1; font-weight: 700; letter-spacing: -0.02em; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.wv-foot { margin-top: auto; padding-top: 10px; font-size:var(--text-xs); color: var(--muted); }
 
 /* chart */
 .wv-chart { height: 100%; display: flex; flex-direction: column; gap: 8px; }

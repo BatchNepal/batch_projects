@@ -9,7 +9,7 @@
       <div v-if="searching" class="flex justify-center py-4">
         <Icon :icon="Loader2" :size="16" class="animate-spin text-muted" />
       </div>
-      <p v-else-if="!results.length" class="text-[12px] text-muted text-center py-4">
+      <p v-else-if="!results.length" class="text-sm text-muted text-center py-4">
         {{ query ? 'No matching tasks.' : 'No tasks in scope yet.' }}
       </p>
       <div v-else class="flex flex-col gap-0.5 max-h-72 overflow-y-auto">

@@ -84,7 +84,7 @@ function hover(i, e) { hi.value = i; const r = el.value.getBoundingClientRect();
 .ch { position: relative; width: 100%; }
 .ch-svg { display: block; }
 .ch-grid { stroke: var(--surface-secondary); stroke-width: 1; shape-rendering: crispEdges; }
-.ch-axis { fill: var(--muted); font-size: 10px; font-family: var(--font-sans); }
+.ch-axis { fill: var(--muted); font-size:var(--text-xs); font-family: var(--font-sans); }
 
 .ch-bar {
   cursor: pointer;
@@ -100,7 +100,7 @@ function hover(i, e) { hi.value = i; const r = el.value.getBoundingClientRect();
   background: var(--foreground); color: var(--background); border-radius: 8px; padding: 6px 9px;
   display: flex; flex-direction: column; gap: 1px; box-shadow: 0 4px 14px rgba(11, 13, 14, .25); white-space: nowrap;
 }
-.ch-tip-l { font-size: 10.5px; color: var(--border-secondary); }
-.ch-tip-v { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: var(--font-semibold); }
+.ch-tip-l { font-size:var(--text-xs); color: var(--border-secondary); }
+.ch-tip-v { display: inline-flex; align-items: center; gap: 6px; font-size:var(--text-base); font-weight: var(--font-semibold); }
 .ch-tip-v i { width: 8px; height: 8px; border-radius: 2px; }
 </style>

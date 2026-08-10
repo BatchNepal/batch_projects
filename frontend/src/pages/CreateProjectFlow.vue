@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed inset-0 z-overlay bg-gray-50 flex flex-col overflow-hidden">
+  <div class="fixed inset-0 z-overlay bg-surface-secondary flex flex-col overflow-hidden">
 
     <!-- ── Top bar ──────────────────────────────────────────────────── -->
     <div class="shrink-0 border-b border-separator shadow-sm bg-surface">
@@ -9,8 +9,8 @@
             <img src="/images/bp-logo-new.svg" class="w-8 h-8 mr-2 inline-block" />
           </div>
          <div>
-           <h2 class="text-lg font-bold text-foreground whitespace-nowrap leading-tight">Create New Project</h2>
-          <p class="text-[12.5px] text-muted truncate">{{ STEP_SUBTITLES[step - 1] }}</p>
+           <h2 class="text-md font-bold text-foreground whitespace-nowrap leading-tight">Create New Project</h2>
+          <p class="text-sm text-muted truncate">{{ STEP_SUBTITLES[step - 1] }}</p>
          </div>
         </div>
 
@@ -37,7 +37,7 @@
             <!-- ════ STEP 1 — Template list (full-width rows) ════ -->
             <div v-if="step === 1" key="s1">
               <div v-for="group in templateGroups" :key="group.label" class="mb-6">
-                <p class="flex items-center gap-1.5 text-[11px] font-bold text-foreground uppercase tracking-wider mb-2.5">
+                <p class="flex items-center gap-1.5 text-xs font-bold text-foreground uppercase tracking-wider mb-2.5">
                   {{ group.label }}
                 </p>
                 <div class="flex flex-col gap-3">
@@ -59,13 +59,13 @@
 
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2">
-                        <p class="text-[13.5px] font-semibold text-foreground leading-snug">{{ t.label }}</p>
+                        <p class="text-base font-semibold text-foreground leading-snug">{{ t.label }}</p>
                         <Chip v-if="t.defaultProjectType" size="sm" color="warning" variant="soft">Billable</Chip>
                         <Chip v-if="group.label === 'Your templates' && !ent.can('templates')" size="sm" variant="soft">
                           <Lock :size="10" class="inline -mt-0.5 mr-0.5" /> {{ ent.requiredPlanFor('templates') }}
                         </Chip>
                       </div>
-                      <p class="text-[12.5px] text-muted mt-0.5 leading-relaxed truncate">{{ t.description }}</p>
+                      <p class="text-sm text-muted mt-0.5 leading-relaxed truncate">{{ t.description }}</p>
                     </div>
 
                     <span
@@ -138,7 +138,7 @@
                 <div class="pt-5 border-t border-separator">
                   <div class="flex items-center gap-2 mb-4">
                     <label class="cp-label" style="margin:0">Engagement</label>
-                    <span class="text-[12px] text-muted">How is this work paid for?</span>
+                    <span class="text-sm text-muted">How is this work paid for?</span>
                   </div>
                   <SegmentedRadio v-model="form.type" :options="PROJECT_TYPES" />
                   <Transition name="fade">
@@ -172,8 +172,8 @@
             <div class="px-5 pt-4 pb-0 bg-surface">
               <div class="flex items-center gap-2.5">
                 <ProjectAvatar :theme="form.theme" size="md" />
-                <p class="text-[14px] font-semibold text-foreground truncate">{{ form.name || 'Untitled project' }}</p>
-                <span v-if="form.key" class="text-[11px] font-semibold text-muted bg-[var(--field-background)] rounded-md px-1.5 py-0.5 font-mono">{{ form.key }}</span>
+                <p class="text-md font-semibold text-foreground truncate">{{ form.name || 'Untitled project' }}</p>
+                <span v-if="form.key" class="text-xs font-semibold text-muted bg-[var(--field-background)] rounded-md px-1.5 py-0.5 font-mono">{{ form.key }}</span>
                 <Chip v-if="form.type !== 'internal'" size="sm" color="warning" variant="soft" class="ml-auto">
                   {{ PROJECT_TYPES.find(t => t.value === form.type)?.label || form.type }}
                 </Chip>
@@ -184,7 +184,7 @@
                 <span
                   v-for="tab in ['Summary', 'Board', 'List', 'Backlog', 'Money']"
                   :key="tab"
-                  class="pv-tab text-[12px] pb-2"
+                  class="pv-tab text-sm pb-2"
                   :class="tab === 'Board' ? 'pv-tab--active' : 'text-muted'"
                 >{{ tab }}</span>
               </div>
@@ -198,19 +198,19 @@
                 class="pv-col flex-1 min-w-0"
               >
                 <div class="flex items-center gap-1.5 px-1 mb-2">
-                  <span class="text-[11px] font-semibold text-foreground uppercase tracking-wide truncate">{{ s.name }}</span>
-                  <span class="text-[10px] text-muted tabular-nums">{{ PREVIEW_COUNTS[ci % 4] }}</span>
+                  <span class="text-xs font-semibold text-foreground uppercase tracking-wide truncate">{{ s.name }}</span>
+                  <span class="text-xs text-muted tabular-nums">{{ PREVIEW_COUNTS[ci % 4] }}</span>
                 </div>
                 <div class="flex flex-col gap-2">
                   <div v-for="r in PREVIEW_COUNTS[ci % 4]" :key="r" class="pv-card rounded-md bg-surface p-2.5">
-                    <p class="text-[11.5px] font-medium text-foreground leading-snug truncate">{{ previewTaskTitle(ci, r) }}</p>
+                    <p class="text-sm font-medium text-foreground leading-snug truncate">{{ previewTaskTitle(ci, r) }}</p>
                     <div class="flex items-center justify-between mt-2.5">
                       <span
                         class="w-3 h-3 rounded-[4px] transition-colors duration-200"
                         :style="{ background: typeColor(ci + r) }"
                       />
                       <span
-                        class="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0"
+                        class="w-4 h-4 rounded-full flex items-center justify-center text-micro font-bold text-white shrink-0"
                         :style="{ background: previewAvatarColor(ci + r) }"
                       >{{ previewInitial(ci + r) }}</span>
                     </div>
@@ -221,11 +221,11 @@
 
             <!-- Issue types strip -->
             <div class="px-5 py-3 bg-surface border-t border-separator flex items-center gap-2 flex-wrap">
-              <span class="text-[11px] text-muted mr-1">Task types:</span>
+              <span class="text-xs text-muted mr-1">Task types:</span>
               <span
                 v-for="name in form.issueTypes.slice(0, 5)"
                 :key="name"
-                class="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground bg-[var(--field-background)] rounded-full px-2 py-0.5"
+                class="inline-flex items-center gap-1.5 text-xs font-medium text-foreground bg-[var(--field-background)] rounded-full px-2 py-0.5"
               >
                 <span class="w-1.5 h-1.5 rounded-full" :style="{ background: typeColorByName(name) }" />
                 {{ name }}
@@ -233,7 +233,7 @@
             </div>
           </div>
 
-          <p class="text-[11px] text-muted text-center mt-3">Live preview — updates as you configure</p>
+          <p class="text-xs text-muted text-center mt-3">Live preview — updates as you configure</p>
         </aside>
 
       </div>
@@ -254,7 +254,7 @@
                 @click="i < step && (step = i)"
               >
                 <span
-                  class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors duration-200 shrink-0"
+                  class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition-colors duration-200 shrink-0"
                   :class="[
                     i === step ? 'bg-accent text-white' : i < step ? 'bg-accent-soft text-accent cursor-pointer' : 'bg-default text-muted',
                   ]"
@@ -263,7 +263,7 @@
                   <template v-else>{{ i }}</template>
                 </span>
                 <span
-                  class="text-[12.5px] font-medium transition-colors duration-200 hidden sm:inline"
+                  class="text-sm font-medium transition-colors duration-200 hidden sm:inline"
                   :class="i === step ? 'text-foreground' : i < step ? 'text-muted cursor-pointer group-hover:text-foreground' : 'text-muted'"
                 >{{ STEP_LABELS[i - 1] }}</span>
               </button>
@@ -489,7 +489,7 @@ function cancel() {
 .fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
-.cp-label { display: block; font-size: 13px; font-weight: 500; color: var(--foreground); margin-bottom: 6px; line-height: 1.3; }
+.cp-label { display: block; font-size:var(--text-base); font-weight: 500; color: var(--foreground); margin-bottom: 6px; line-height: 1.3; }
 
 /* ── Template rows ( full-width rows, HeroUI v2 skin) ──────
    Dense list → shadow-small at rest, shadow-medium only on hover. */

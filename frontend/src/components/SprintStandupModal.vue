@@ -1,8 +1,8 @@
 <template>
   <Modal :open="open" @update:open="onToggle" size="md">
     <div class="p-5 w-full">
-      <h3 class="text-[15px] font-semibold text-foreground leading-tight mb-0.5">Daily standup</h3>
-      <p class="text-[12.5px] text-muted mb-4">{{ sprintName }} — {{ today }}</p>
+      <h3 class="text-md font-semibold text-foreground leading-tight mb-0.5">Daily standup</h3>
+      <p class="text-sm text-muted mb-4">{{ sprintName }} — {{ today }}</p>
 
       <div v-if="loading" class="py-8 flex items-center justify-center">
         <Spinner size="sm" />
@@ -37,9 +37,9 @@
           <div v-for="e in others" :key="e.user" class="standup-card">
             <div class="flex items-center gap-2 mb-2">
               <span class="standup-av" :style="{ background: avatarColor(e.user) }">{{ initials(e.full_name) }}</span>
-              <span class="text-[12.5px] font-semibold text-foreground">{{ e.full_name }}</span>
+              <span class="text-sm font-semibold text-foreground">{{ e.full_name }}</span>
             </div>
-            <div class="space-y-1.5 text-[12.5px] text-muted pl-1">
+            <div class="space-y-1.5 text-sm text-muted pl-1">
               <p v-if="e.yesterday"><span class="standup-tag">Yesterday</span> {{ e.yesterday }}</p>
               <p v-if="e.today"><span class="standup-tag">Today</span> {{ e.today }}</p>
               <p v-if="e.blockers" class="text-danger"><span class="standup-tag standup-tag--danger">Blockers</span> {{ e.blockers }}</p>
@@ -118,16 +118,16 @@ async function save() {
 }
 .standup-card--mine { background: var(--accent-soft); border-color: transparent; }
 .standup-card-label {
-  font-size: 10px; font-weight: 700; color: var(--muted);
+  font-size:var(--text-xs); font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
 }
 .standup-field { margin-bottom: 8px; }
 .standup-field:last-of-type { margin-bottom: 0; }
 .standup-field label {
-  display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 3px;
+  display: block; font-size:var(--text-xs); font-weight: 600; color: var(--muted); margin-bottom: 3px;
 }
 .standup-field textarea {
-  width: 100%; font-size: 12.5px; font-family: inherit; color: var(--foreground);
+  width: 100%; font-size:var(--text-sm); font-family: inherit; color: var(--foreground);
   background: var(--surface); border: 1px solid var(--field-border); border-radius: 6px;
   padding: 6px 8px; resize: none; outline: none; transition: border-color .1s;
 }
@@ -136,10 +136,10 @@ async function save() {
 .standup-av {
   width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--accent-foreground); font-size: 8.5px; font-weight: 700;
+  color: var(--accent-foreground); font-size:var(--text-micro); font-weight: 700;
 }
 .standup-tag {
-  display: inline-block; font-size: 10px; font-weight: 700; color: var(--muted);
+  display: inline-block; font-size:var(--text-xs); font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.03em; margin-right: 4px;
 }
 .standup-tag--danger { color: var(--danger); }

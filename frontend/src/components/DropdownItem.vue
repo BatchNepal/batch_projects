@@ -2,7 +2,7 @@
   <div
     @click="$emit('click')"
     :class="[
-      'fd-item flex font-medium items-center gap-2.5 px-2.5 py-1.5 min-h-[30px] text-[13px] rounded-[5px] cursor-pointer select-none',
+      'fd-item flex font-medium items-center gap-2.5 px-2.5 py-1.5 min-h-[30px] text-base rounded-[5px] cursor-pointer select-none',
       active ? 'text-foreground font-semibold' : 'text-foreground',
       'hover:bg-default',
       danger ? '!text-danger hover:!bg-danger-soft' : ''

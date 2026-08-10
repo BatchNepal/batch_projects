@@ -99,25 +99,25 @@
           <table class="w-full border-collapse text-sm">
             <thead>
               <tr class="border-b border-separator bg-surface-secondary">
-                <th class="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Member
                 </th>
-                <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Capacity
                 </th>
-                <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Logged
                 </th>
-                <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Billable
                 </th>
-                <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Util %
                 </th>
-                <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted">
                   Realized
                 </th>
-                <th class="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted w-48">
+                <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted w-48">
                   <!-- bar -->
                 </th>
               </tr>
@@ -137,10 +137,10 @@
                       size="sm"
                     />
                     <div class="min-w-0">
-                      <p class="text-[13px] font-medium text-foreground truncate leading-none">
+                      <p class="text-base font-medium text-foreground truncate leading-none">
                         {{ m.full_name }}
                       </p>
-                      <p class="text-[10.5px] text-muted mt-0.5 leading-none truncate">
+                      <p class="text-xs text-muted mt-0.5 leading-none truncate">
                         {{ m.user }}
                       </p>
                     </div>
@@ -149,19 +149,19 @@
 
                 <!-- Capacity -->
                 <td class="px-4 py-3 text-right tabular-nums">
-                  <span class="text-[13px] text-muted">{{ fmt(m.capacity_hours) }}h</span>
+                  <span class="text-base text-muted">{{ fmt(m.capacity_hours) }}h</span>
                 </td>
 
                 <!-- Logged -->
                 <td class="px-4 py-3 text-right tabular-nums">
-                  <span class="text-[13px] font-medium text-foreground">{{ fmt(m.logged_hours) }}h</span>
+                  <span class="text-base font-medium text-foreground">{{ fmt(m.logged_hours) }}h</span>
                 </td>
 
                 <!-- Billable -->
                 <td class="px-4 py-3 text-right">
                   <div>
-                    <span class="text-[13px] font-medium text-foreground tabular-nums">{{ fmt(m.billable_hours) }}h</span>
-                    <span v-if="m.logged_hours > 0" class="ml-1.5 text-[11px] text-muted tabular-nums">
+                    <span class="text-base font-medium text-foreground tabular-nums">{{ fmt(m.billable_hours) }}h</span>
+                    <span v-if="m.logged_hours > 0" class="ml-1.5 text-xs text-muted tabular-nums">
                       {{ m.billable_pct }}%
                     </span>
                   </div>
@@ -170,7 +170,7 @@
                 <!-- Util % -->
                 <td class="px-4 py-3 text-right">
                   <span
-                    class="text-[13px] font-semibold tabular-nums"
+                    class="text-base font-semibold tabular-nums"
                     :class="utilColor(m.utilization_pct)"
                   >
                     {{ m.utilization_pct }}%
@@ -179,7 +179,7 @@
 
                 <!-- Realization (stub until ERPNext invoices connected) -->
                 <td class="px-4 py-3 text-right">
-                  <span class="text-[13px] text-muted tabular-nums">—</span>
+                  <span class="text-base text-muted tabular-nums">—</span>
                 </td>
 
                 <!-- Utilization bar — full-width, colored by band -->
@@ -191,7 +191,7 @@
                       :style="{ width: Math.min(m.utilization_pct, 100) + '%' }"
                     />
                   </div>
-                  <p class="text-[10px] text-muted mt-0.5 tabular-nums text-right">
+                  <p class="text-xs text-muted mt-0.5 tabular-nums text-right">
                     {{ Math.min(m.utilization_pct, 100) }}% of capacity
                   </p>
                 </td>
@@ -201,16 +201,16 @@
 
           <!-- Table footer legend — utilization bands -->
           <div class="flex items-center gap-4 px-5 py-3 border-t border-separator bg-surface-secondary">
-            <div class="flex items-center gap-1.5 text-[11px] text-muted">
+            <div class="flex items-center gap-1.5 text-xs text-muted">
               <span class="w-3 h-1.5 rounded-full bg-accent" />Under 70%
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] text-muted">
+            <div class="flex items-center gap-1.5 text-xs text-muted">
               <span class="w-3 h-1.5 rounded-full bg-success" />Healthy 70–95%
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] text-muted">
+            <div class="flex items-center gap-1.5 text-xs text-muted">
               <span class="w-3 h-1.5 rounded-full bg-warning" />At capacity 95–110%
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] text-muted">
+            <div class="flex items-center gap-1.5 text-xs text-muted">
               <span class="w-3 h-1.5 rounded-full bg-danger" />Overloaded
             </div>
           </div>

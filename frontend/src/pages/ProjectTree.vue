@@ -3,7 +3,7 @@
     <div class="px-6 pt-5 pb-0 border-b border-border flex-shrink-0">
       <div class="flex items-center justify-between mb-3">
         <div>
-          <h1 class="text-[15px] font-semibold text-foreground leading-tight">Project Hierarchy</h1>
+          <h1 class="text-md font-semibold text-foreground leading-tight">Project Hierarchy</h1>
           <p class="text-xs text-muted mt-0.5">WBS tree — parent/child project structure, with delivery status per node</p>
         </div>
       </div>
@@ -154,17 +154,17 @@ onMounted(load)
 .pt-toggle-spacer { width: 16px; flex-shrink: 0; }
 
 .pt-identity { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1 1 260px; }
-.pt-name { font-size: 13px; font-weight: 500; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pt-key { font-size: 10.5px; font-weight: 700; color: var(--muted); font-family: monospace; flex-shrink: 0; }
+.pt-name { font-size:var(--text-base); font-weight: 500; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-key { font-size:var(--text-xs); font-weight: 700; color: var(--muted); font-family: monospace; flex-shrink: 0; }
 
 .pt-lead { display: flex; align-items: center; gap: 5px; flex-shrink: 0; width: 132px; }
-.pt-lead-name { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-lead-name { font-size:var(--text-sm); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .pt-progress { display: flex; align-items: center; gap: 6px; flex-shrink: 0; width: 96px; }
-.pt-progress-empty { font-size: 11px; color: var(--muted); width: auto; }
+.pt-progress-empty { font-size:var(--text-xs); color: var(--muted); width: auto; }
 .pt-progress-track { width: 48px; height: 4px; border-radius: 2px; background: var(--surface-secondary); overflow: hidden; flex-shrink: 0; }
 .pt-progress-fill { display: block; height: 100%; background: var(--success); border-radius: 2px; }
-.pt-progress-label { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pt-progress-label { font-size:var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 
-.pt-status { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
+.pt-status { font-size:var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
 </style>

@@ -71,15 +71,15 @@ function hover(i, e) { hi.value = i; const rc = el.value.getBoundingClientRect()
 .dn-seg.dim { opacity: .3; }
 
 .dn-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; pointer-events: none; }
-.dn-total { font-size: 19px; font-weight: var(--font-bold); color: var(--foreground); letter-spacing: -0.02em; }
-.dn-label { font-size: 10px; color: var(--muted); }
+.dn-total { font-size:var(--text-3xl); font-weight: var(--font-bold); color: var(--foreground); letter-spacing: -0.02em; }
+.dn-label { font-size:var(--text-xs); color: var(--muted); }
 
 .dn-tip {
   position: absolute; z-index: 20; pointer-events: none; transform: translateY(-100%);
   background: var(--foreground); color: var(--background); border-radius: 8px; padding: 6px 9px;
   display: flex; flex-direction: column; gap: 1px; box-shadow: 0 4px 14px rgba(11, 13, 14, .25); white-space: nowrap;
 }
-.dn-tip-l { font-size: 10.5px; color: var(--border-secondary); }
-.dn-tip-v { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: var(--font-semibold); }
+.dn-tip-l { font-size:var(--text-xs); color: var(--border-secondary); }
+.dn-tip-v { display: inline-flex; align-items: center; gap: 6px; font-size:var(--text-base); font-weight: var(--font-semibold); }
 .dn-tip-v i { width: 8px; height: 8px; border-radius: 2px; }
 </style>

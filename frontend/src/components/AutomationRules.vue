@@ -3,15 +3,15 @@
     <!-- Header -->
     <div class="flex items-start justify-between mb-4">
       <div>
-        <h1 class="text-[15px] font-semibold text-foreground tracking-[-0.01em] flex items-center gap-2">
+        <h1 class="text-md font-semibold text-foreground tracking-[-0.01em] flex items-center gap-2">
           Automations
           <span v-if="!unlocked"
-            class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
+            class="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded
                    bg-[var(--surface-secondary)] text-muted uppercase tracking-wider">
             <Icon :icon="Lock" class="size-3" /> {{ requiredPlan }}
           </span>
         </h1>
-        <p class="text-[13px] text-muted mt-1">
+        <p class="text-base text-muted mt-1">
           When something happens, automatically do something else — no clicks required.
         </p>
       </div>
@@ -28,8 +28,8 @@
           <Icon :icon="Zap" class="size-5 text-accent" />
         </span>
         <div class="min-w-0 flex-1">
-          <p class="text-[14px] font-semibold text-foreground">Put your busywork on autopilot</p>
-          <p class="text-[13px] text-muted mt-1 leading-relaxed">
+          <p class="text-md font-semibold text-foreground">Put your busywork on autopilot</p>
+          <p class="text-base text-muted mt-1 leading-relaxed">
             Auto-assign incoming work, move tasks across columns, notify the right people, and
             spin up follow-up tasks — all without lifting a finger. Available on the
             <span class="font-semibold text-foreground">{{ requiredPlan }}</span> plan and above.
@@ -38,7 +38,7 @@
             <Button size="sm" color="primary" @click="goUpgrade">
               <Icon :icon="Sparkles" class="size-3.5 mr-1" /> Upgrade to {{ requiredPlan }}
             </Button>
-            <span class="text-[12px] text-muted">You're on the {{ ent.tierLabel }} plan</span>
+            <span class="text-sm text-muted">You're on the {{ ent.tierLabel }} plan</span>
           </div>
         </div>
       </div>
@@ -53,7 +53,7 @@
         <!-- Category rail -->
         <div class="w-40 shrink-0 space-y-0.5">
           <button v-for="c in visibleCategories" :key="c.id" type="button"
-            class="w-full text-left px-2.5 py-1.5 rounded-md text-[13px] transition-colors"
+            class="w-full text-left px-2.5 py-1.5 rounded-md text-base transition-colors"
             :class="activeCategory === c.id ? 'bg-accent-soft text-accent font-medium' : 'text-muted hover:bg-default hover:text-foreground'"
             @click="activeCategory = c.id">
             {{ c.label }}
@@ -66,13 +66,13 @@
           </Input>
 
           <template v-if="!recipeQuery">
-            <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-5 mb-2">Start with the basics</p>
+            <p class="text-xs font-semibold text-muted uppercase tracking-wider mt-5 mb-2">Start with the basics</p>
             <div class="grid grid-cols-2 gap-2.5">
               <button v-for="r in featuredRecipes" :key="r.id" type="button"
                 class="text-left rounded-lg border border-border bg-overlay p-3.5 hover:border-accent hover:shadow-xs transition-all"
                 @click="pickRecipe(r)">
-                <p class="text-[13px] font-medium text-foreground">{{ r.label }}</p>
-                <p class="text-[12px] text-muted mt-1 leading-snug">{{ recipeSentenceText(r) }}</p>
+                <p class="text-base font-medium text-foreground">{{ r.label }}</p>
+                <p class="text-sm text-muted mt-1 leading-snug">{{ recipeSentenceText(r) }}</p>
               </button>
               <button type="button"
                 class="text-left rounded-lg border border-dashed border-border bg-transparent p-3.5 hover:border-accent transition-all flex items-center gap-2.5"
@@ -81,23 +81,23 @@
                   <Icon :icon="Plus" class="size-4 text-muted" />
                 </span>
                 <span>
-                  <p class="text-[13px] font-medium text-foreground">Create from scratch</p>
-                  <p class="text-[12px] text-muted">Build a custom rule step by step</p>
+                  <p class="text-base font-medium text-foreground">Create from scratch</p>
+                  <p class="text-sm text-muted">Build a custom rule step by step</p>
                 </span>
               </button>
             </div>
           </template>
 
           <template v-else>
-            <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-5 mb-2">
+            <p class="text-xs font-semibold text-muted uppercase tracking-wider mt-5 mb-2">
               {{ searchedRecipes.length }} result{{ searchedRecipes.length === 1 ? '' : 's' }}
             </p>
             <div v-if="searchedRecipes.length" class="grid grid-cols-2 gap-2.5">
               <button v-for="r in searchedRecipes" :key="r.id" type="button"
                 class="text-left rounded-lg border border-border bg-overlay p-3.5 hover:border-accent hover:shadow-xs transition-all"
                 @click="pickRecipe(r)">
-                <p class="text-[13px] font-medium text-foreground">{{ r.label }}</p>
-                <p class="text-[12px] text-muted mt-1 leading-snug">{{ recipeSentenceText(r) }}</p>
+                <p class="text-base font-medium text-foreground">{{ r.label }}</p>
+                <p class="text-sm text-muted mt-1 leading-snug">{{ recipeSentenceText(r) }}</p>
               </button>
             </div>
             <EmptyState v-else :icon="Search" title="No matching recipes"
@@ -109,15 +109,15 @@
           </template>
 
           <template v-if="!recipeQuery && activeCategory !== 'all'">
-            <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mt-6 mb-2">
+            <p class="text-xs font-semibold text-muted uppercase tracking-wider mt-6 mb-2">
               {{ RECIPE_CATEGORIES.find(c => c.id === activeCategory)?.label }}
             </p>
             <div class="grid grid-cols-2 gap-2.5">
               <button v-for="r in categoryRecipes" :key="r.id" type="button"
                 class="text-left rounded-lg border border-border bg-overlay p-3.5 hover:border-accent hover:shadow-xs transition-all"
                 @click="pickRecipe(r)">
-                <p class="text-[13px] font-medium text-foreground">{{ r.label }}</p>
-                <p class="text-[12px] text-muted mt-1 leading-snug">{{ recipeSentenceText(r) }}</p>
+                <p class="text-base font-medium text-foreground">{{ r.label }}</p>
+                <p class="text-sm text-muted mt-1 leading-snug">{{ recipeSentenceText(r) }}</p>
               </button>
             </div>
           </template>
@@ -159,14 +159,14 @@
           </span>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-1.5 flex-wrap">
-              <p class="text-[13px] font-medium text-foreground">{{ r.rule_name }}</p>
+              <p class="text-base font-medium text-foreground">{{ r.rule_name }}</p>
               <Chip size="sm" variant="soft">{{ r.scope === 'workspace' ? 'All projects' : (r.project === project ? 'This project' : r.project) }}</Chip>
             </div>
             <!-- Bold-token sentence — the SAME renderer the builder's own hero uses. -->
-            <p class="text-[12.5px] text-muted mt-0.5 leading-snug">
+            <p class="text-sm text-muted mt-0.5 leading-snug">
               <span v-for="(s, i) in ruleSentence(r, options)" :key="i" :class="s.bold ? 'ars-token' : ''">{{ s.text }}</span>
             </p>
-            <p class="text-[11.5px] text-muted mt-1 flex items-center gap-1.5 flex-wrap">
+            <p class="text-sm text-muted mt-1 flex items-center gap-1.5 flex-wrap">
               <span>Updated {{ relativeTime(r.modified) }}</span>
               <span class="opacity-50">·</span>
               <Avatar :name="r.owner" size="xs" />
@@ -217,7 +217,7 @@
           <SelectItem v-for="r in rules" :key="r.name" :value="r.name">{{ r.rule_name }}</SelectItem>
         </Select>
       </div>
-      <div v-if="runsLoading" class="py-10 text-center text-[13px] text-muted">Loading…</div>
+      <div v-if="runsLoading" class="py-10 text-center text-base text-muted">Loading…</div>
       <EmptyState v-else-if="!runs.length" :icon="History" title="No runs yet"
         description="Rule activity will appear here once your automations fire." />
       <div v-else class="divide-y divide-separator rounded-md border border-border overflow-hidden">
@@ -225,15 +225,15 @@
           <Icon :icon="(runStatusMeta[run.status] || runStatusMeta.Skipped).icon"
             class="size-4 mt-0.5 shrink-0" :class="(runStatusMeta[run.status] || runStatusMeta.Skipped).cls" />
           <div class="min-w-0 flex-1">
-            <p class="text-[13px] text-foreground truncate">
+            <p class="text-base text-foreground truncate">
               <span class="font-medium">{{ run.rule_name }}</span>
               <span v-if="run.action_type" class="text-muted"> · #{{ (run.action_index ?? 0) + 1 }} {{ run.action_type }}</span>
             </p>
-            <p class="text-[12px] text-muted truncate">{{ run.message }}</p>
+            <p class="text-sm text-muted truncate">{{ run.message }}</p>
           </div>
           <div class="text-right shrink-0">
             <Chip v-if="run.task_key" size="sm" variant="soft" color="accent" class="font-mono">{{ run.task_key }}</Chip>
-            <p class="text-[11px] text-muted mt-1 tabular-nums">{{ fmtRunTime(run.run_at) }}</p>
+            <p class="text-xs text-muted mt-1 tabular-nums">{{ fmtRunTime(run.run_at) }}</p>
           </div>
         </div>
       </div>
@@ -242,7 +242,7 @@
     <!-- ══════════════ WORKFLOWS TAB — graph canvas ═══════════════ -->
     <TabsPanel :model-value="activeTab" value="workflows">
       <div v-if="unlocked" class="flex items-center justify-between mb-3">
-        <p class="text-[13px] text-muted">
+        <p class="text-base text-muted">
           Multi-step, branching automations with external integrations — the visual builder.
         </p>
         <Button size="sm" variant="bordered" @click="newWorkflow">
@@ -269,10 +269,10 @@
             </span>
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5 flex-wrap">
-                <p class="text-[13px] font-medium text-foreground">{{ wf.title }}</p>
+                <p class="text-base font-medium text-foreground">{{ wf.title }}</p>
                 <Chip size="sm" variant="soft">{{ wf.scope === 'workspace' ? 'All projects' : (wf.project === project ? 'This project' : wf.project) }}</Chip>
               </div>
-              <p class="text-[11.5px] text-muted mt-1">
+              <p class="text-sm text-muted mt-1">
                 <span v-if="wf.last_run_at">Last ran {{ relativeTime(wf.last_run_at) }} · {{ wf.last_run_status }}</span>
                 <span v-else>Never run yet</span>
               </p>
@@ -292,7 +292,7 @@
     <Modal :open="!!deleting" size="sm" @update:open="v => !v && (deleting = null)">
       <ModalHeader @close="deleting = null">Delete rule?</ModalHeader>
       <ModalBody>
-        <p class="text-[13px] text-muted">"{{ deleting?.rule_name }}" will be permanently removed. This can't be undone.</p>
+        <p class="text-base text-muted">"{{ deleting?.rule_name }}" will be permanently removed. This can't be undone.</p>
       </ModalBody>
       <ModalFooter>
         <Button size="sm" variant="light" @click="deleting = null">Cancel</Button>
@@ -304,7 +304,7 @@
     <Modal :open="!!deletingWorkflow" size="sm" @update:open="v => !v && (deletingWorkflow = null)">
       <ModalHeader @close="deletingWorkflow = null">Delete workflow?</ModalHeader>
       <ModalBody>
-        <p class="text-[13px] text-muted">"{{ deletingWorkflow?.title }}" will be permanently removed. This can't be undone.</p>
+        <p class="text-base text-muted">"{{ deletingWorkflow?.title }}" will be permanently removed. This can't be undone.</p>
       </ModalBody>
       <ModalFooter>
         <Button size="sm" variant="light" @click="deletingWorkflow = null">Cancel</Button>
@@ -316,7 +316,7 @@
     <Modal :open="!!converting" size="sm" @update:open="v => !v && (converting = null)">
       <ModalHeader @close="converting = null">Convert to advanced workflow?</ModalHeader>
       <ModalBody>
-        <p class="text-[13px] text-muted">
+        <p class="text-base text-muted">
           Creates a draft workflow you can extend with branches and integrations. Your rule keeps
           running until you activate the workflow and pause the rule.
         </p>

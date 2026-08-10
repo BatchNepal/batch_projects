@@ -1,7 +1,7 @@
 <template>
   <div class="relative flex flex-col gap-1.5" :class="width" ref="containerRef">
 
-    <label v-if="label" class="text-[12.5px] font-semibold tracking-wide" :class="error ? 'text-danger' : 'text-muted'">
+    <label v-if="label" class="text-sm font-semibold tracking-wide" :class="error ? 'text-danger' : 'text-muted'">
       {{ label }} <span v-if="required" class="text-danger">*</span>
     </label>
 
@@ -12,7 +12,7 @@
       class="ui-trigger group flex w-full items-center justify-between text-left outline-none transition-all duration-150"
       :class="[
         triggerClass || 'rounded-md',
-        triggerSizeClass || 'min-h-[36px] px-3 text-[13px]',
+        triggerSizeClass || 'min-h-[36px] px-3 text-base',
         disabled
           ? 'opacity-50 cursor-not-allowed bg-default text-muted'
           : error
@@ -78,7 +78,7 @@
           ref="searchInputRef"
           v-model="searchQuery"
           placeholder="Search…"
-          class="flex-1 text-[12.5px] bg-transparent border-none outline-none text-foreground placeholder:text-muted"
+          class="flex-1 text-sm bg-transparent border-none outline-none text-foreground placeholder:text-muted"
           @click.stop
           @keydown.space.stop
         />
@@ -89,7 +89,7 @@
           v-for="opt in listOptions"
           :key="opt.value"
           @click="select(opt)"
-          class="flex w-full cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-[7px] text-[13px] transition-colors duration-100"
+          class="flex w-full cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-[7px] text-base transition-colors duration-100"
           :class="opt.value === modelValue
             ? 'bg-accent-soft text-[var(--accent-soft-foreground)] font-semibold'
             : 'text-foreground hover:bg-default'"
@@ -99,12 +99,12 @@
               <img :src="opt.avatar" class="h-8 w-8 rounded-full object-cover shrink-0 bg-default" alt=""/>
               <div class="flex flex-col min-w-0">
                 <span class="block truncate font-medium">{{ opt.label }}</span>
-                <span v-if="opt.desc" class="block truncate text-[12px] text-muted">{{ opt.desc }}</span>
+                <span v-if="opt.desc" class="block truncate text-sm text-muted">{{ opt.desc }}</span>
               </div>
             </div>
             <div v-else-if="opt.desc && rich" class="flex flex-col min-w-0 flex-1">
               <span class="block truncate">{{ opt.label }}</span>
-              <span class="block truncate text-[12px] text-muted">{{ opt.desc }}</span>
+              <span class="block truncate text-sm text-muted">{{ opt.desc }}</span>
             </div>
             <span v-else class="flex-1 truncate">{{ opt.label }}</span>
           </slot>
@@ -113,7 +113,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
           </svg>
         </li>
-        <li v-if="!listOptions.length" class="px-2.5 py-3 text-[13px] text-muted text-center">
+        <li v-if="!listOptions.length" class="px-2.5 py-3 text-base text-muted text-center">
           {{ emptyText || 'No options available' }}
         </li>
       </ul>

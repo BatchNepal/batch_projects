@@ -3,7 +3,7 @@
 
     <!-- ── Top bar: breadcrumb ─────────────────────────────────────────── -->
     <header class="shrink-0 h-12 flex items-center justify-between gap-4 px-6 bg-surface border-b border-separator">
-      <nav class="flex items-center gap-1 text-[13px] min-w-0">
+      <nav class="flex items-center gap-1 text-base min-w-0">
         <button type="button"
           class="flex items-center gap-1.5 text-muted hover:text-foreground transition-colors shrink-0 -ml-1.5 px-1.5 py-1 rounded-md hover:bg-[var(--surface-hover)]"
           @click="router.push('/workspace')">
@@ -14,10 +14,10 @@
         <span class="text-foreground font-medium">Workspace Settings</span>
       </nav>
       <Transition name="fade">
-        <span v-if="saving" key="saving" class="flex items-center gap-1.5 text-[12px] text-muted shrink-0">
+        <span v-if="saving" key="saving" class="flex items-center gap-1.5 text-sm text-muted shrink-0">
           <Spinner size="sm" /> Saving…
         </span>
-        <span v-else-if="savedFlash" key="saved" class="flex items-center gap-1.5 text-[12px] text-[var(--success-soft-foreground)] shrink-0">
+        <span v-else-if="savedFlash" key="saved" class="flex items-center gap-1.5 text-sm text-[var(--success-soft-foreground)] shrink-0">
           <Icon :icon="Check" class="size-3.5" /> Saved
         </span>
       </Transition>
@@ -37,7 +37,7 @@
     <div v-else class="flex-1 flex min-h-0 overflow-hidden">
 
       <aside class="hidden md:flex flex-col w-[228px] shrink-0 bg-surface border-r border-separator overflow-y-auto py-5 px-3">
-        <p class="px-3 mb-2 text-[11px] font-semibold text-muted uppercase tracking-wider">Settings</p>
+        <p class="px-3 mb-2 text-xs font-semibold text-muted uppercase tracking-wider">Settings</p>
         <button v-for="tab in TABS" :key="tab.id" type="button" class="set-nav-item"
           :class="activeTab === tab.id ? 'set-nav-item--active' : ''" @click="setTab(tab.id)">
           <Icon :icon="tab.icon" :size="15" :stroke-width="1.75" class="shrink-0" />
@@ -50,7 +50,7 @@
 
           <nav class="md:hidden tabs-scroll flex items-center gap-1 mb-7 overflow-x-auto pb-3 border-b border-separator">
             <button v-for="tab in TABS" :key="tab.id" type="button"
-              class="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-medium whitespace-nowrap shrink-0 transition-colors"
+              class="flex items-center gap-1.5 h-8 px-3 rounded-lg text-base font-medium whitespace-nowrap shrink-0 transition-colors"
               :class="activeTab === tab.id ? 'bg-accent-soft text-[var(--accent-soft-foreground)]' : 'text-muted hover:text-foreground'"
               @click="setTab(tab.id)">
               <Icon :icon="tab.icon" :size="13" /> {{ tab.label }}
@@ -61,50 +61,50 @@
           <template v-if="activeTab === 'general'">
             <div class="max-w-[760px]">
               <div class="mb-4">
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">General</h1>
-                <p class="text-[13px] text-muted mt-1">Overview for this workspace's plan and access.</p>
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">General</h1>
+                <p class="text-base text-muted mt-1">Overview for this workspace's plan and access.</p>
               </div>
 
               <div class="bp-set-card">
                 <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                   <div>
-                    <p class="text-[13px] font-medium text-foreground">Plan</p>
-                    <p class="text-[12px] text-muted mt-0.5">Current subscription tier.</p>
+                    <p class="text-base font-medium text-foreground">Plan</p>
+                    <p class="text-sm text-muted mt-0.5">Current subscription tier.</p>
                   </div>
                   <div class="flex items-center gap-3">
                     <Chip size="sm" color="accent" variant="soft">{{ ent.tierLabel }}</Chip>
-                    <RouterLink to="/workspace/pricing" class="text-[12.5px] text-primary hover:underline">
+                    <RouterLink to="/workspace/pricing" class="text-sm text-primary hover:underline">
                       View plans
                     </RouterLink>
                   </div>
                 </div>
                 <div v-if="ent.seatsTotal" class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center">
                   <div>
-                    <p class="text-[13px] font-medium text-foreground">Seats</p>
-                    <p class="text-[12px] text-muted mt-0.5">Licensed seat cap for this install.</p>
+                    <p class="text-base font-medium text-foreground">Seats</p>
+                    <p class="text-sm text-muted mt-0.5">Licensed seat cap for this install.</p>
                   </div>
-                  <p class="text-[13px] text-foreground tabular-nums">
+                  <p class="text-base text-foreground tabular-nums">
                     {{ ent.seatsUsed }} of {{ ent.seatsTotal }} used
                     <span v-if="ent.isAtCapacity" class="text-danger font-medium">— at capacity</span>
                   </p>
                 </div>
                 <div class="grid grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] gap-x-12 py-6 items-center border-t border-separator">
                   <div>
-                    <p class="text-[13px] font-medium text-foreground">Billing</p>
-                    <p class="text-[12px] text-muted mt-0.5">Manage subscription and payment methods.</p>
+                    <p class="text-base font-medium text-foreground">Billing</p>
+                    <p class="text-sm text-muted mt-0.5">Manage subscription and payment methods.</p>
                   </div>
                   <div class="flex items-center gap-3">
-                    <RouterLink to="/workspace/pricing" class="text-[12.5px] text-primary hover:underline">
+                    <RouterLink to="/workspace/pricing" class="text-sm text-primary hover:underline">
                       Upgrade plan
                     </RouterLink>
-                    <span class="text-[12px] text-muted">·</span>
-                    <button type="button" class="text-[12.5px] text-primary hover:underline" @click="openBillingPortal">
+                    <span class="text-sm text-muted">·</span>
+                    <button type="button" class="text-sm text-primary hover:underline" @click="openBillingPortal">
                       Invoices &amp; payment method
                     </button>
                   </div>
                 </div>
                 <div class="py-6">
-                  <p class="text-[12px] text-muted leading-relaxed">
+                  <p class="text-sm text-muted leading-relaxed">
                     Only users holding the <span class="font-medium text-foreground">BP Admin</span> role, or a
                     System Manager, can change workspace settings. Per-project settings stay with each project's
                     own Settings page.
@@ -118,8 +118,8 @@
           <template v-else-if="activeTab === 'features'">
             <div class="max-w-[760px]">
               <div class="mb-4">
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Features</h1>
-                <p class="text-[13px] text-muted mt-1">Turn workspace-wide surfaces on or off for everyone.</p>
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Features</h1>
+                <p class="text-base text-muted mt-1">Turn workspace-wide surfaces on or off for everyone.</p>
               </div>
 
               <div class="bp-set-card">
@@ -140,8 +140,8 @@
           <template v-else-if="activeTab === 'customFields'">
             <div class="mb-4 flex items-center justify-between gap-4">
               <div>
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Custom Fields</h1>
-                <p class="text-[13px] text-muted mt-1">Define fields once, reuse them across projects.</p>
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Custom Fields</h1>
+                <p class="text-base text-muted mt-1">Define fields once, reuse them across projects.</p>
               </div>
               <Button variant="solid" color="primary" size="sm" @click="openNewField">
                 <Icon :icon="Plus" class="size-3.5 mr-1" /> New field
@@ -185,8 +185,8 @@
           <template v-else-if="activeTab === 'roles'">
             <div class="max-w-[860px]">
               <div class="mb-4">
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Roles &amp; Permissions</h1>
-                <p class="text-[13px] text-muted mt-1">
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Roles &amp; Permissions</h1>
+                <p class="text-base text-muted mt-1">
                   What each project role can do. Money and Files are switchable per role — everything
                   else is inherent to the role itself.
                 </p>
@@ -242,8 +242,8 @@
           <template v-else-if="activeTab === 'templates'">
             <div class="max-w-[860px]">
               <div class="mb-4">
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Templates</h1>
-                <p class="text-[13px] text-muted mt-1">
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Templates</h1>
+                <p class="text-base text-muted mt-1">
                   User-saved project templates. Save one from any project's Settings → General.
                 </p>
               </div>
@@ -255,11 +255,11 @@
                 <div v-for="t in allTemplates" :key="(t.is_built_in ? 'builtin:' : 'user:') + t.name" class="ptpl-row">
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2">
-                      <span class="text-[13px] font-medium text-foreground">{{ t.template_name }}</span>
+                      <span class="text-base font-medium text-foreground">{{ t.template_name }}</span>
                       <Chip v-if="t.is_built_in" size="sm" variant="soft" color="default">Built-in</Chip>
                       <Chip v-else-if="t.category" size="sm" variant="soft">{{ t.category }}</Chip>
                     </div>
-                    <p class="text-[12px] text-muted mt-0.5">
+                    <p class="text-sm text-muted mt-0.5">
                       <template v-if="t.is_built_in">{{ t.description }}</template>
                       <template v-else>
                         {{ t.task_count }} task{{ t.task_count === 1 ? '' : 's' }} ·
@@ -284,29 +284,29 @@
             <!-- Preview drawer -->
             <Drawer :open="tplPreviewOpen" @update:open="tplPreviewOpen = $event" size="lg" placement="right">
               <DrawerHeader @close="tplPreviewOpen = false">
-                <span class="text-[14px] font-semibold text-foreground">{{ tplPreview?.template_name }}</span>
+                <span class="text-md font-semibold text-foreground">{{ tplPreview?.template_name }}</span>
               </DrawerHeader>
               <DrawerBody v-if="tplPreview">
                 <div class="flex flex-col gap-5">
-                  <p v-if="tplPreview.description" class="text-[13px] text-muted">{{ tplPreview.description }}</p>
+                  <p v-if="tplPreview.description" class="text-base text-muted">{{ tplPreview.description }}</p>
 
                   <div>
-                    <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Workflow states</p>
+                    <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Workflow states</p>
                     <div class="flex flex-wrap gap-1.5">
                       <Chip v-for="s in tplPreview.workflow_states" :key="s.name" size="sm" variant="soft">{{ s.name }}</Chip>
                     </div>
                   </div>
 
                   <div>
-                    <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Task types</p>
+                    <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Task types</p>
                     <div class="flex flex-wrap gap-1.5">
                       <Chip v-for="it in tplPreview.issue_types" :key="it.name" size="sm" variant="soft">{{ it.name }}</Chip>
                     </div>
                   </div>
 
                   <div v-if="tplPreview.billing">
-                    <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Billing</p>
-                    <div class="flex items-center gap-2 flex-wrap text-[12.5px] text-foreground">
+                    <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Billing</p>
+                    <div class="flex items-center gap-2 flex-wrap text-sm text-foreground">
                       <Chip size="sm" variant="soft">{{ tplPreview.billing.project_type || 'internal' }}</Chip>
                       <span v-if="tplPreview.billing.hourly_rate">{{ tplPreview.billing.hourly_rate }}/hr</span>
                       <span v-if="tplPreview.billing.retainer_hours">{{ tplPreview.billing.retainer_hours }}h retainer</span>
@@ -315,7 +315,7 @@
                   </div>
 
                   <div v-if="tplPreview.custom_fields && (tplPreview.custom_fields.global_ids?.length || tplPreview.custom_fields.owner_fields?.length)">
-                    <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">
+                    <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
                       Custom fields ({{ (tplPreview.custom_fields.global_ids?.length || 0) + (tplPreview.custom_fields.owner_fields?.length || 0) }})
                     </p>
                     <div class="flex flex-wrap gap-1.5">
@@ -329,14 +329,14 @@
                   </div>
 
                   <div v-if="tplPreview.tasks?.length">
-                    <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">
+                    <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
                       Tasks ({{ tplPreview.tasks.length }})
                     </p>
                     <div class="ptpl-task-tree">
                       <div v-for="(t, i) in tplPreview.tasks" :key="i" class="ptpl-task-row"
                         :class="{ 'ptpl-task-row--sub': t.parent_idx !== null && t.parent_idx !== undefined }">
-                        <span class="text-[12.5px] text-foreground">{{ t.title }}</span>
-                        <span class="text-[11px] text-muted ml-1.5">{{ t.task_type }}</span>
+                        <span class="text-sm text-foreground">{{ t.title }}</span>
+                        <span class="text-xs text-muted ml-1.5">{{ t.task_type }}</span>
                         <Chip v-if="t.depends_on?.length" size="sm" variant="soft" class="ml-1.5">
                           depends on {{ t.depends_on.length }}
                         </Chip>
@@ -345,11 +345,11 @@
                   </div>
 
                   <div v-if="tplPreview.automations?.length">
-                    <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">
+                    <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
                       Automations ({{ tplPreview.automations.length }})
                     </p>
                     <div class="flex flex-col gap-1">
-                      <p v-for="(a, i) in tplPreview.automations" :key="i" class="text-[12.5px] text-foreground">
+                      <p v-for="(a, i) in tplPreview.automations" :key="i" class="text-sm text-foreground">
                         {{ a.rule_name }}
                         <span class="text-muted">— {{ a.trigger_event }} → {{ (a.actions || []).map(x => x.type).join(' + ') || a.action_type }}</span>
                       </p>
@@ -371,15 +371,15 @@
           <template v-else-if="activeTab === 'branding'">
             <div class="max-w-[760px]">
               <div class="mb-4">
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em] flex items-center gap-2">
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em] flex items-center gap-2">
                   Branding
                   <span v-if="!ent.can('custom_branding')"
-                    class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
+                    class="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded
                            bg-[var(--surface-secondary)] text-muted uppercase tracking-wider">
                     <Icon :icon="Lock" class="size-3" /> {{ ent.requiredPlanFor('custom_branding') }}
                   </span>
                 </h1>
-                <p class="text-[13px] text-muted mt-1">Put your own name, logo and favicon on the app shell.</p>
+                <p class="text-base text-muted mt-1">Put your own name, logo and favicon on the app shell.</p>
               </div>
 
               <!-- Premium lock banner -->
@@ -390,8 +390,8 @@
                     <Icon :icon="Image" class="size-5 text-accent" />
                   </span>
                   <div class="min-w-0 flex-1">
-                    <p class="text-[14px] font-semibold text-foreground">Make it yours</p>
-                    <p class="text-[13px] text-muted mt-1 leading-relaxed">
+                    <p class="text-md font-semibold text-foreground">Make it yours</p>
+                    <p class="text-base text-muted mt-1 leading-relaxed">
                       Replace the BatchProjects name, sidebar logo, and browser tab icon with your own —
                       what your team and clients see stays fully white-labeled. Available on the
                       <span class="font-semibold text-foreground">{{ ent.requiredPlanFor('custom_branding') }}</span> plan and above.
@@ -400,7 +400,7 @@
                       <Button size="sm" color="primary" @click="goUpgradeBranding">
                         <Icon :icon="Sparkles" class="size-3.5 mr-1" /> Upgrade to {{ ent.requiredPlanFor('custom_branding') }}
                       </Button>
-                      <span class="text-[12px] text-muted">You're on the {{ ent.tierLabel }} plan</span>
+                      <span class="text-sm text-muted">You're on the {{ ent.tierLabel }} plan</span>
                     </div>
                   </div>
                 </div>
@@ -408,19 +408,19 @@
 
               <div class="bp-set-card" :class="{ 'opacity-50 pointer-events-none': !ent.can('custom_branding') }">
                 <div class="py-6">
-                  <p class="text-[13px] font-medium text-foreground mb-1">Brand name</p>
-                  <p class="text-[12px] text-muted mb-3">Replaces "BatchProjects" in the sidebar and browser tab title.</p>
+                  <p class="text-base font-medium text-foreground mb-1">Brand name</p>
+                  <p class="text-sm text-muted mb-3">Replaces "BatchProjects" in the sidebar and browser tab title.</p>
                   <Input v-model="branding.brand_name" size="md" placeholder="BatchProjects" class="max-w-[360px]" />
                 </div>
 
                 <div class="py-6 border-t border-separator">
-                  <p class="text-[13px] font-medium text-foreground mb-1">Logo</p>
-                  <p class="text-[12px] text-muted mb-3">Replaces the "BP" mark in the sidebar. Square image recommended.</p>
+                  <p class="text-base font-medium text-foreground mb-1">Logo</p>
+                  <p class="text-sm text-muted mb-3">Replaces the "BP" mark in the sidebar. Square image recommended.</p>
                   <div class="flex items-center gap-3">
                     <div class="size-11 rounded-[10px] flex items-center justify-center overflow-hidden shrink-0"
                       :class="branding.logo_url ? '' : 'bg-accent'">
                       <img v-if="branding.logo_url" :src="branding.logo_url" class="w-full h-full object-cover" alt="Logo" />
-                      <span v-else class="text-white text-[13px] font-black">BP</span>
+                      <span v-else class="text-white text-base font-black">BP</span>
                     </div>
                     <label class="bp-upload-btn">
                       <Spinner v-if="uploadingLogo" size="sm" />
@@ -434,8 +434,8 @@
                 </div>
 
                 <div class="py-6 border-t border-separator">
-                  <p class="text-[13px] font-medium text-foreground mb-1">Favicon</p>
-                  <p class="text-[12px] text-muted mb-3">Replaces the browser tab icon.</p>
+                  <p class="text-base font-medium text-foreground mb-1">Favicon</p>
+                  <p class="text-sm text-muted mb-3">Replaces the browser tab icon.</p>
                   <div class="flex items-center gap-3">
                     <div class="size-8 rounded-md flex items-center justify-center overflow-hidden shrink-0 bg-surface-secondary border border-border">
                       <img v-if="branding.favicon_url" :src="branding.favicon_url" class="w-full h-full object-cover" alt="Favicon" />
@@ -466,13 +466,13 @@
           <template v-else-if="activeTab === 'timesheet'">
             <div class="max-w-[760px]">
               <div class="mb-4">
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Timesheet</h1>
-                <p class="text-[13px] text-muted mt-1">Configure how timesheets get approved.</p>
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Timesheet</h1>
+                <p class="text-base text-muted mt-1">Configure how timesheets get approved.</p>
               </div>
 
               <div class="rounded-[10px] bg-accent-soft px-4 py-3 mb-4 flex items-start gap-2.5">
                 <Icon :icon="Info" :size="15" class="text-[var(--accent-soft-foreground)] mt-0.5 shrink-0" />
-                <p class="text-[12.5px] text-[var(--accent-soft-foreground)] leading-relaxed">
+                <p class="text-sm text-[var(--accent-soft-foreground)] leading-relaxed">
                   This saves your approval configuration now. The gate itself — blocking submission until an
                   approver acts — is enforced by the approval workflow engine.
                 </p>
@@ -480,7 +480,7 @@
 
               <div class="bp-set-card">
                 <div class="py-6">
-                  <p class="text-[13px] font-medium text-foreground mb-3">Approval mode</p>
+                  <p class="text-base font-medium text-foreground mb-3">Approval mode</p>
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <button v-for="mode in APPROVAL_MODES" :key="mode.value" type="button"
                       class="text-left rounded-[10px] p-4 transition-colors duration-150"
@@ -493,15 +493,15 @@
                           :class="timesheet.approval_mode === mode.value ? 'text-accent' : 'text-muted'" />
                         <Icon v-if="timesheet.approval_mode === mode.value" :icon="Check" :size="14" class="text-accent" />
                       </div>
-                      <p class="text-[13px] font-semibold text-foreground">{{ mode.label }}</p>
-                      <p class="text-[12px] text-muted mt-1 leading-relaxed">{{ mode.description }}</p>
+                      <p class="text-base font-semibold text-foreground">{{ mode.label }}</p>
+                      <p class="text-sm text-muted mt-1 leading-relaxed">{{ mode.description }}</p>
                     </button>
                   </div>
                 </div>
 
                 <div v-if="timesheet.approval_mode === 'Manager Approval'" class="py-6">
-                  <p class="text-[13px] font-medium text-foreground">Approvers</p>
-                  <p class="text-[12px] text-muted mt-0.5 mb-3">Anyone here can approve a submitted timesheet.</p>
+                  <p class="text-base font-medium text-foreground">Approvers</p>
+                  <p class="text-sm text-muted mt-0.5 mb-3">Anyone here can approve a submitted timesheet.</p>
 
                   <div class="flex flex-wrap gap-2 mb-3" v-if="timesheet.approvers.length">
                     <Chip v-for="a in timesheet.approvers" :key="a.user" size="sm" variant="soft" isCloseable
@@ -546,17 +546,17 @@
           <template v-else-if="activeTab === 'notifications'">
             <div class="max-w-[860px]">
               <div class="mb-4">
-                <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Notifications</h1>
-                <p class="text-[13px] text-muted mt-1">Override email wording per event, and route events to extra recipients.</p>
+                <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Notifications</h1>
+                <p class="text-base text-muted mt-1">Override email wording per event, and route events to extra recipients.</p>
               </div>
 
               <!-- Templates -->
-              <p class="text-[13px] font-semibold text-foreground mb-2">Email templates</p>
+              <p class="text-base font-semibold text-foreground mb-2">Email templates</p>
               <div class="bp-set-card mb-6">
                 <div v-for="t in templates" :key="t.event_key" class="ntf-tpl-row">
                   <div class="flex items-center gap-3 flex-1 min-w-0">
                     <Switch size="sm" :modelValue="!!t.enabled" @update:modelValue="v => toggleTemplate(t, v)" />
-                    <span class="text-[13px] font-medium text-foreground">{{ t.event_key }}</span>
+                    <span class="text-base font-medium text-foreground">{{ t.event_key }}</span>
                     <Chip v-if="!t.subject && !t.body" size="sm" variant="soft">Using default</Chip>
                   </div>
                   <Button variant="ghost" size="sm" @click="openTemplateEditor(t)">Edit</Button>
@@ -565,10 +565,10 @@
 
               <!-- Rules -->
               <div class="flex items-center justify-between mb-2">
-                <p class="text-[13px] font-semibold text-foreground flex items-center gap-1.5">
+                <p class="text-base font-semibold text-foreground flex items-center gap-1.5">
                   Custom rules
                   <span v-if="!ent.can('notification_rules')"
-                    class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
+                    class="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded
                            bg-[var(--surface-secondary)] text-muted uppercase tracking-wider">
                     <Icon :icon="Lock" class="size-3" /> {{ ent.requiredPlanFor('notification_rules') }}
                   </span>
@@ -588,8 +588,8 @@
                     <Icon :icon="Zap" class="size-4 text-accent" />
                   </span>
                   <div class="min-w-0 flex-1">
-                    <p class="text-[13px] font-semibold text-foreground">Route events to extra recipients</p>
-                    <p class="text-[12.5px] text-muted mt-1 leading-relaxed">
+                    <p class="text-base font-semibold text-foreground">Route events to extra recipients</p>
+                    <p class="text-sm text-muted mt-1 leading-relaxed">
                       Custom notification rules are available on the
                       <span class="font-semibold text-foreground">{{ ent.requiredPlanFor('notification_rules') }}</span> plan and above.
                     </p>
@@ -605,12 +605,12 @@
                 <div v-for="r in rules" :key="r.name" class="ntf-rule-row">
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2">
-                      <span class="text-[13px] font-medium text-foreground">{{ r.rule_name }}</span>
+                      <span class="text-base font-medium text-foreground">{{ r.rule_name }}</span>
                       <Chip size="sm" variant="soft">{{ r.event }}</Chip>
                       <Chip v-if="r.mute" size="sm" color="danger" variant="soft">Mute</Chip>
                       <Chip v-if="!r.enabled" size="sm" variant="soft">Disabled</Chip>
                     </div>
-                    <p class="text-[12px] text-muted mt-0.5">
+                    <p class="text-sm text-muted mt-0.5">
                       {{ r.project || 'All projects' }} · {{ r.conditions.length }} condition{{ r.conditions.length === 1 ? '' : 's' }}
                       · {{ r.recipients.length }} recipient{{ r.recipients.length === 1 ? '' : 's' }}
                     </p>
@@ -624,24 +624,24 @@
             <!-- Template editor drawer -->
             <Drawer :open="tplDrawerOpen" @update:open="tplDrawerOpen = $event" size="lg" placement="right">
               <DrawerHeader @close="tplDrawerOpen = false">
-                <span class="text-[14px] font-semibold text-foreground">{{ editingTpl?.event_key }} email</span>
+                <span class="text-md font-semibold text-foreground">{{ editingTpl?.event_key }} email</span>
               </DrawerHeader>
               <DrawerBody>
                 <div class="flex flex-col gap-4" v-if="editingTpl">
                   <div class="flex flex-wrap gap-1.5">
-                    <span class="text-[11px] text-muted mr-1 self-center">Variables:</span>
+                    <span class="text-xs text-muted mr-1 self-center">Variables:</span>
                     <button v-for="v in editingTpl.variables" :key="v" type="button" class="ntf-var-chip"
                       @click="insertVariable(v)">{{ variableToken(v) }}</button>
                   </div>
                   <Input v-model="editingTpl.subject" label="Subject" placeholder="Leave blank to use the default" />
                   <div>
-                    <label class="text-[13px] font-medium text-foreground mb-1.5 block">Body (HTML)</label>
+                    <label class="text-base font-medium text-foreground mb-1.5 block">Body (HTML)</label>
                     <textarea ref="bodyRef" v-model="editingTpl.body" rows="10" class="ntf-body-input"
                       placeholder="Leave blank to use the default" />
                   </div>
                   <Button variant="ghost" size="sm" :isLoading="previewing" @click="doPreview">Preview</Button>
                   <div v-if="previewHtml" class="ntf-preview-frame">
-                    <p class="text-[11px] text-muted mb-2">Subject: {{ previewSubject }}</p>
+                    <p class="text-xs text-muted mb-2">Subject: {{ previewSubject }}</p>
                     <iframe :srcdoc="previewHtml" class="ntf-iframe" />
                   </div>
                 </div>
@@ -655,21 +655,21 @@
             <!-- Rule editor drawer -->
             <Drawer :open="ruleDrawerOpen" @update:open="ruleDrawerOpen = $event" size="lg" placement="right">
               <DrawerHeader @close="ruleDrawerOpen = false">
-                <span class="text-[14px] font-semibold text-foreground">{{ editingRule?.name ? 'Edit rule' : 'New rule' }}</span>
+                <span class="text-md font-semibold text-foreground">{{ editingRule?.name ? 'Edit rule' : 'New rule' }}</span>
               </DrawerHeader>
               <DrawerBody v-if="editingRule">
                 <div class="flex flex-col gap-4">
                   <Input v-model="editingRule.rule_name" label="Rule name" placeholder="e.g. Urgent task -> manager" />
 
                   <div>
-                    <label class="text-[13px] font-medium text-foreground mb-1.5 block">Event</label>
+                    <label class="text-base font-medium text-foreground mb-1.5 block">Event</label>
                     <Select v-model="editingRule.event" size="sm">
                       <SelectItem v-for="e in RULE_EVENTS" :key="e" :value="e">{{ e }}</SelectItem>
                     </Select>
                   </div>
 
                   <div>
-                    <label class="text-[13px] font-medium text-foreground mb-1.5 block">Project</label>
+                    <label class="text-base font-medium text-foreground mb-1.5 block">Project</label>
                     <Select v-model="editingRule.project" size="sm" placeholder="All projects">
                       <SelectItem value="">All projects</SelectItem>
                       <SelectItem v-for="p in allProjects" :key="p.name" :value="p.name">{{ p.project_name }}</SelectItem>
@@ -678,7 +678,7 @@
 
                   <div>
                     <div class="flex items-center justify-between mb-1.5">
-                      <label class="text-[13px] font-medium text-foreground">Conditions (all must match)</label>
+                      <label class="text-base font-medium text-foreground">Conditions (all must match)</label>
                       <button type="button" class="ntf-add-link" @click="editingRule.conditions.push({ field: '', op: '=', value: '' })">+ Add</button>
                     </div>
                     <div v-for="(c, i) in editingRule.conditions" :key="i" class="ntf-cond-row">
@@ -693,7 +693,7 @@
 
                   <div>
                     <div class="flex items-center justify-between mb-1.5">
-                      <label class="text-[13px] font-medium text-foreground">Recipients</label>
+                      <label class="text-base font-medium text-foreground">Recipients</label>
                       <button type="button" class="ntf-add-link" @click="editingRule.recipients.push({ type: 'assignee', value: '' })">+ Add</button>
                     </div>
                     <div v-for="(r, i) in editingRule.recipients" :key="i" class="ntf-cond-row">
@@ -715,7 +715,7 @@
                   </div>
 
                   <div>
-                    <label class="text-[13px] font-medium text-foreground mb-1.5 block">Channels</label>
+                    <label class="text-base font-medium text-foreground mb-1.5 block">Channels</label>
                     <div class="flex gap-4">
                       <Checkbox v-for="ch in ['in_app', 'email', 'desktop']" :key="ch"
                         :isSelected="editingRule.channels.includes(ch)"
@@ -1293,13 +1293,13 @@ const FeatureRow = defineComponent({
       h('div', { class: 'flex items-start justify-between gap-4 py-4' }, [
         h('div', { class: 'flex-1' }, [
           h('div', { class: 'flex items-center gap-2' }, [
-            h('p', { class: 'text-[13px] text-foreground' }, props.label),
+            h('p', { class: 'text-base text-foreground' }, props.label),
             props.comingSoon
               ? h(Chip, { size: 'sm', variant: 'soft', color: 'default' }, () => props.comingSoon)
               : null,
           ]),
           props.description
-            ? h('p', { class: 'text-[12px] text-muted mt-0.5' }, props.description)
+            ? h('p', { class: 'text-sm text-muted mt-0.5' }, props.description)
             : null,
         ]),
         h(Switch, {
@@ -1331,7 +1331,7 @@ const FeatureRow = defineComponent({
   height: 30px;
   padding: 0 12px;
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   font-weight: 500;
   color: var(--foreground);
   background: var(--default);
@@ -1348,7 +1348,7 @@ const FeatureRow = defineComponent({
   height: 34px;
   padding: 0 10px;
   border-radius: 9px;
-  font-size: 13.5px;
+  font-size:var(--text-base);
   font-weight: 500;
   color: var(--muted);
   background: none;
@@ -1374,9 +1374,9 @@ const FeatureRow = defineComponent({
 
 /* ── Roles & Permissions matrix ─────────────────────────────── */
 .bp-matrix-card { padding: 0; overflow-x: auto; }
-.rp-matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rp-matrix { width: 100%; border-collapse: collapse; font-size:var(--text-base); }
 .rp-matrix thead th {
-  text-align: left; font-size: 11px; font-weight: 600; color: var(--muted);
+  text-align: left; font-size:var(--text-xs); font-weight: 600; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.02em;
   padding: 10px 16px; border-bottom: 1px solid var(--separator);
   white-space: nowrap;
@@ -1385,7 +1385,7 @@ const FeatureRow = defineComponent({
 .rp-role-col { width: 100px; text-align: center !important; }
 .rp-role-head { display: inline-flex; align-items: center; gap: 4px; }
 .rp-group-row td {
-  padding: 8px 16px 4px; font-size: 11px; font-weight: 600; color: var(--muted);
+  padding: 8px 16px 4px; font-size:var(--text-xs); font-weight: 600; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.02em;
   background: var(--surface-secondary);
 }
@@ -1393,7 +1393,7 @@ const FeatureRow = defineComponent({
 .rp-matrix tbody td { padding: 10px 16px; vertical-align: middle; }
 .rp-cap-label { color: var(--foreground); display: flex; align-items: center; gap: 8px; }
 .rp-fixed-badge {
-  font-size: 10px; font-weight: 600; color: var(--muted);
+  font-size:var(--text-xs); font-weight: 600; color: var(--muted);
   background: var(--surface-secondary); border-radius: 999px; padding: 2px 8px;
   white-space: nowrap;
 }
@@ -1405,14 +1405,14 @@ const FeatureRow = defineComponent({
   display: flex; align-items: center; gap: 10px; padding: 12px 20px;
 }
 .ntf-var-chip {
-  font-size: 11px; font-family: monospace; color: var(--accent);
+  font-size:var(--text-xs); font-family: monospace; color: var(--accent);
   background: var(--accent-soft); border: none; border-radius: 999px;
   padding: 3px 9px; cursor: pointer;
 }
 .ntf-var-chip:hover { opacity: 0.85; }
 .ntf-body-input {
   width: 100%; min-height: 160px; border-radius: 8px; padding: 10px 12px;
-  font-family: monospace; font-size: 12.5px; line-height: 1.5;
+  font-family: monospace; font-size:var(--text-sm); line-height: 1.5;
   background: var(--surface-secondary); border: 1px solid var(--border-secondary);
   color: var(--foreground); resize: vertical;
 }
@@ -1423,7 +1423,7 @@ const FeatureRow = defineComponent({
 }
 .ntf-iframe { width: 100%; height: 420px; border: none; border-radius: 6px; background: white; }
 .ntf-add-link {
-  font-size: 12px; font-weight: 600; color: var(--accent);
+  font-size:var(--text-sm); font-weight: 600; color: var(--accent);
   background: none; border: none; cursor: pointer; padding: 0;
 }
 .ntf-add-link:hover { text-decoration: underline; }
@@ -1447,6 +1447,6 @@ const FeatureRow = defineComponent({
 .ptpl-task-row:hover { background: var(--surface-secondary); }
 .ptpl-task-row--sub { margin-left: 20px; }
 .ptpl-task-row--sub::before {
-  content: '↳'; color: var(--muted); margin-right: 6px; font-size: 12px;
+  content: '↳'; color: var(--muted); margin-right: 6px; font-size:var(--text-sm);
 }
 </style>

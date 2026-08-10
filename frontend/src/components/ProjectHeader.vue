@@ -3,7 +3,7 @@
 
     <div class="flex lg:hidden items-center justify-between h-12 px-4 border-b border-separator">
       <div class="flex items-center gap-2 min-w-0 flex-1">
-        <div class="w-5 h-5 rounded flex items-center justify-center text-white text-[9px] font-bold shrink-0" :style="{ background: projectColor }">
+        <div class="w-5 h-5 rounded flex items-center justify-center text-white text-micro font-bold shrink-0" :style="{ background: projectColor }">
           {{ projectKey?.slice(0,2).toUpperCase() }}
         </div>
         <span class="text-sm font-semibold text-foreground truncate">{{ currentProject?.project_name || projectKey }}</span>
@@ -22,19 +22,19 @@
 
         <div class="flex flex-col gap-0.5 min-w-0">
           <div class="flex items-center gap-1.5">
-            <button class="text-[12px] text-muted hover:text-foreground font-medium transition-colors" @click="router.push('/workspace')">Projects</button>
+            <button class="text-sm text-muted hover:text-foreground font-medium transition-colors" @click="router.push('/workspace')">Projects</button>
             <ChevronRight :size="12" class="text-muted shrink-0" />
-            <span class="text-[10px] text-muted font-medium truncate">{{ projectKey  }}</span>
+            <span class="text-xs text-muted font-medium truncate">{{ projectKey  }}</span>
           </div>
           <div class="flex items-center gap-2 min-w-0">
-            <h1 class="text-lg font-semibold text-foreground truncate max-w-[480px]">
+            <h1 class="text-md font-semibold text-foreground truncate max-w-[480px]">
               {{ currentProject?.project_name || projectKey }}
             </h1>
             <button
               v-if="pipelineSource"
               type="button"
               @click="openPipelineSource"
-              class="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded
+              class="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded
                      bg-[var(--surface-secondary)] text-muted hover:text-foreground shrink-0 transition-colors"
               :title="`Created from ${pipelineSource.typeLabel} ${pipelineSource.name}`"
             >
@@ -69,30 +69,30 @@
               leave-to-class="transform scale-95 opacity-0"
             >
               <div v-if="moreOpen" class="absolute top-[calc(100%+6px)] right-0 z-50 w-44 bg-overlay border border-border rounded-md shadow-lg p-1.5">
-                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[12.5px] font-medium text-foreground hover:bg-default rounded-md transition-colors" @click="router.push(`/workspace/${projectKey}/settings`); moreOpen=false">
+                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-default rounded-md transition-colors" @click="router.push(`/workspace/${projectKey}/settings`); moreOpen=false">
                   <Settings :size="14" class="text-muted" /> Settings
                 </button>
-                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[12.5px] font-medium text-foreground hover:bg-default rounded-md transition-colors" @click="copyLink">
+                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-default rounded-md transition-colors" @click="copyLink">
                   <Copy :size="14" class="text-muted" /> Copy link
                 </button>
                 <div class="h-[1px] bg-default my-1"/>
-                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[12.5px] font-medium text-foreground hover:bg-default rounded-md transition-colors" @click="exportCsv">
+                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-default rounded-md transition-colors" @click="exportCsv">
                   <Download :size="14" class="text-muted" /> Export to CSV
                 </button>
-                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[12.5px] font-medium text-foreground hover:bg-default rounded-md transition-colors" :class="{ 'opacity-50': !ent.can('exports') }" @click="exportXlsx">
+                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-default rounded-md transition-colors" :class="{ 'opacity-50': !ent.can('exports') }" @click="exportXlsx">
                   <Download :size="14" class="text-muted" /> Export to Excel
                   <Lock v-if="!ent.can('exports')" :size="11" class="text-muted ml-auto" />
                 </button>
-                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[12.5px] font-medium text-foreground hover:bg-default rounded-md transition-colors" :class="{ 'opacity-50': !ent.can('exports') }" @click="exportPdf">
+                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-default rounded-md transition-colors" :class="{ 'opacity-50': !ent.can('exports') }" @click="exportPdf">
                   <Download :size="14" class="text-muted" /> Export to PDF
                   <Lock v-if="!ent.can('exports')" :size="11" class="text-muted ml-auto" />
                 </button>
                 <div class="h-[1px] bg-default my-1"/>
-                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[12.5px] font-medium text-foreground hover:bg-default rounded-md transition-colors" @click="quickSaveAsTemplate">
+                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-default rounded-md transition-colors" @click="quickSaveAsTemplate">
                   <FileText :size="14" class="text-muted" /> Save as template…
                 </button>
                 <div class="h-[1px] bg-default my-1"/>
-                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-[12.5px] font-medium text-danger hover:bg-danger-soft rounded-md transition-colors" @click="archiveProject">
+                <button class="flex items-center gap-2.5 w-full px-2.5 py-1.5 text-sm font-medium text-danger hover:bg-danger-soft rounded-md transition-colors" @click="archiveProject">
                   <Archive :size="14" class="text-danger" /> Archive project
                 </button>
               </div>
@@ -113,7 +113,7 @@
               <button
                 v-for="tab in visibleTabs" :key="tab.value"
                 draggable="true"
-                class="flex items-center gap-1.5 px-3 h-[26px] text-[12.5px] font-medium rounded-md transition-colors whitespace-nowrap"
+                class="flex items-center gap-1.5 px-3 h-[26px] text-sm font-medium rounded-md transition-colors whitespace-nowrap"
                 :class="[
                   isActiveTab(tab) ? 'bg-surface text-foreground shadow-xs' : 'text-muted hover:text-foreground',
                   tab.soon ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
@@ -127,7 +127,7 @@
               >
                 <component :is="tab.icon" :size="13" :stroke-width="2" class="shrink-0" />
                 {{ tab.label }}
-                <span v-if="tab.soon" class="text-[9px] font-bold uppercase tracking-wide bg-surface-secondary text-muted px-1.5 py-0.5 rounded-sm">Soon</span>
+                <span v-if="tab.soon" class="text-micro font-bold uppercase tracking-wide bg-surface-secondary text-muted px-1.5 py-0.5 rounded-sm">Soon</span>
                 <Lock v-if="tab.locked" :size="10" :stroke-width="2" class="text-muted shrink-0" />
               </button>
             </div>
@@ -191,7 +191,7 @@
             >
               <Avatar :name="name" size="xs" class="w-full h-full" />
             </button>
-            <span v-if="uniqueAssignees.length > 4" class="relative flex items-center justify-center w-[26px] h-[26px] rounded-full ring-2 ring-surface bg-default text-muted text-[9px] font-bold shadow-sm z-0">
+            <span v-if="uniqueAssignees.length > 4" class="relative flex items-center justify-center w-[26px] h-[26px] rounded-full ring-2 ring-surface bg-default text-muted text-micro font-bold shadow-sm z-0">
               +{{ uniqueAssignees.length - 4 }}
             </span>
           </div>
@@ -201,12 +201,12 @@
 
           <div v-if="(isBoard || isList) && activeSprint" class="flex items-center bg-default p-0.5 rounded-lg shrink-0">
             <button
-              class="flex items-center h-7 px-2.5 text-[12px] font-medium rounded-md transition-colors whitespace-nowrap"
+              class="flex items-center h-7 px-2.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap"
               :class="store.boardSprintFilter === 'all' ? 'bg-surface text-foreground shadow-xs' : 'text-muted hover:text-foreground'"
               @click="store.boardSprintFilter = 'all'"
             >All</button>
             <button
-              class="flex items-center gap-1.5 h-7 px-2.5 text-[12px] font-medium rounded-md transition-colors whitespace-nowrap"
+              class="flex items-center gap-1.5 h-7 px-2.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap"
               :class="store.boardSprintFilter === 'active_sprint' ? 'bg-surface text-foreground shadow-xs' : 'text-muted hover:text-foreground'"
               @click="store.boardSprintFilter = 'active_sprint'"
             >
@@ -237,7 +237,7 @@
 
           <button class="h-[26px] px-2 xl:px-2.5 flex items-center gap-1.5 justify-center rounded-[6px] bg-accent hover:bg-[var(--accent-hover)] text-white transition-colors active:scale-95 shrink-0" @click="store.showCreateTask = true" title="Create task">
             <Plus :size="14" :stroke-width="2.5" />
-            <span class="hidden xl:inline text-[12.5px] font-medium">New</span>
+            <span class="hidden xl:inline text-sm font-medium">New</span>
           </button>
         </div>
       </div>
@@ -250,7 +250,7 @@
           color="accent" variant="soft" size="md" is-closeable
           @close="store.boardViewState[c.key] = null"
         >{{ c.label }}</Chip>
-        <button class="text-[12px] font-medium text-muted hover:text-danger transition-colors ml-0.5" @click="clearAll">Clear all</button>
+        <button class="text-sm font-medium text-muted hover:text-danger transition-colors ml-0.5" @click="clearAll">Clear all</button>
       </div>
     </div>
 
@@ -262,7 +262,7 @@
       leave-from-class="transform translate-y-0 opacity-100"
       leave-to-class="transform translate-y-2 opacity-0"
     >
-      <div v-if="copyToast" class="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 bg-success text-success-foreground text-[12.5px] font-medium rounded-md shadow-lg z-50 whitespace-nowrap">
+      <div v-if="copyToast" class="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 bg-success text-success-foreground text-sm font-medium rounded-md shadow-lg z-50 whitespace-nowrap">
         <Check :size="14" :stroke-width="2.5" /> Copied
       </div>
     </Transition>

@@ -19,7 +19,7 @@
                 <div class="size-7 rounded-lg bg-accent-soft flex items-center justify-center">
                   <Bookmark class="size-3.5 text-accent" />
                 </div>
-                <span class="text-[14px] font-semibold text-foreground">Save current view</span>
+                <span class="text-md font-semibold text-foreground">Save current view</span>
               </div>
               <button
                 class="size-7 flex items-center justify-center rounded-md text-muted hover:bg-surface-secondary hover:text-muted transition-colors"
@@ -34,11 +34,11 @@
             <!-- Body -->
             <div class="px-5 py-4 space-y-3.5">
               <div>
-                <label class="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">View name</label>
+                <label class="block text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">View name</label>
                 <input
                   ref="inputRef"
                   v-model="name"
-                  class="w-full h-9 px-3 text-[13.5px] text-foreground bg-[var(--surface-secondary)] border border-transparent rounded-lg outline-none transition-all
+                  class="w-full h-9 px-3 text-base text-foreground bg-[var(--surface-secondary)] border border-transparent rounded-lg outline-none transition-all
                     hover:bg-[var(--surface-secondary)] focus:bg-overlay focus:border-border-secondary focus:ring-2 focus:ring-accent-soft"
                   placeholder="e.g. My open bugs, Sprint 3 work…"
                   maxlength="60"
@@ -48,7 +48,7 @@
               </div>
 
               <div>
-                <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Saving</p>
+                <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Saving</p>
                 <div class="flex flex-wrap gap-1.5">
                   <span class="sv-pill sv-pill-blue">
                     <LayoutGrid class="size-3" />{{ viewTypeLabel }}
@@ -73,14 +73,14 @@
             <!-- Footer -->
             <div class="flex items-center justify-end gap-2 px-5 pb-4">
               <button
-                class="h-8 px-4 text-[13px] font-medium text-muted rounded-full border border-border bg-overlay hover:bg-surface-secondary transition-colors"
+                class="h-8 px-4 text-base font-medium text-muted rounded-full border border-border bg-overlay hover:bg-surface-secondary transition-colors"
                 @click="$emit('update:modelValue', false)"
               >
                 Cancel
               </button>
               <button
                 :disabled="!name.trim()"
-                class="h-8 px-4 text-[13px] font-semibold text-white bg-accent rounded-full hover:bg-accent-hover active:scale-[0.97] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                class="h-8 px-4 text-base font-semibold text-white bg-accent rounded-full hover:bg-accent-hover active:scale-[0.97] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 @click="save"
               >
                 Save view
@@ -140,7 +140,7 @@ function save() {
   height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size:var(--text-sm);
   font-weight: 600;
   white-space: nowrap;
 }

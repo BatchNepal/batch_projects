@@ -71,8 +71,8 @@ defineEmits(['update:modelValue'])
   border-radius: var(--radius-md);
   transition: transform 150ms var(--ease-out), background-color 150ms var(--ease-out), color 150ms var(--ease-out);
 }
-.bp-seg-label { font-size: 12.5px; font-weight: var(--font-semibold); line-height: 1.2; margin-top: 2px; color: var(--foreground); }
-.bp-seg-sub { font-size: 11px; line-height: 1.2; color: var(--muted); }
+.bp-seg-label { font-size:var(--text-sm); font-weight: var(--font-semibold); line-height: 1.2; margin-top: 2px; color: var(--foreground); }
+.bp-seg-sub { font-size:var(--text-xs); line-height: 1.2; color: var(--muted); }
 
 .bp-seg-check {
   position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%;

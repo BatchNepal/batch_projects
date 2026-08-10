@@ -1,29 +1,29 @@
 <template>
   <Drawer :open="open" @update:open="$emit('update:open', $event)" size="lg">
     <DrawerHeader @close="$emit('update:open', false)">
-      <span class="text-[14px] font-semibold text-foreground">
+      <span class="text-md font-semibold text-foreground">
         {{ field ? 'Edit field' : 'New field' }}
       </span>
     </DrawerHeader>
     <DrawerBody class="space-y-5">
       <div>
-        <p class="text-[12px] font-medium text-muted mb-1.5">Field name</p>
+        <p class="text-sm font-medium text-muted mb-1.5">Field name</p>
         <Input v-model="fieldDraft.field_label" size="md" placeholder="e.g. Risk score" />
       </div>
       <div>
-        <p class="text-[12px] font-medium text-muted mb-1.5">Description <span class="text-[11px]">(optional)</span></p>
+        <p class="text-sm font-medium text-muted mb-1.5">Description <span class="text-xs">(optional)</span></p>
         <Input v-model="fieldDraft.description" size="md" placeholder="What is this field for?" />
       </div>
       <div>
-        <p class="text-[12px] font-medium text-muted mb-1.5">Type</p>
+        <p class="text-sm font-medium text-muted mb-1.5">Type</p>
         <Select v-model="fieldDraft.field_type" size="md" :isDisabled="!!field">
           <SelectItem v-for="t in FIELD_TYPES" :key="t.value" :value="t.value">{{ t.label }}</SelectItem>
         </Select>
-        <p v-if="field" class="text-[11px] text-muted mt-1">Type can't change once a field has values — create a new field instead.</p>
+        <p v-if="field" class="text-xs text-muted mt-1">Type can't change once a field has values — create a new field instead.</p>
       </div>
 
       <div v-if="['select', 'multiselect'].includes(fieldDraft.field_type)">
-        <p class="text-[12px] font-medium text-muted mb-1.5">Options</p>
+        <p class="text-sm font-medium text-muted mb-1.5">Options</p>
         <div class="space-y-1.5">
           <div v-for="(opt, oi) in fieldDraft.options" :key="opt.id" class="flex items-center gap-2">
             <Input v-model="opt.label" size="sm" :placeholder="`Option ${oi + 1}`" class="flex-1" />
@@ -39,14 +39,14 @@
       </div>
 
       <div v-else-if="fieldDraft.field_type === 'link'">
-        <p class="text-[12px] font-medium text-muted mb-1.5">ERPNext document type</p>
+        <p class="text-sm font-medium text-muted mb-1.5">ERPNext document type</p>
         <Input v-model="fieldDraft.link_doctype" size="md" placeholder="e.g. Customer" />
-        <p class="text-[11px] text-muted mt-1">The exact ERPNext doctype name this field links to.</p>
+        <p class="text-xs text-muted mt-1">The exact ERPNext doctype name this field links to.</p>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <p class="text-[12px] font-medium text-muted mb-1.5">Applies to</p>
+          <p class="text-sm font-medium text-muted mb-1.5">Applies to</p>
           <Select v-model="fieldDraft.applies_to" size="md">
             <SelectItem value="Tasks">Tasks</SelectItem>
             <SelectItem value="Projects">Projects</SelectItem>
@@ -54,7 +54,7 @@
           </Select>
         </div>
         <div>
-          <p class="text-[12px] font-medium text-muted mb-1.5">Show in list view</p>
+          <p class="text-sm font-medium text-muted mb-1.5">Show in list view</p>
           <div class="h-9 flex items-center">
             <Switch v-model="fieldDraft.show_in_list" />
           </div>
@@ -63,13 +63,13 @@
 
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <p class="text-[12px] font-medium text-muted mb-1.5">Can view (minimum role)</p>
+          <p class="text-sm font-medium text-muted mb-1.5">Can view (minimum role)</p>
           <Select v-model="fieldDraft.view_role" size="md">
             <SelectItem v-for="r in ROLE_OPTIONS" :key="r" :value="r">{{ r }}</SelectItem>
           </Select>
         </div>
         <div>
-          <p class="text-[12px] font-medium text-muted mb-1.5">Can edit (minimum role)</p>
+          <p class="text-sm font-medium text-muted mb-1.5">Can edit (minimum role)</p>
           <Select v-model="fieldDraft.edit_role" size="md">
             <SelectItem v-for="r in ROLE_OPTIONS" :key="r" :value="r">{{ r }}</SelectItem>
           </Select>
@@ -78,8 +78,8 @@
 
       <!-- Conditional marker -->
       <div v-if="NUMERIC_FIELD_TYPES.has(fieldDraft.field_type)" class="pt-2 border-t border-separator">
-        <p class="text-[13px] font-semibold text-foreground mt-4 mb-1">Conditional marker</p>
-        <p class="text-[12px] text-muted mb-3">Show a colored dot when the value matches a rule.</p>
+        <p class="text-base font-semibold text-foreground mt-4 mb-1">Conditional marker</p>
+        <p class="text-sm text-muted mb-3">Show a colored dot when the value matches a rule.</p>
 
         <div class="space-y-2">
           <div v-for="(rule, ri) in fieldDraft.conditional_rules" :key="ri"
@@ -91,7 +91,7 @@
             </Select>
             <Input v-model.number="rule.value" type="number" size="sm" class="w-[90px]" />
             <template v-if="rule.op === 'between'">
-              <span class="text-[12px] text-muted">&amp;</span>
+              <span class="text-sm text-muted">&amp;</span>
               <Input v-model.number="rule.value2" type="number" size="sm" class="w-[90px]" />
             </template>
             <div class="flex-1" />
@@ -112,8 +112,8 @@
       <div class="pt-2 border-t border-separator">
         <div class="flex items-center justify-between py-2">
           <div>
-            <p class="text-[13px] text-foreground">Field status</p>
-            <p class="text-[12px] text-muted mt-0.5">Disabled fields are hidden everywhere without losing data.</p>
+            <p class="text-base text-foreground">Field status</p>
+            <p class="text-sm text-muted mt-0.5">Disabled fields are hidden everywhere without losing data.</p>
           </div>
           <Switch v-model="fieldDraft.enabled" />
         </div>

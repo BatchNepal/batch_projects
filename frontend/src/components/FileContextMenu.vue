@@ -79,7 +79,7 @@ onBeforeUnmount(() => {
   height: 30px;
   padding: 0 8px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size:var(--text-sm);
   font-weight: 500;
   color: var(--foreground);
   text-align: left;

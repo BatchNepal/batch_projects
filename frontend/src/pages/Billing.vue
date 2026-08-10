@@ -6,7 +6,7 @@
          upgrade before it "runs out" — it just says what's true and that
          nothing breaks or gets deleted when it ends. -->
     <div v-if="ent.isTrial" class="border-b px-8 py-3" style="background: var(--accent-soft); border-color: var(--border);">
-      <div class="max-w-6xl mx-auto w-full flex items-center gap-2.5 text-[13px]" style="color: var(--accent-soft-foreground);">
+      <div class="max-w-6xl mx-auto w-full flex items-center gap-2.5 text-base" style="color: var(--accent-soft-foreground);">
         <Sparkles class="size-4 shrink-0" :stroke-width="2" />
         <span>
           You're on a free <strong>Business</strong> trial —
@@ -22,11 +22,11 @@
       <div class="px-8 py-6 max-w-6xl mx-auto w-full">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 class="text-[20px] font-bold tracking-tight" style="color: var(--foreground);">Billing &amp; Plan</h1>
-            <p class="text-[13px] mt-1" style="color: var(--muted);">Manage your workspace's subscription, seats, and invoices.</p>
+            <h1 class="text-3xl font-bold tracking-tight" style="color: var(--foreground);">Billing &amp; Plan</h1>
+            <p class="text-base mt-1" style="color: var(--muted);">Manage your workspace's subscription, seats, and invoices.</p>
           </div>
           <button type="button" :disabled="portalBusy" @click="openPortal"
-            class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-medium transition-colors shrink-0 disabled:opacity-60"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-base font-medium transition-colors shrink-0 disabled:opacity-60"
             style="background: var(--surface-secondary); color: var(--foreground); border: 1px solid var(--border);"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
@@ -40,25 +40,25 @@
         <div class="mt-6 rounded-lg p-5" style="background: var(--surface); border: 1px solid var(--border);">
           <div class="flex flex-wrap items-center gap-x-8 gap-y-4">
             <div>
-              <p class="text-[11px] font-medium uppercase tracking-wider" style="color: var(--muted);">Current plan</p>
+              <p class="text-xs font-medium uppercase tracking-wider" style="color: var(--muted);">Current plan</p>
               <div class="flex items-center gap-2 mt-1">
-                <span class="text-[16px] font-semibold" style="color: var(--foreground);">{{ ent.tierLabel }}</span>
-                <span v-if="statusNote" class="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                <span class="text-xl font-semibold" style="color: var(--foreground);">{{ ent.tierLabel }}</span>
+                <span v-if="statusNote" class="text-xs font-medium px-2 py-0.5 rounded-full"
                   :style="{ background: statusTone.bg, color: statusTone.fg }">{{ statusNote }}</span>
               </div>
             </div>
             <div v-if="renewalLabel">
-              <p class="text-[11px] font-medium uppercase tracking-wider" style="color: var(--muted);">{{ activeSub?.status === 'trialing' ? 'Trial ends' : 'Renews' }}</p>
-              <p class="text-[13px] mt-1 tabular-nums" style="color: var(--foreground);">{{ renewalLabel }}</p>
+              <p class="text-xs font-medium uppercase tracking-wider" style="color: var(--muted);">{{ activeSub?.status === 'trialing' ? 'Trial ends' : 'Renews' }}</p>
+              <p class="text-base mt-1 tabular-nums" style="color: var(--foreground);">{{ renewalLabel }}</p>
             </div>
             <div v-if="ent.seatsTotal">
-              <p class="text-[11px] font-medium uppercase tracking-wider" style="color: var(--muted);">Seats</p>
-              <p class="text-[13px] mt-1 tabular-nums" :style="{ color: ent.isAtCapacity ? 'var(--danger)' : 'var(--foreground)' }">
+              <p class="text-xs font-medium uppercase tracking-wider" style="color: var(--muted);">Seats</p>
+              <p class="text-base mt-1 tabular-nums" :style="{ color: ent.isAtCapacity ? 'var(--danger)' : 'var(--foreground)' }">
                 {{ ent.seatsUsed }} / {{ ent.seatsTotal }} used
               </p>
             </div>
             <div class="ml-auto" v-if="ent.tier !== 'starter'">
-              <RouterLink to="/workspace/settings" class="text-[12.5px]" style="color: var(--accent);">Workspace settings →</RouterLink>
+              <RouterLink to="/workspace/settings" class="text-sm" style="color: var(--accent);">Workspace settings →</RouterLink>
             </div>
           </div>
         </div>
@@ -68,7 +68,7 @@
     <!-- Loading state -->
     <div v-if="loading" class="flex flex-col items-center justify-center py-24 max-w-5xl mx-auto w-full">
       <div class="size-6 rounded-full animate-spin" style="border: 2px solid var(--border); border-top-color: var(--accent);" />
-      <p class="text-[13px] mt-4" style="color: var(--muted);">Loading plans…</p>
+      <p class="text-base mt-4" style="color: var(--muted);">Loading plans…</p>
     </div>
 
     <!-- Error state -->
@@ -78,10 +78,10 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
         </svg>
       </div>
-      <p class="text-[14px]" style="color: var(--muted);">Plan details temporarily unavailable.</p>
-      <p class="text-[12px] mt-1" style="color: var(--muted);">Check your connection and try again.</p>
+      <p class="text-md" style="color: var(--muted);">Plan details temporarily unavailable.</p>
+      <p class="text-sm mt-1" style="color: var(--muted);">Check your connection and try again.</p>
       <button @click="loadPlans"
-        class="mt-5 px-5 py-2 rounded-md text-[13px] font-medium transition-colors"
+        class="mt-5 px-5 py-2 rounded-md text-base font-medium transition-colors"
         style="background: var(--accent); color: var(--accent-foreground);"
       >Try again</button>
     </div>
@@ -92,8 +92,8 @@
     <div class="px-8 pt-10 pb-4 max-w-6xl mx-auto w-full">
       <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
-          <h2 class="text-[16px] font-bold" style="color: var(--foreground);">Change your plan</h2>
-          <p class="text-[13px] mt-0.5" style="color: var(--muted);">Flat per-workspace pricing — no per-user math.</p>
+          <h2 class="text-xl font-bold" style="color: var(--foreground);">Change your plan</h2>
+          <p class="text-base mt-0.5" style="color: var(--muted);">Flat per-workspace pricing — no per-user math.</p>
         </div>
         <!-- Billing toggle -->
         <div class="inline-flex items-center gap-3 p-1 rounded-lg" style="background: var(--surface-secondary);">
@@ -101,7 +101,7 @@
             v-for="opt in billingOptions"
             :key="opt.value"
             @click="billing = opt.value"
-            class="relative px-4 py-2 text-[13px] font-medium rounded-md transition-colors duration-150"
+            class="relative px-4 py-2 text-base font-medium rounded-md transition-colors duration-150"
             :class="billing === opt.value
               ? 'shadow-sm' : 'hover:opacity-70'"
             :style="billing === opt.value
@@ -110,7 +110,7 @@
           >
             {{ opt.label }}
             <span v-if="opt.value === 'yearly' && annualSavingsLabel"
-              class="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+              class="ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full"
               :style="billing === opt.value
                 ? 'background: var(--accent-soft); color: var(--accent-soft-foreground);'
                 : 'background: var(--surface); color: var(--muted);'"
@@ -152,17 +152,17 @@
                 </svg>
               </div>
               <div>
-                <h3 class="text-[16px] font-semibold" style="color: var(--foreground);">{{ starterPlan.name }}</h3>
-                <p class="text-[12px]" style="color: var(--muted);">{{ starterPlan.tagline }}</p>
+                <h3 class="text-xl font-semibold" style="color: var(--foreground);">{{ starterPlan.name }}</h3>
+                <p class="text-sm" style="color: var(--muted);">{{ starterPlan.tagline }}</p>
               </div>
             </div>
             <div class="mb-5">
-              <span class="text-[28px] font-bold" style="color: var(--foreground);">Free</span>
-              <span class="text-[12px] ml-1" style="color: var(--muted);">{{ starterPlan.per }}</span>
+              <span class="text-metric font-bold" style="color: var(--foreground);">Free</span>
+              <span class="text-sm ml-1" style="color: var(--muted);">{{ starterPlan.per }}</span>
             </div>
             <ul class="space-y-2.5 mb-6 flex-1">
               <li v-for="l in starterPlan.limits" :key="l"
-                class="flex items-start gap-2.5 text-[13px]" style="color: var(--foreground);">
+                class="flex items-start gap-2.5 text-base" style="color: var(--foreground);">
                 <svg class="w-4 h-4 shrink-0 mt-0.5" style="color: var(--success);" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                 </svg>
@@ -170,7 +170,7 @@
               </li>
             </ul>
             <button type="button" :disabled="currentPlan === 'starter'"
-              class="w-full py-2.5 rounded-md text-[13px] font-medium transition-colors"
+              class="w-full py-2.5 rounded-md text-base font-medium transition-colors"
               :class="currentPlan === 'starter' ? 'cursor-default' : ''"
               :style="currentPlan === 'starter'
                 ? 'background: var(--surface-secondary); color: var(--muted); border: 1px solid var(--border);'
@@ -191,27 +191,27 @@
               </svg>
             </div>
             <div>
-              <h3 class="text-[16px] font-semibold" style="color: var(--foreground);">{{ enterprisePlan.name }}</h3>
-              <p class="text-[12px]" style="color: var(--muted);">{{ enterprisePlan.tagline }}</p>
+              <h3 class="text-xl font-semibold" style="color: var(--foreground);">{{ enterprisePlan.name }}</h3>
+              <p class="text-sm" style="color: var(--muted);">{{ enterprisePlan.tagline }}</p>
             </div>
           </div>
           <div class="mb-5">
-            <span class="text-[28px] font-bold" style="color: var(--foreground);">Custom</span>
-            <span class="text-[12px] ml-1" style="color: var(--muted);">pricing — contact us</span>
+            <span class="text-metric font-bold" style="color: var(--foreground);">Custom</span>
+            <span class="text-sm ml-1" style="color: var(--muted);">pricing — contact us</span>
           </div>
           <ul class="space-y-2.5 mb-6 flex-1">
             <li v-for="l in enterprisePlan.limits" :key="l"
-              class="flex items-start gap-2.5 text-[13px]" style="color: var(--foreground);">
+              class="flex items-start gap-2.5 text-base" style="color: var(--foreground);">
               <svg class="w-4 h-4 shrink-0 mt-0.5" style="color: var(--success);" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
               {{ l }}
             </li>
             <li class="pt-2 mt-2" style="border-top: 1px solid var(--border);">
-              <span class="text-[11px] font-medium uppercase tracking-wider" style="color: var(--muted);">Everything in Business, plus:</span>
+              <span class="text-xs font-medium uppercase tracking-wider" style="color: var(--muted);">Everything in Business, plus:</span>
             </li>
             <li v-for="feat in enterprisePlan.features?.slice(1)" :key="feat"
-              class="flex items-start gap-2.5 text-[13px]" style="color: var(--foreground);">
+              class="flex items-start gap-2.5 text-base" style="color: var(--foreground);">
               <svg class="w-4 h-4 shrink-0 mt-0.5" style="color: var(--accent-soft-foreground);" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
@@ -219,7 +219,7 @@
             </li>
           </ul>
           <button type="button" @click="contactSales"
-            class="w-full py-2.5 rounded-md text-[13px] font-medium transition-colors hover:opacity-90"
+            class="w-full py-2.5 rounded-md text-base font-medium transition-colors hover:opacity-90"
             style="background: var(--accent); color: var(--accent-foreground);"
           >Contact sales</button>
         </div>
@@ -229,13 +229,13 @@
     <!-- ─── FEATURE COMPARISON — grouped by category, not one flat list ─── -->
     <div class="px-8 pb-12 max-w-6xl mx-auto w-full">
       <div class="text-center mb-8">
-        <h2 class="text-[18px] font-bold" style="color: var(--foreground);">Compare plans in detail</h2>
-        <p class="text-[13px] mt-1" style="color: var(--muted);">Every plan includes core collaboration features. Premium capabilities unlock at higher tiers.</p>
+        <h2 class="text-3xl font-bold" style="color: var(--foreground);">Compare plans in detail</h2>
+        <p class="text-base mt-1" style="color: var(--muted);">Every plan includes core collaboration features. Premium capabilities unlock at higher tiers.</p>
       </div>
       <div class="rounded-lg overflow-hidden"
         style="background: var(--surface); border: 1px solid var(--border);">
         <div class="overflow-x-auto">
-          <table class="w-full text-[13px]" style="border-collapse: separate; border-spacing: 0;">
+          <table class="w-full text-base" style="border-collapse: separate; border-spacing: 0;">
             <thead>
               <tr>
                 <th class="text-left px-5 py-3.5 font-semibold sticky left-0 z-10 min-w-[200px]"
@@ -246,14 +246,14 @@
                   class="text-center px-4 py-3.5 font-semibold min-w-[110px]"
                   style="color: var(--foreground); background: var(--surface); border-bottom: 1px solid var(--border);">
                   <div>{{ col.name }}</div>
-                  <div class="text-[11px] font-normal mt-0.5" style="color: var(--muted);">{{ col.seats }}</div>
+                  <div class="text-xs font-normal mt-0.5" style="color: var(--muted);">{{ col.seats }}</div>
                 </th>
               </tr>
             </thead>
             <tbody>
               <template v-for="group in featureGroups" :key="group.category">
                 <tr>
-                  <td :colspan="planColumns.length + 1" class="px-5 py-2 text-[11px] font-semibold uppercase tracking-wider"
+                  <td :colspan="planColumns.length + 1" class="px-5 py-2 text-xs font-semibold uppercase tracking-wider"
                     style="color: var(--muted); background: var(--surface-secondary);">
                     {{ group.category }}
                   </td>
@@ -261,7 +261,7 @@
                 <tr v-for="(row, ri) in group.rows" :key="row.label"
                   class="transition-colors"
                   :style="rowStyle(ri)">
-                  <td class="px-5 py-3 text-[13px] sticky left-0 z-10"
+                  <td class="px-5 py-3 text-base sticky left-0 z-10"
                     :style="cellStyle(ri)">
                     {{ row.label }}
                   </td>
@@ -275,7 +275,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M18 12H6" />
                       </svg>
                     </span>
-                    <span v-else class="text-[12px]" style="color: var(--muted);">{{ row[col.tier] }}</span>
+                    <span v-else class="text-sm" style="color: var(--muted);">{{ row[col.tier] }}</span>
                   </td>
                 </tr>
               </template>
@@ -287,13 +287,13 @@
 
     <!-- ─── FAQ ─── -->
     <div class="px-8 pb-16 max-w-3xl mx-auto w-full">
-      <h2 class="text-[18px] font-bold text-center mb-8" style="color: var(--foreground);">Common questions</h2>
+      <h2 class="text-3xl font-bold text-center mb-8" style="color: var(--foreground);">Common questions</h2>
       <div class="rounded-lg overflow-hidden" style="background: var(--surface); border: 1px solid var(--border);">
         <div class="divide-y" style="border-color: var(--border);">
           <div v-for="(faq, fi) in FAQS" :key="fi">
             <button
               type="button"
-              class="w-full flex items-center justify-between gap-4 px-6 py-[18px] text-[13px] font-medium cursor-pointer transition-colors text-left"
+              class="w-full flex items-center justify-between gap-4 px-6 py-[18px] text-base font-medium cursor-pointer transition-colors text-left"
               style="color: var(--foreground);"
               @click="toggleFaq(fi)"
             >
@@ -304,13 +304,13 @@
             </button>
             <div class="grid transition-[grid-template-rows] duration-200 ease-out" :style="{ gridTemplateRows: openFaqs.has(fi) ? '1fr' : '0fr' }">
               <div class="overflow-hidden">
-                <p class="px-6 pb-[18px] text-[13px] leading-relaxed" style="color: var(--muted);">{{ faq.a }}</p>
+                <p class="px-6 pb-[18px] text-base leading-relaxed" style="color: var(--muted);">{{ faq.a }}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <p class="text-[12px] text-center mt-6" style="color: var(--muted);">
+      <p class="text-sm text-center mt-6" style="color: var(--muted);">
         Questions? <a href="mailto:sales@batcherp.com" style="color: var(--accent); text-decoration: underline;">Contact support</a>
       </p>
     </div>
@@ -703,7 +703,7 @@ const PlanCard = defineComponent({
         h('div', { class: 'flex items-center justify-between mb-5' }, [
           p.highlight && !isCurrent.value
             ? h('span', {
-                class: 'text-[10px] font-semibold px-2.5 py-0.5 rounded-full',
+                class: 'text-xs font-semibold px-2.5 py-0.5 rounded-full',
                 style: {
                   background: 'var(--accent)',
                   color: 'var(--accent-foreground)',
@@ -712,7 +712,7 @@ const PlanCard = defineComponent({
             : h('span'),
           isCurrent.value
             ? h('span', {
-                class: 'text-[10px] font-semibold px-2.5 py-0.5 rounded-full',
+                class: 'text-xs font-semibold px-2.5 py-0.5 rounded-full',
                 style: {
                   background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
                   color: 'var(--accent-soft-foreground)',
@@ -724,30 +724,30 @@ const PlanCard = defineComponent({
         // Price
         h('div', { class: 'mb-5' }, [
           h('h3', {
-            class: 'text-[18px] font-bold',
+            class: 'text-metric font-bold',
             style: { color: 'var(--foreground)' },
           }, p.name),
           h('p', {
-            class: 'text-[12px] mt-0.5',
+            class: 'text-sm mt-0.5',
             style: { color: 'var(--muted)' },
           }, p.tagline),
           h('div', { class: 'mt-4 flex items-baseline gap-1' }, [
             price.value === 0
               ? h('span', {
-                  class: 'text-[28px] font-bold',
+                  class: 'text-metric font-bold',
                   style: { color: 'var(--foreground)' },
                 }, 'Free')
               : [
                   h('span', {
-                    class: 'text-[28px] font-bold',
+                    class: 'text-metric font-bold',
                     style: { color: 'var(--foreground)' },
                   }, currency.value),
                   h('span', {
-                    class: 'text-[28px] font-bold leading-none',
+                    class: 'text-metric font-bold leading-none',
                     style: { color: 'var(--foreground)' },
                   }, price.value.toLocaleString()),
                   h('span', {
-                    class: 'text-[12px] ml-1',
+                    class: 'text-sm ml-1',
                     style: { color: 'var(--muted)' },
                   }, periodSuffix.value),
                 ],
@@ -757,11 +757,11 @@ const PlanCard = defineComponent({
         // Feature highlights list
         h('ul', { class: 'space-y-2.5 mb-6 flex-1' }, (p.limits || []).map(l =>
           h('li', {
-            class: 'flex items-start gap-2.5 text-[13px]',
+            class: 'flex items-start gap-2.5 text-base',
             style: { color: 'var(--foreground)' },
           }, [
             h('span', {
-              class: 'w-4 h-4 shrink-0 mt-0.5 flex items-center justify-center text-[12px] font-bold rounded-full',
+              class: 'w-4 h-4 shrink-0 mt-0.5 flex items-center justify-center text-sm font-bold rounded-full',
               style: { color: 'var(--success)', background: 'color-mix(in oklab, var(--success) 12%, transparent)' },
             }, '✓'),
             h('span', l),
@@ -775,12 +775,12 @@ const PlanCard = defineComponent({
           style: { borderTop: '1px solid var(--border)' },
         }, [
           h('p', {
-            class: 'text-[11px] font-medium uppercase tracking-wider mb-2',
+            class: 'text-xs font-medium uppercase tracking-wider mb-2',
             style: { color: 'var(--muted)' },
           }, p.features[0] && /^everything in/i.test(p.features[0]) ? p.features[0] + ':' : 'Includes:'),
           ...p.features.slice(1, 5).map(f =>
             h('p', {
-              class: 'text-[12px] leading-relaxed',
+              class: 'text-sm leading-relaxed',
               style: { color: 'var(--muted)' },
             }, `— ${f}`)
           ),
@@ -789,7 +789,7 @@ const PlanCard = defineComponent({
         // CTA
         h('button', {
           class: [
-            'w-full py-2.5 rounded-md text-[13px] font-medium transition-colors flex items-center justify-center gap-2',
+            'w-full py-2.5 rounded-md text-base font-medium transition-colors flex items-center justify-center gap-2',
           ].join(' '),
           disabled: isCurrent.value || isBusy.value,
           style: isCurrent.value

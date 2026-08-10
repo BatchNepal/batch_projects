@@ -1,7 +1,10 @@
 # Design Patterns
 
-Component visual language: **HeroUI React** (see `src/ui/`).
-Page layout, information density, and data hierarchy: **Linear / Jira / Wrike**.
+Component mechanics and variant semantics come from the ported kit in `src/ui/`.
+The visual register is the token layer in `tokens.css`: near-black ink on calm
+neutrals, hairline borders, restrained colour, premium-fintech typography.
+Page layout, information density and data hierarchy follow the dense-workspace
+register — calm chrome, colour reserved for data.
 
 These notes capture the structural patterns to apply when building or rebuilding pages.
 They are layout decisions, not component implementations.
@@ -12,11 +15,11 @@ They are layout decisions, not component implementations.
 
 Horizontal strip of key metrics. Each metric is a vertical pair: uppercase label above a large number.
 
-- Label: `text-[11px] font-medium uppercase tracking-wider text-gray-500`
-- Value: `text-2xl font-semibold text-gray-900 tabular-nums` (`tabular-nums` prevents jiggle when values update)
+- Label: `text-xs font-medium uppercase tracking-wider text-muted`
+- Value: `text-metric font-semibold text-foreground tabular-nums` (`tabular-nums` prevents jiggle when values update)
 - Gap between metrics: `48px` (`gap-12`)
 - No icon backgrounds, no pastel tiles, no rounded squares behind icons — just text
-- Optional `sub` line below the value: `text-[11px] text-gray-400`
+- Optional `sub` line below the value: `text-xs text-muted`
 
 **Use instead of:** 4-up icon-tile dashboard cards. Those waste vertical space and add visual noise.
 **Use on:** Summary page top section, Team home, Dashboard.
@@ -29,8 +32,8 @@ Column header label for board views and status indicators everywhere.
 
 - Structure: `[6px colored dot] [UPPERCASE LABEL] [optional count chip]`
 - Dot: `w-1.5 h-1.5 rounded-full` in the status color
-- Label: `text-[11px] font-medium uppercase tracking-wider text-gray-700`
-- Count chip: `min-w-[1rem] h-4 px-1 rounded-full text-[10px] font-medium text-gray-600 bg-gray-100 tabular-nums`
+- Label: `text-xs font-medium uppercase tracking-wider text-foreground`
+- Count chip: `min-w-[1rem] h-4 px-1 rounded-full text-xs font-medium text-muted bg-default tabular-nums`
 - Colors: gray (todo/default), blue (in progress), green (done), red (blocked), orange (pending), purple (review)
 
 **Use on:** Board column headers, status rows in Summary, status cells in DataTable.
@@ -65,9 +68,9 @@ The dot on urgent is the critical differentiator — without it, high and urgent
 
 Centered empty state for columns, lists, and pages.
 
-- Icon: 32px Lucide icon in `text-gray-300` — communicates category, not decoration
-- Title: `text-sm font-medium text-gray-900`
-- Description: `text-xs text-gray-500 max-w-[220px] leading-relaxed`
+- Icon: 32px Lucide icon in `text-muted-tertiary` — communicates category, not decoration
+- Title: `text-sm font-medium text-foreground`
+- Description: `text-xs text-muted max-w-[220px] leading-relaxed`
 - Action: optional slot below description, typically a secondary or ghost Button
 - Container: `min-height: 120px`, centered with `flex-col items-center justify-center`
 
@@ -78,13 +81,13 @@ Centered empty state for columns, lists, and pages.
 
 ## DataTable
 
-Compact tabular data. Power-user density — rows at 36px, not the spacious 48px Notion default.
+Compact tabular data. Power-user density — rows at 36px, not the spacious 48px a document-editor register would use.
 
 - Row height: `h-9` (36px) on `<tr>`, `align-middle` on `<td>`
-- Header: `text-[11px] font-medium uppercase tracking-wider text-gray-500`, no background fill, `border-b border-gray-200`
-- Body rows: `bg-white border-b border-gray-100 hover:bg-gray-50 transition-colors duration-75`
+- Header: `text-xs font-medium uppercase tracking-wider text-muted`, no background fill, `border-b border-border`
+- Body rows: `bg-surface border-b border-separator hover:bg-surface-secondary transition-colors duration-75`
 - Cell padding: `px-3`
-- Skeleton loading: `loading` prop renders N rows (default 6) of `animate-pulse bg-gray-100 h-2.5 rounded` bars at deterministic-varying widths so columns look proportional
+- Skeleton loading: `loading` prop renders N rows (default 6) of `animate-pulse bg-default h-2.5 rounded` bars at deterministic-varying widths so columns look proportional
 
 Column definition: `{ key: string, label: string, width?: string }`
 Cell slot: `` `#cell-{key}` `` receives `{ row, col, value }`
@@ -99,8 +102,8 @@ Filter bar pill. 28px height, minimal — label only, no left icon.
 
 - Height: `h-7` (28px)
 - Padding: `px-2` (8px)
-- Inactive: `bg-white border border-gray-200 text-gray-600 hover:bg-gray-50`
-- Active: `bg-gray-100 border-gray-200 text-gray-900` — shows value inline as `"Priority: High"`
+- Inactive: `bg-surface border border-border text-muted hover:bg-surface-secondary`
+- Active: `bg-default border-border text-foreground` — shows value inline as `"Priority: High"`
 - Right icon: `ChevronDown` at 12px — omit with `hasMenu: false` for toggle-style filters
 - No icon on the left
 
@@ -112,11 +115,11 @@ Filter bar pill. 28px height, minimal — label only, no left icon.
 
 Dashboard section wrapper. White card with hover shadow.
 
-- Background: `bg-white`
-- Border: `border border-gray-200`
+- Background: `bg-surface`
+- Border: `border border-border`
 - Radius: `rounded-lg` (8px)
 - Shadow: none at rest, `shadow-sm` on hover — `transition-shadow duration-150`
-- Header: `px-4 py-3 border-b border-gray-100` — title (`text-sm font-semibold text-gray-900`) + optional subtitle (`text-xs text-gray-500`)
+- Header: `px-4 py-3 border-b border-separator` — title (`text-sm font-semibold text-foreground`) + optional subtitle (`text-xs text-muted`)
 - "View all" link: right-aligned, primary accent color, renders as `<RouterLink>` when `to` prop is given (no full reload)
 - Content: `p-4` slot
 
@@ -130,9 +133,9 @@ Text-only tab strip for page-level view switching.
 
 - Tab height: `h-8` (32px)
 - Tab padding: `px-4` (16px horizontal)
-- Inactive: `text-gray-600 hover:text-gray-900`
-- Active: `text-gray-900` + `absolute bottom-0 h-0.5 bg-gray-900` underline (2px, full tab width)
-- Container: `border-b border-gray-200`
+- Inactive: `text-muted hover:text-foreground`
+- Active: `text-foreground` + `absolute bottom-0 h-0.5 bg-foreground` underline (2px, full tab width)
+- Container: `border-b border-border`
 - No icons inside tabs — label text only
 
 **Use on:** Summary/Board/List/Backlog switcher in ProjectHeader (currently a custom segment pill — ViewTabs is the simpler replacement).
@@ -141,12 +144,13 @@ Text-only tab strip for page-level view switching.
 
 ## Layout Density Rule
 
-Default to **Linear/Plane density**, not Notion density.
+Default to **dense-workspace density**, not document-editor density.
 
 - Rows at 36px, not 48px
 - Section padding at 16px, not 24px
 - Gap between sections at 24px (`gap-6`), not 32px
-- Font sizes: 11px for meta labels, 13px for body, 15px for section titles, never go above `text-lg` on a data page
+- Font sizes: `text-xs` meta labels, `text-base` body, `text-md` section titles;
+  never exceed `text-xl` on a data page (see the closed scale in the Composition Law)
 
 Power users skim rows quickly. Casual users tolerate density when hierarchy is clear. Extra whitespace makes data pages feel like landing pages.
 
@@ -193,7 +197,7 @@ Full API: `size` × `type` × `isClearable` × `isDisabled` × `isReadOnly` × `
 
 | Situation | Usage |
 |---|---|
-| Standard form field | Global flat standard (default). `bg-gray-100` at rest, `bg-white ring-2 ring-[#1e96eb]/40` on focus. No borders. |
+| Standard form field | Global flat standard (default). `bg-default` at rest, `bg-surface ring-2 ring-[#1e96eb]/40` on focus. No borders. |
 | Error state | `:isInvalid="true" errorMessage="Field is required"` — turns white + red ring |
 | Leading icon (search, user, etc.) | `startContent` slot: `<Icon :icon="Search" />` at 16px |
 | Trailing content (units, actions) | `endContent` slot |
@@ -270,7 +274,7 @@ No `size`, `variant` or `color` prop. Height is controlled by `rows`. Uses Globa
 | `Modal` + `ModalHeader` + `ModalBody` + `ModalFooter` | All dialogs. Never use browser `alert()`/`confirm()`. `ModalFooter` slots: `startContent` (secondary actions left) and `endContent` (primary CTA right). |
 | `Tooltip` | Hover explanation for icon-only buttons, truncated text. Keep tooltip text under 80 chars. |
 | `Accordion` / `AccordionItem` | Collapsible sections in settings and detail panels. |
-| `Divider` | Horizontal rule between sections. Prefer `border-t border-gray-100` in tight layouts. |
+| `Divider` | Horizontal rule between sections. Prefer `border-t border-separator` in tight layouts. |
 | `Icon` | Lucide icon wrapper with 16px / 1.5px stroke defaults. `<Icon :icon="Search" />` or override: `<Icon :icon="Plus" :size="18" />`. |
 | `IconButton` | Icon-only button shorthand. Equivalent to `Button` with `isIconOnly`. |
 | `Spinner` | Loading state. Already used in Board.vue. |
@@ -279,7 +283,7 @@ No `size`, `variant` or `color` prop. Height is controlled by `rows`. Uses Globa
 
 ### Primitives not yet in `src/ui/` — build before Summary rebuild
 
-These are documented above as layout patterns but not yet implemented as components. Build them in `src/ui/` using HeroUI visual tokens (primary blue, neutral palette, existing typography scale) before rebuilding ProjectSummary:
+These are documented above as layout patterns but not yet implemented as components. Build them in `src/ui/` on the token layer (accent, neutral palette, the closed typography scale above) before rebuilding ProjectSummary:
 
 - `MetricRow` — horizontal metric strip
 - `SectionCard` — white card wrapper with header + hover shadow
@@ -290,7 +294,7 @@ These are documented above as layout patterns but not yet implemented as compone
 - `DataTable` — compact 36px-row table with skeleton loading
 - `EmptyState` — centered 120px empty state
 
-They should feel like they came from the same design system as Button and Select — same corner radii, same color tokens, same typography scale. Not the stark Linear aesthetic from the deleted `src/components/ui/` experiment.
+They should feel like they came from the same design system as Button and Select — same corner radii, same color tokens, same typography scale. Not the stark high-contrast aesthetic from the deleted `src/components/ui/` experiment.
 
 ---
 
@@ -302,7 +306,7 @@ Complex primitives that `src/ui/` doesn't yet provide (Popover, Dialog, Command 
 
 ## Never-Do Rules
 
-These were identified from evaluating earlier implementations against the Linear/Plane reference:
+These were identified from evaluating earlier implementations against the dense-workspace reference:
 
 1. **No pastel icon background tiles on metric cards.** No `bg-green-100` rounded squares with an icon inside. Icons stand alone or are omitted.
 2. **No charts with fewer than 3 data points.** Show a number or a simple list instead. A bar chart with 1–2 bars is noise.
@@ -334,6 +338,26 @@ buttons, no colored section headers, no accent borders as decoration.
 - **Text:** 11 uppercase labels · 12.5 secondary · 13 body · 14 section titles ·
   16+ page titles only. Weights 400/500/600 — 600 for anything structural.
   Numbers ALWAYS `tabular-nums`.
+
+  Write these as the token classes, never as `text-[13px]` or `font-size:13px`
+  — arbitrary values are how the scale drifted to 28 sizes before (it is now
+  closed; `grep -rE 'text-\[[0-9.]+px\]|font-size:\s*[0-9.]+px' src` must stay
+  empty). The complete, closed set:
+
+  | class | px | use |
+  |---|---|---|
+  | `text-xs` | 11 | uppercase labels |
+  | `text-sm` | 12.5 | secondary / meta |
+  | `text-base` | 13 | body |
+  | `text-md` | 14 | section titles, **dialog titles** |
+  | `text-xl` | 16 | page / section `h1` |
+  | `text-2xl` / `text-3xl` | 18 / 20 | page titles, hero |
+  | `text-micro` | 9 | initials inside 14–20px avatars ONLY |
+  | `text-metric` | 28 | KPI/metric numerals ONLY — never a heading |
+
+  `text-lg` (15px) is DEPRECATED and unreferenced — do not reintroduce it.
+  A dialog title is a section title (`text-md`), matching `ModalHeader`'s own
+  default; a dialog must never carry a heading larger than the page behind it.
 
 ### 3. Separation language
 Background shifts and whitespace FIRST. Borders are permitted in exactly three

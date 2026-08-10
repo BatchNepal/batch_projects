@@ -7,13 +7,13 @@
         <div class="flex items-center gap-2.5 min-w-0">
           <ProjectAvatar v-if="data?.project" :theme="data.project.theme" :seed="data.project.key" size="md" />
           <div class="min-w-0">
-            <p class="text-[14px] font-semibold text-foreground truncate leading-tight">
+            <p class="text-md font-semibold text-foreground truncate leading-tight">
               {{ data?.project?.project_name || 'Shared view' }}
             </p>
-            <p class="text-[11px] text-muted leading-tight">{{ scopeLabel }}</p>
+            <p class="text-xs text-muted leading-tight">{{ scopeLabel }}</p>
           </div>
         </div>
-        <span class="shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-default text-[11.5px] font-medium text-muted">
+        <span class="shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-default text-sm font-medium text-muted">
           <template v-if="data?.access_level === 'comment'">
             <MessageSquare class="size-3.5" /> Can comment
           </template>
@@ -35,8 +35,8 @@
         <div class="size-12 rounded-2xl bg-default flex items-center justify-center mx-auto mb-4">
           <LinkOff class="size-6 text-muted" />
         </div>
-        <h1 class="text-[16px] font-semibold text-foreground">{{ error }}</h1>
-        <p class="text-[13px] text-muted mt-1.5">
+        <h1 class="text-xl font-semibold text-foreground">{{ error }}</h1>
+        <p class="text-base text-muted mt-1.5">
           Ask whoever shared this link to send you a new one.
         </p>
       </div>
@@ -48,7 +48,7 @@
 
         <!-- BOARD / PROJECT scope → read-only kanban -->
         <template v-if="data.scope !== 'task'">
-          <p v-if="data.project?.description" class="text-[13px] text-muted mb-4 max-w-2xl">
+          <p v-if="data.project?.description" class="text-base text-muted mb-4 max-w-2xl">
             {{ data.project.description }}
           </p>
           <div class="flex gap-3 overflow-x-auto pb-4">
@@ -56,35 +56,35 @@
                  class="shrink-0 w-[300px] bg-surface-secondary rounded-sm flex flex-col">
               <div class="flex items-center gap-2 px-3.5 py-3">
                 <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ background: col.color || 'var(--muted)' }" />
-                <span class="text-[13px] font-semibold text-foreground">{{ col.name }}</span>
-                <span class="text-[12px] text-muted">{{ (data.board[col.name] || []).length }}</span>
+                <span class="text-base font-semibold text-foreground">{{ col.name }}</span>
+                <span class="text-sm text-muted">{{ (data.board[col.name] || []).length }}</span>
               </div>
               <div class="px-2.5 pb-2.5 space-y-2 overflow-y-auto">
                 <div v-for="t in (data.board[col.name] || [])" :key="t.name"
                      class="bg-surface rounded-[7px] border border-border p-3">
                   <div class="flex items-center gap-1.5 mb-1.5">
-                    <span class="text-[11px] font-mono text-muted">{{ t.task_key }}</span>
+                    <span class="text-xs font-mono text-muted">{{ t.task_key }}</span>
                     <PriorityDot :priority="t.priority" />
                   </div>
-                  <p class="text-[13px] text-foreground leading-snug">{{ t.title }}</p>
+                  <p class="text-base text-foreground leading-snug">{{ t.title }}</p>
                   <div v-if="t.labels?.length || t.assignees?.length" class="flex items-center justify-between mt-2.5 gap-2">
                     <div class="flex flex-wrap gap-1 min-w-0">
                       <span v-for="l in t.labels?.slice(0,2)" :key="l.label || l"
-                            class="inline-flex items-center gap-1 px-1.5 h-5 rounded text-[10.5px] font-medium bg-default text-muted">
+                            class="inline-flex items-center gap-1 px-1.5 h-5 rounded text-xs font-medium bg-default text-muted">
                         <span v-if="l.color" class="w-1.5 h-1.5 rounded-full" :style="{ background: l.color }" />
                         {{ l.label || l }}
                       </span>
                     </div>
                     <div class="flex -space-x-1.5 shrink-0">
                       <span v-for="a in t.assignees?.slice(0,3)" :key="a.user"
-                            class="w-5 h-5 rounded-full ring-2 ring-surface flex items-center justify-center text-[9px] font-semibold text-white"
+                            class="w-5 h-5 rounded-full ring-2 ring-surface flex items-center justify-center text-micro font-semibold text-white"
                             :style="{ background: avatarColor(a.user) }" :title="a.full_name">
                         {{ initials(a.full_name) }}
                       </span>
                     </div>
                   </div>
                 </div>
-                <p v-if="!(data.board[col.name] || []).length" class="text-[12px] text-muted text-center py-4">No tasks</p>
+                <p v-if="!(data.board[col.name] || []).length" class="text-sm text-muted text-center py-4">No tasks</p>
               </div>
             </div>
           </div>
@@ -95,54 +95,54 @@
           <div class="max-w-2xl mx-auto bg-surface rounded-lg border border-border overflow-hidden">
             <div class="p-6">
               <div class="flex items-center gap-2 mb-3">
-                <span class="text-[12px] font-mono text-muted">{{ data.task.task_key }}</span>
-                <span class="inline-flex items-center gap-1.5 h-6 px-2 rounded-md text-[12px] font-medium text-white"
+                <span class="text-sm font-mono text-muted">{{ data.task.task_key }}</span>
+                <span class="inline-flex items-center gap-1.5 h-6 px-2 rounded-md text-sm font-medium text-white"
                       :style="{ background: data.task.status_color }">{{ data.task.status }}</span>
                 <PriorityDot :priority="data.task.priority" />
               </div>
-              <h1 class="text-[20px] font-semibold text-foreground leading-snug">{{ data.task.title }}</h1>
+              <h1 class="text-3xl font-semibold text-foreground leading-snug">{{ data.task.title }}</h1>
 
               <div v-if="data.task.assignees?.length || data.task.due_date" class="flex items-center gap-5 mt-4">
                 <div v-if="data.task.assignees?.length" class="flex items-center gap-2">
-                  <span class="text-[12px] text-muted">Assignees</span>
+                  <span class="text-sm text-muted">Assignees</span>
                   <div class="flex -space-x-1.5">
                     <span v-for="a in data.task.assignees" :key="a.user"
-                          class="w-6 h-6 rounded-full ring-2 ring-surface flex items-center justify-center text-[10px] font-semibold text-white"
+                          class="w-6 h-6 rounded-full ring-2 ring-surface flex items-center justify-center text-xs font-semibold text-white"
                           :style="{ background: avatarColor(a.user) }" :title="a.full_name">{{ initials(a.full_name) }}</span>
                   </div>
                 </div>
-                <div v-if="data.task.due_date" class="flex items-center gap-1.5 text-[12px] text-muted">
+                <div v-if="data.task.due_date" class="flex items-center gap-1.5 text-sm text-muted">
                   <Calendar class="size-3.5" /> Due {{ fmtDate(data.task.due_date) }}
                 </div>
               </div>
 
-              <div v-if="data.task.description" class="prose prose-sm max-w-none mt-5 text-[13.5px] text-foreground leading-relaxed"
+              <div v-if="data.task.description" class="prose prose-sm max-w-none mt-5 text-base text-foreground leading-relaxed"
                    v-html="data.task.description" />
 
               <!-- Guest edit controls (access_level === 'edit') -->
               <div v-if="data.access_level === 'edit'" class="border-t border-border mt-5 pt-5">
-                <p class="text-[12px] font-semibold text-muted uppercase tracking-wider mb-3">Edit task</p>
+                <p class="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Edit task</p>
                 <div class="space-y-3">
                   <div>
-                    <label class="text-[12px] text-muted">Status</label>
-                    <select v-model="editStatus" class="hui-field w-full mt-1 py-1.5 px-2.5 text-[13px] rounded-md">
+                    <label class="text-sm text-muted">Status</label>
+                    <select v-model="editStatus" class="hui-field w-full mt-1 py-1.5 px-2.5 text-base rounded-md">
                       <option v-for="s in data.task.workflow_states" :key="s" :value="s">{{ s }}</option>
                     </select>
                   </div>
                   <div>
-                    <label class="text-[12px] text-muted">Priority</label>
-                    <select v-model="editPriority" class="hui-field w-full mt-1 py-1.5 px-2.5 text-[13px] rounded-md">
+                    <label class="text-sm text-muted">Priority</label>
+                    <select v-model="editPriority" class="hui-field w-full mt-1 py-1.5 px-2.5 text-base rounded-md">
                       <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
                     </select>
                   </div>
                   <div>
-                    <label class="text-[12px] text-muted">Description</label>
+                    <label class="text-sm text-muted">Description</label>
                     <textarea v-model="editDescription" rows="4"
-                      class="hui-field w-full mt-1 py-2 px-3 text-[13px] text-foreground rounded-md"
+                      class="hui-field w-full mt-1 py-2 px-3 text-base text-foreground rounded-md"
                       placeholder="Update description…" />
                   </div>
                   <div class="flex items-center justify-between gap-2">
-                    <p v-if="editError" class="text-[11.5px] text-danger">{{ editError }}</p>
+                    <p v-if="editError" class="text-sm text-danger">{{ editError }}</p>
                     <span v-else />
                     <Button size="sm" color="primary" :isLoading="saving" @click="submitEdit">
                       Save changes
@@ -153,33 +153,33 @@
             </div>
 
             <div v-if="data.task.subtasks?.length" class="border-t border-border px-6 py-4">
-              <p class="text-[12px] font-semibold text-muted uppercase tracking-wider mb-2">Subtasks</p>
+              <p class="text-sm font-semibold text-muted uppercase tracking-wider mb-2">Subtasks</p>
               <div class="space-y-1.5">
                 <div v-for="s in data.task.subtasks" :key="s.name" class="flex items-center gap-2.5">
                   <span class="w-2 h-2 rounded-full shrink-0" :style="{ background: s.status_color }" />
-                  <span class="text-[12px] font-mono text-muted">{{ s.task_key }}</span>
-                  <span class="text-[13px] text-foreground truncate">{{ s.title }}</span>
+                  <span class="text-sm font-mono text-muted">{{ s.task_key }}</span>
+                  <span class="text-base text-foreground truncate">{{ s.title }}</span>
                 </div>
               </div>
             </div>
 
             <div v-if="data.access_level === 'comment' || data.task.comments?.length"
                  class="border-t border-border px-6 py-4">
-              <p class="text-[12px] font-semibold text-muted uppercase tracking-wider mb-3">Comments</p>
+              <p class="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Comments</p>
 
               <div v-if="data.task.comments?.length" class="space-y-3 mb-4">
-                <div v-for="c in data.task.comments" :key="c.name" class="text-[13px]">
+                <div v-for="c in data.task.comments" :key="c.name" class="text-base">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="font-semibold text-foreground">
                       {{ c.user === 'Guest' ? (c.guest_name || 'Guest') : (c.full_name || c.user) }}
                     </span>
-                    <span v-if="c.user === 'Guest'" class="text-[11px] text-muted">(via share link)</span>
-                    <span class="text-[11px] text-muted">· {{ fmtDateTime(c.creation) }}</span>
+                    <span v-if="c.user === 'Guest'" class="text-xs text-muted">(via share link)</span>
+                    <span class="text-xs text-muted">· {{ fmtDateTime(c.creation) }}</span>
                   </div>
                   <p class="text-foreground leading-relaxed mt-0.5 whitespace-pre-wrap">{{ c.comment_text }}</p>
                 </div>
               </div>
-              <p v-else class="text-[12px] text-muted mb-4">No comments yet.</p>
+              <p v-else class="text-sm text-muted mb-4">No comments yet.</p>
 
               <div v-if="data.access_level === 'comment'" class="space-y-2">
                 <Input v-model="guestName" placeholder="Your name" size="sm" class="max-w-[200px]" />
@@ -187,10 +187,10 @@
                   v-model="commentText"
                   rows="3"
                   placeholder="Write a comment…"
-                  class="hui-field w-full py-2 px-3 text-[13px] text-foreground placeholder:text-[var(--field-placeholder)]"
+                  class="hui-field w-full py-2 px-3 text-base text-foreground placeholder:text-[var(--field-placeholder)]"
                 />
                 <div class="flex items-center justify-between gap-2">
-                  <p v-if="postError" class="text-[11.5px] text-danger">{{ postError }}</p>
+                  <p v-if="postError" class="text-sm text-danger">{{ postError }}</p>
                   <span v-else />
                   <Button size="sm" color="primary" :disabled="!commentText.trim() || posting"
                           :isLoading="posting" @click="submitComment">
@@ -206,7 +206,7 @@
 
     <!-- Brand footer -->
     <footer class="shrink-0 py-3 text-center">
-      <span class="text-[11px] text-muted">Shared with <span class="font-semibold text-foreground">BatchProjects</span></span>
+      <span class="text-xs text-muted">Shared with <span class="font-semibold text-foreground">BatchProjects</span></span>
     </footer>
   </div>
 </template>

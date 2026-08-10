@@ -103,7 +103,7 @@ function hover(i) { hi.value = i }
 .ac { position: relative; width: 100%; }
 .ac-svg { display: block; }
 .ac-grid { stroke: var(--surface-secondary); stroke-width: 1; shape-rendering: crispEdges; }
-.ac-axis { fill: var(--muted); font-size: 10px; font-family: var(--font-sans); }
+.ac-axis { fill: var(--muted); font-size:var(--text-xs); font-family: var(--font-sans); }
 .ac-cross { stroke: var(--border-secondary); stroke-width: 1; stroke-dasharray: 3 3; }
 
 .ac-area { opacity: 0; transition: opacity .6s ease; }
@@ -116,7 +116,7 @@ function hover(i) { hi.value = i }
   background: var(--foreground); color: var(--background); border-radius: 8px; padding: 6px 9px;
   display: flex; flex-direction: column; gap: 1px; box-shadow: 0 4px 14px rgba(11, 13, 14, .25); white-space: nowrap;
 }
-.ac-tip-l { font-size: 10.5px; color: var(--border-secondary); }
-.ac-tip-v { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: var(--font-semibold); }
+.ac-tip-l { font-size:var(--text-xs); color: var(--border-secondary); }
+.ac-tip-v { display: inline-flex; align-items: center; gap: 6px; font-size:var(--text-base); font-weight: var(--font-semibold); }
 .ac-tip-v i { width: 8px; height: 8px; border-radius: 2px; }
 </style>

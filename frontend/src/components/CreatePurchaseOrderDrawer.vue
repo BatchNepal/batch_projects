@@ -2,8 +2,8 @@
   <Drawer :open="modelValue" @update:open="close" size="md" placement="right">
     <DrawerHeader @close="close">
       <div class="min-w-0">
-        <span class="text-[14px] font-semibold text-foreground">Create Purchase Order</span>
-        <p class="text-[12px] text-muted truncate mt-0.5">{{ taskTitle }}</p>
+        <span class="text-md font-semibold text-foreground">Create Purchase Order</span>
+        <p class="text-sm text-muted truncate mt-0.5">{{ taskTitle }}</p>
       </div>
     </DrawerHeader>
 
@@ -12,7 +12,7 @@
         <!-- Supplier picker — same async search-list pattern as the
              unlinked-project search in ProjectMoney.vue -->
         <div class="flex flex-col gap-1.5">
-          <label class="text-[13px] font-medium text-foreground">Supplier</label>
+          <label class="text-base font-medium text-foreground">Supplier</label>
           <div v-if="supplier" class="cpo-selected">
             <span class="truncate">{{ supplierLabel }}</span>
             <button type="button" class="cpo-clear" @click="clearSupplier">
@@ -33,11 +33,11 @@
 
         <!-- Item rows -->
         <div class="flex flex-col gap-2">
-          <label class="text-[13px] font-medium text-foreground">Items</label>
+          <label class="text-base font-medium text-foreground">Items</label>
           <div v-for="(row, i) in items" :key="row.key" class="cpo-item-row">
             <div class="flex-1 min-w-0">
               <div v-if="row.item_code" class="cpo-selected">
-                <span class="truncate">{{ row.item_name }} <span class="text-muted font-mono text-[11px]">{{ row.item_code }}</span></span>
+                <span class="truncate">{{ row.item_name }} <span class="text-muted font-mono text-xs">{{ row.item_code }}</span></span>
                 <button type="button" class="cpo-clear" @click="clearItem(i)"><X class="size-3.5" /></button>
               </div>
               <template v-else>
@@ -46,7 +46,7 @@
                 </Input>
                 <div v-if="row.results && row.results.length" class="cpo-results">
                   <button v-for="r in row.results" :key="r.item_code" type="button" class="cpo-result-row" @click="pickItem(i, r)">
-                    {{ r.item_name }} <span class="text-muted font-mono text-[11px] ml-1">{{ r.item_code }}</span>
+                    {{ r.item_name }} <span class="text-muted font-mono text-xs ml-1">{{ r.item_code }}</span>
                   </button>
                 </div>
               </template>
@@ -63,8 +63,8 @@
         </div>
 
         <div class="cpo-total">
-          <span class="text-[12.5px] text-muted">Estimated total</span>
-          <span class="text-[13px] font-semibold text-foreground tabular-nums">{{ fmtTotal }}</span>
+          <span class="text-sm text-muted">Estimated total</span>
+          <span class="text-base font-semibold text-foreground tabular-nums">{{ fmtTotal }}</span>
         </div>
       </div>
     </DrawerBody>
@@ -202,7 +202,7 @@ watch(() => props.modelValue, (v) => { if (v) reset() })
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   height: 36px; padding: 0 10px; border-radius: 8px;
   background: var(--surface-secondary); border: 1px solid var(--border-secondary);
-  font-size: 12.5px; color: var(--foreground);
+  font-size:var(--text-sm); color: var(--foreground);
 }
 .cpo-clear { display: flex; align-items: center; color: var(--muted); background: none; border: none; cursor: pointer; flex-shrink: 0; }
 .cpo-clear:hover { color: var(--foreground); }
@@ -213,7 +213,7 @@ watch(() => props.modelValue, (v) => { if (v) reset() })
 }
 .cpo-result-row {
   display: block; width: 100%; text-align: left; padding: 7px 10px;
-  font-size: 12.5px; color: var(--foreground); background: none; border: none; cursor: pointer;
+  font-size:var(--text-sm); color: var(--foreground); background: none; border: none; cursor: pointer;
 }
 .cpo-result-row + .cpo-result-row { border-top: 1px solid var(--border-secondary); }
 .cpo-result-row:hover { background: var(--surface-secondary); }
@@ -231,7 +231,7 @@ watch(() => props.modelValue, (v) => { if (v) reset() })
 
 .cpo-add-row {
   display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
-  font-size: 12.5px; font-weight: 600; color: var(--accent);
+  font-size:var(--text-sm); font-weight: 600; color: var(--accent);
   background: none; border: none; cursor: pointer; padding: 4px 2px;
 }
 .cpo-add-row:hover { text-decoration: underline; }

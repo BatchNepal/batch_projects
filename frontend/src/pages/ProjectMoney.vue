@@ -11,8 +11,8 @@
     <div v-else-if="!unlocked" class="pm-lock-banner">
       <span class="pm-lock-icon"><Icon :icon="Lock" class="size-5 text-primary" /></span>
       <div class="min-w-0 flex-1">
-        <p class="text-[14px] font-semibold text-foreground">See real revenue, cost and margin — on top of your own ERPNext</p>
-        <p class="text-[13px] text-muted mt-1 leading-relaxed">
+        <p class="text-md font-semibold text-foreground">See real revenue, cost and margin — on top of your own ERPNext</p>
+        <p class="text-base text-muted mt-1 leading-relaxed">
           Every invoice, timesheet and sales order this project touches, rolled up and
           three clicks from the real document. Available on the
           <span class="font-semibold text-foreground">{{ requiredPlan }}</span> plan and above.
@@ -21,7 +21,7 @@
           <Button size="sm" color="primary" @click="goUpgrade">
             <Icon :icon="Sparkles" class="size-3.5 mr-1" /> Upgrade to {{ requiredPlan }}
           </Button>
-          <span class="text-[12px] text-muted">You're on the {{ ent.tierLabel }} plan</span>
+          <span class="text-sm text-muted">You're on the {{ ent.tierLabel }} plan</span>
         </div>
       </div>
     </div>
@@ -36,8 +36,8 @@
       <div v-else-if="money && !money.linked" class="pm-unlinked">
         <span class="pm-lock-icon"><Icon :icon="Link2" class="size-5 text-primary" /></span>
         <div class="min-w-0 flex-1">
-          <p class="text-[14px] font-semibold text-foreground">Link this project to ERPNext</p>
-          <p class="text-[13px] text-muted mt-1 leading-relaxed">
+          <p class="text-md font-semibold text-foreground">Link this project to ERPNext</p>
+          <p class="text-base text-muted mt-1 leading-relaxed">
             Money numbers come from your real ERPNext invoices, timesheets and sales
             orders — link an existing ERPNext Project or create one from this BP Project.
           </p>
@@ -54,10 +54,10 @@
                 @click="pickProject(r)"
               >
                 <span class="min-w-0">
-                  <span class="block text-[13px] font-medium text-foreground truncate">{{ r.project_name }}</span>
-                  <span class="block text-[11.5px] text-muted truncate">{{ r.name }}<template v-if="r.customer"> · {{ r.customer }}</template></span>
+                  <span class="block text-base font-medium text-foreground truncate">{{ r.project_name }}</span>
+                  <span class="block text-sm text-muted truncate">{{ r.name }}<template v-if="r.customer"> · {{ r.customer }}</template></span>
                 </span>
-                <span v-if="r.already_linked" class="text-[11px] text-muted shrink-0">Already linked</span>
+                <span v-if="r.already_linked" class="text-xs text-muted shrink-0">Already linked</span>
               </button>
             </div>
           </div>
@@ -76,8 +76,8 @@
         <div class="pm-linked-header">
           <div class="flex items-center gap-2 min-w-0">
             <Icon :icon="Link2" class="size-4 text-success shrink-0" />
-            <span class="text-[12.5px] text-muted shrink-0">Linked to</span>
-            <span class="text-[13px] font-semibold text-foreground font-mono truncate">{{ money.erpnext_project }}</span>
+            <span class="text-sm text-muted shrink-0">Linked to</span>
+            <span class="text-base font-semibold text-foreground font-mono truncate">{{ money.erpnext_project }}</span>
           </div>
           <Button variant="ghost" size="sm" color="danger" :isLoading="unlinking" @click="doUnlink">
             Unlink
@@ -95,7 +95,7 @@
              so invisible to every number above -->
         <div v-if="money.labour.draft_hours" class="pm-note pm-note-draft">
           <Icon :icon="Hourglass" class="size-3.5 shrink-0" />
-          <span class="text-[12.5px]">
+          <span class="text-sm">
             <span class="font-semibold tabular-nums">{{ money.labour.draft_hours }}h</span>
             awaiting submission — draft timesheets don't count above until submitted in ERPNext.
           </span>
@@ -110,7 +110,7 @@
         <!-- No hourly rate: timer hours will land with a 0 billing value -->
         <div v-if="showRateNudge" class="pm-note pm-note-rate">
           <Icon :icon="AlertTriangle" class="size-3.5 shrink-0" />
-          <span class="text-[12.5px]">
+          <span class="text-sm">
             No hourly rate set — tracked time lands on timesheets worth
             <span class="font-semibold tabular-nums">{{ fmtCurrency(0) }}</span>.
           </span>
@@ -121,12 +121,12 @@
         </div>
 
         <div v-if="money.budget.amount" class="pm-budget-row">
-          <span class="text-[12.5px] text-muted">Budget</span>
+          <span class="text-sm text-muted">Budget</span>
           <div class="pm-budget-bar">
             <div class="pm-budget-fill" :class="(money.budget.burn_pct || 0) > 100 ? 'pm-over' : (money.budget.burn_pct || 0) > 85 ? 'pm-watch' : ''"
                  :style="{ width: Math.min(money.budget.burn_pct || 0, 100) + '%' }" />
           </div>
-          <span class="text-[12.5px] text-foreground tabular-nums">{{ money.budget.burn_pct ?? 0 }}% of {{ fmtCurrency(money.budget.amount) }}</span>
+          <span class="text-sm text-foreground tabular-nums">{{ money.budget.burn_pct ?? 0 }}% of {{ fmtCurrency(money.budget.amount) }}</span>
         </div>
 
         <Accordion class="pm-sections">
@@ -184,7 +184,7 @@
             </div>
             <p v-else class="pm-empty">No Expense Claims in this period.</p>
             <div v-if="money.expenses.unbilled_count" class="flex items-center justify-between gap-4 py-1" style="margin-top:8px">
-              <p class="text-[13px] text-muted leading-relaxed max-w-md">
+              <p class="text-base text-muted leading-relaxed max-w-md">
                 {{ money.expenses.unbilled_count }} billable expense line(s), not yet on an invoice —
                 worth {{ fmtCurrency(money.expenses.unbilled_value) }} at cost/markup.
               </p>
@@ -221,7 +221,7 @@
               <span class="pm-sec-title">Unbilled <span class="pm-sec-count">{{ money.labour.unbilled_hours }}h</span></span>
             </template>
             <div class="flex items-center justify-between gap-4 py-1">
-              <p class="text-[13px] text-muted leading-relaxed max-w-md">
+              <p class="text-base text-muted leading-relaxed max-w-md">
                 {{ money.labour.unbilled_hours }} billable hour(s) logged, not yet on an invoice —
                 worth {{ fmtCurrency(money.labour.unbilled_value) }} at current rates.
               </p>
@@ -530,7 +530,7 @@ async function onGenerateExpenseInvoice() {
 }
 .pm-note-link {
   background: none; border: none; padding: 0; font: inherit; cursor: pointer;
-  font-size: 12px; font-weight: 600; color: var(--accent);
+  font-size:var(--text-sm); font-weight: 600; color: var(--accent);
   text-decoration: none; white-space: nowrap;
 }
 .pm-note-link:hover { text-decoration: underline; }
@@ -547,7 +547,7 @@ async function onGenerateExpenseInvoice() {
 
 .pm-sections { border: 1px solid var(--border-secondary); border-radius: 10px; padding: 4px 12px; }
 .pm-sec-title { display: flex; align-items: center; gap: 8px; }
-.pm-sec-count { font-size: 11px; font-weight: 600; color: var(--muted); background: var(--surface-secondary); padding: 1px 7px; border-radius: 999px; }
+.pm-sec-count { font-size:var(--text-xs); font-weight: 600; color: var(--muted); background: var(--surface-secondary); padding: 1px 7px; border-radius: 999px; }
 
 .pm-rows { display: flex; flex-direction: column; }
 .pm-row {
@@ -557,20 +557,20 @@ async function onGenerateExpenseInvoice() {
   text-decoration: none; transition: background .08s;
 }
 .pm-row:hover { background: var(--surface-secondary); }
-.pm-row-name { font-size: 12.5px; font-weight: 600; color: var(--accent); font-family: monospace; flex-shrink: 0; }
-.pm-row-date { font-size: 12px; color: var(--muted); flex-shrink: 0; }
-.pm-row-amt { font-size: 13px; font-weight: 600; color: var(--foreground); margin-left: auto; font-variant-numeric: tabular-nums; }
-.pm-row-sub { font-size: 11.5px; color: var(--muted); flex-shrink: 0; }
-.pm-empty { font-size: 12.5px; color: var(--muted); padding: 8px; }
+.pm-row-name { font-size:var(--text-sm); font-weight: 600; color: var(--accent); font-family: monospace; flex-shrink: 0; }
+.pm-row-date { font-size:var(--text-sm); color: var(--muted); flex-shrink: 0; }
+.pm-row-amt { font-size:var(--text-base); font-weight: 600; color: var(--foreground); margin-left: auto; font-variant-numeric: tabular-nums; }
+.pm-row-sub { font-size:var(--text-sm); color: var(--muted); flex-shrink: 0; }
+.pm-empty { font-size:var(--text-sm); color: var(--muted); padding: 8px; }
 
 .pm-task-list { display: flex; flex-direction: column; gap: 2px; }
 .pm-task-row { padding: 6px 8px; border-radius: 6px; }
 .pm-task-row + .pm-task-row { border-top: 1px solid var(--border-secondary); }
 .pm-task-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.pm-task-key { font-size: 12px; font-weight: 600; color: var(--accent); font-family: monospace; flex-shrink: 0; }
-.pm-task-title { font-size: 12.5px; color: var(--foreground); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-task-figure { font-size: 12.5px; font-weight: 600; color: var(--foreground); font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; }
-.pm-task-figure-label { font-size: 10.5px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.pm-task-key { font-size:var(--text-sm); font-weight: 600; color: var(--accent); font-family: monospace; flex-shrink: 0; }
+.pm-task-title { font-size:var(--text-sm); color: var(--foreground); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-task-figure { font-size:var(--text-sm); font-weight: 600; color: var(--foreground); font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; }
+.pm-task-figure-label { font-size:var(--text-xs); font-weight: 500; color: var(--muted); white-space: nowrap; }
 .pm-task-committed { color: var(--warning); }
 .pm-task-po-rows { margin-top: 2px; padding-left: 12px; }
 </style>

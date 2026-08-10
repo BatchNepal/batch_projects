@@ -1,8 +1,8 @@
 <template>
   <Modal :open="open" @update:open="$emit('update:open', $event)" size="sm">
     <div class="p-5 w-full">
-      <h3 class="text-[15px] font-semibold text-foreground leading-tight mb-0.5">Capacity</h3>
-      <p class="text-[12.5px] text-muted mb-4">{{ data?.sprint_name || '…' }} — allocated hours vs. weekly capacity</p>
+      <h3 class="text-md font-semibold text-foreground leading-tight mb-0.5">Capacity</h3>
+      <p class="text-sm text-muted mb-4">{{ data?.sprint_name || '…' }} — allocated hours vs. weekly capacity</p>
 
       <div v-if="loading" class="py-8 flex items-center justify-center">
         <Spinner size="sm" />
@@ -10,15 +10,15 @@
 
       <template v-else-if="data">
         <div v-if="!data.members.length" class="py-8 text-center">
-          <p class="text-[13px] text-muted">No assigned tasks with estimated hours yet.</p>
+          <p class="text-base text-muted">No assigned tasks with estimated hours yet.</p>
         </div>
         <div v-else class="space-y-3 max-h-[360px] overflow-y-auto pr-1">
           <div v-for="m in data.members" :key="m.user" class="flex items-center gap-3">
             <span class="cap-av" :style="{ background: avatarColor(m.user) }">{{ initials(m.full_name) }}</span>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between mb-1">
-                <p class="text-[12.5px] font-medium text-foreground truncate">{{ m.full_name }}</p>
-                <p class="text-[11.5px] tabular-nums shrink-0 ml-2" :class="pctClass(m)">
+                <p class="text-sm font-medium text-foreground truncate">{{ m.full_name }}</p>
+                <p class="text-sm tabular-nums shrink-0 ml-2" :class="pctClass(m)">
                   {{ m.allocated_hours }}h / {{ m.capacity_hours }}h
                 </p>
               </div>
@@ -28,7 +28,7 @@
             </div>
           </div>
         </div>
-        <p v-if="data.unassigned_task_count" class="text-[11.5px] text-muted mt-4 pt-3 border-t border-separator">
+        <p v-if="data.unassigned_task_count" class="text-sm text-muted mt-4 pt-3 border-t border-separator">
           {{ data.unassigned_task_count }} task{{ data.unassigned_task_count === 1 ? '' : 's' }} in this sprint have no assignee yet.
         </p>
       </template>
@@ -80,7 +80,7 @@ function pctFillClass(m) {
 .cap-av {
   width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--accent-foreground); font-size: 10px; font-weight: 700;
+  color: var(--accent-foreground); font-size:var(--text-xs); font-weight: 700;
 }
 .cap-bar { width: 100%; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
 .cap-bar-fill { height: 100%; border-radius: 99px; transition: width .3s; }

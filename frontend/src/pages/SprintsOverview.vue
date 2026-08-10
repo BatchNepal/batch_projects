@@ -19,7 +19,7 @@
             </router-link>
             <h1 class="text-xl font-semibold text-foreground">Sprints Overview</h1>
           </div>
-          <p class="ml-9 text-[12.5px] text-muted">{{ store.currentProject?.project_name || route.params.key }} · {{ sprints.length }} sprint{{ sprints.length === 1 ? '' : 's' }}</p>
+          <p class="ml-9 text-sm text-muted">{{ store.currentProject?.project_name || route.params.key }} · {{ sprints.length }} sprint{{ sprints.length === 1 ? '' : 's' }}</p>
         </div>
         <button class="so-btn so-btn--ghost" :disabled="refreshing" @click="load({ silent: true })">
           <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" :class="{ 'animate-spin': refreshing }"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -39,7 +39,7 @@
         </div>
         <div class="so-stat-card">
           <span class="so-stat-label">Avg velocity</span>
-          <span class="so-stat-value">{{ avgVelocity }}<span class="text-[13px] font-normal text-muted"> pts</span></span>
+          <span class="so-stat-value">{{ avgVelocity }}<span class="text-base font-normal text-muted"> pts</span></span>
         </div>
         <div class="so-stat-card">
           <span class="so-stat-label">Trend</span>
@@ -55,7 +55,7 @@
           <span v-if="completedSprints.length" class="text-xs font-normal text-muted ml-2">avg {{ avgVelocity }} pts/sprint</span>
         </h2>
         <apexchart v-if="velocityOptions" type="bar" height="240" :options="velocityOptions" :series="velocitySeries" />
-        <div v-else class="flex items-center justify-center h-48 text-[12.5px] text-muted">
+        <div v-else class="flex items-center justify-center h-48 text-sm text-muted">
           No completed sprints yet — velocity shows up once a sprint finishes.
         </div>
       </div>
@@ -249,7 +249,7 @@ const velocitySeries = computed(() => [{ name: 'Completed', data: completedSprin
 
 .so-btn {
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
-  font-size: 12px; font-weight: 600; font-family: inherit; border-radius: var(--radius-md); cursor: pointer;
+  font-size:var(--text-sm); font-weight: 600; font-family: inherit; border-radius: var(--radius-md); cursor: pointer;
   white-space: nowrap; transition: background .1s, border-color .1s; border: 1.5px solid transparent;
 }
 .so-btn--ghost { color: var(--foreground); background: var(--surface); border-color: var(--border); }
@@ -260,12 +260,12 @@ const velocitySeries = computed(() => [{ name: 'Completed', data: completedSprin
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px;
   display: flex; flex-direction: column; gap: 3px;
 }
-.so-stat-label { font-size: 10.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.so-stat-value { font-size: 20px; font-weight: 700; color: var(--foreground); line-height: 1.15; font-variant-numeric: tabular-nums; }
-.so-stat-value--sm { font-size: 14px; font-weight: 600; }
+.so-stat-label { font-size:var(--text-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.so-stat-value { font-size:var(--text-3xl); font-weight: 700; color: var(--foreground); line-height: 1.15; font-variant-numeric: tabular-nums; }
+.so-stat-value--sm { font-size:var(--text-md); font-weight: 600; }
 
 .so-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px 12px; }
-.so-card-title { font-size: 13px; font-weight: 600; color: var(--foreground); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.so-card-title { font-size:var(--text-base); font-weight: 600; color: var(--foreground); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
 
 .so-table { display: flex; flex-direction: column; }
 .so-row {
@@ -273,9 +273,9 @@ const velocitySeries = computed(() => [{ name: 'Completed', data: completedSprin
   gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--separator); text-decoration: none; color: inherit;
 }
 .so-row:last-child { border-bottom: none; }
-.so-row--head { color: var(--muted); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--border); }
+.so-row--head { color: var(--muted); font-size:var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--border); }
 .so-row:not(.so-row--head):hover { background: var(--surface-secondary); border-radius: var(--radius-sm); }
-.so-col { font-size: 12.5px; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.so-col { font-size:var(--text-sm); color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .so-col--name { display: flex; align-items: center; gap: 7px; font-weight: 600; }
 .so-col--dates { color: var(--muted); }
 .so-col--num { font-variant-numeric: tabular-nums; }
@@ -286,9 +286,9 @@ const velocitySeries = computed(() => [{ name: 'Completed', data: completedSprin
 .so-dot--active { background: var(--accent); }
 .so-dot--completed { background: var(--success); }
 
-.so-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; }
+.so-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--radius-full); font-size:var(--text-xs); font-weight: 600; }
 
 .so-progress { flex: 1; height: 4px; border-radius: var(--radius-xs); background: var(--default); overflow: hidden; }
 .so-progress-fill { display: block; height: 100%; background: var(--accent); border-radius: var(--radius-xs); }
-.so-progress-pct { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; width: 32px; text-align: right; flex-shrink: 0; }
+.so-progress-pct { font-size:var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; width: 32px; text-align: right; flex-shrink: 0; }
 </style>

@@ -74,7 +74,7 @@
     </DrawerBody>
 
     <DrawerFooter v-if="activeCount" class="justify-between">
-      <span class="text-[12px] text-muted">{{ activeCount }} filter{{ activeCount > 1 ? 's' : '' }} active</span>
+      <span class="text-sm text-muted">{{ activeCount }} filter{{ activeCount > 1 ? 's' : '' }} active</span>
       <Button size="sm" variant="outline" color="default" @click="clearAll">Clear all</Button>
     </DrawerFooter>
   </Drawer>
@@ -133,7 +133,7 @@ function clearAll() {
   border-radius: 9999px;
   background: var(--accent-soft);
   color: var(--accent-soft-foreground);
-  font-size: 10px;
+  font-size:var(--text-xs);
   font-weight: 600;
   pointer-events: none;
 }

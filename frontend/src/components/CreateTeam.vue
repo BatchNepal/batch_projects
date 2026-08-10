@@ -209,11 +209,11 @@ onMounted(async () => {
 .ct-logo {
   width: 26px; height: 26px; border-radius: 5px; background: var(--accent);
   display: flex; align-items: center; justify-content: center;
-  color: var(--accent-foreground); font-size: 9px; font-weight: 800;
+  color: var(--accent-foreground); font-size:var(--text-micro); font-weight: 800;
 }
-.ct-header-title { font-size: 15px; font-weight: 600; color: var(--foreground); }
+.ct-header-title { font-size:var(--text-md); font-weight: 600; color: var(--foreground); }
 .ct-header-subtitle{
-  font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 1px;
+  font-size:var(--text-sm); font-weight: 400; color: var(--muted); margin-top: 1px;
 }
 .ct-close {
   display: flex; align-items: center; justify-content: center;
@@ -234,22 +234,22 @@ onMounted(async () => {
 .ct-preview-dot {
   width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 20px; transition: background .2s;
+  font-size:var(--text-3xl); transition: background .2s;
   box-shadow: 0 2px 8px rgba(0,0,0,.15);
 }
-.ct-preview-initials { color: var(--accent-foreground); font-size: 14px; font-weight: 800; }
-.ct-preview-name { font-size: 15px; font-weight: 700; color: var(--foreground); }
-.ct-preview-key { font-size: 11px; font-family: monospace; color: var(--muted); margin-top: 1px; }
+.ct-preview-initials { color: var(--accent-foreground); font-size:var(--text-md); font-weight: 800; }
+.ct-preview-name { font-size:var(--text-md); font-weight: 700; color: var(--foreground); }
+.ct-preview-key { font-size:var(--text-xs); font-family: monospace; color: var(--muted); margin-top: 1px; }
 
 /* Fields */
 .ct-field { display: flex; flex-direction: column; gap: 6px; }
-.ct-label { font-size: 12.5px; font-weight: 600; color: var(--subtle-text); }
-.ct-sublabel { font-size: 11.5px; font-weight: 400; color: var(--muted); }
+.ct-label { font-size:var(--text-sm); font-weight: 600; color: var(--subtle-text); }
+.ct-sublabel { font-size:var(--text-sm); font-weight: 400; color: var(--muted); }
 .ct-req { color: var(--danger); }
 
 .ct-input {
   height: 36px; padding: 0 12px;
-  font-size: 13.5px; font-family: inherit; color: var(--foreground);
+  font-size:var(--text-base); font-family: inherit; color: var(--foreground);
   background: var(--surface);
    border: 1px solid #d9dadc;
   border-radius: 5px; outline: none;
@@ -261,8 +261,8 @@ onMounted(async () => {
     box-shadow: inset 0 0 0 1px #4688ec;
 }
 .ct-input::placeholder { color: var(--muted); }
-.ct-input--mono { font-family: monospace; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; width: 110px; }
-.ct-input--icon { width: 60px; text-align: center; font-size: 22px; padding: 0 6px; }
+.ct-input--mono { font-family: monospace; font-size:var(--text-base); letter-spacing: .06em; text-transform: uppercase; width: 110px; }
+.ct-input--icon { width: 60px; text-align: center; font-size:var(--text-3xl); padding: 0 6px; }
 
 /* Color row */
 .ct-color-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -278,13 +278,13 @@ onMounted(async () => {
 .ct-custom-color { position: relative; }
 .ct-color-hidden { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
 .ct-icon-wrap { display: flex; align-items: center; gap: 8px; }
-.ct-icon-hint { font-size: 11.5px; color: var(--muted); }
+.ct-icon-hint { font-size:var(--text-sm); color: var(--muted); }
 
 /* Select */
 .ct-select {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; height: 36px; padding: 0 11px;
-  font-size: 13.5px; font-family: inherit;
+  font-size:var(--text-base); font-family: inherit;
   background: var(--surface); border: 1.75px solid #d9dadc;
   border-radius: 5px; cursor: pointer; outline: none;
   transition: border-color .1s, background .1s;
@@ -299,14 +299,14 @@ onMounted(async () => {
 }
 .ct-btn-ghost {
   padding: 0 14px;
-  font-size: 13px; font-weight: 600; font-family: inherit;
+  font-size:var(--text-base); font-weight: 600; font-family: inherit;
   color: var(--foreground); background: var(--surface); border: 1px solid var(--border);
   border-radius: 5px; cursor: pointer; transition: background .1s;
 }
 .ct-btn-ghost:hover { background: var(--surface-secondary); }
 .ct-btn-primary {
   padding: 4px 16px;
-  font-size: 13px; font-weight: 700; font-family: inherit;
+  font-size:var(--text-base); font-weight: 700; font-family: inherit;
   color: var(--accent-foreground); background: var(--accent); border: none;
   border-radius: 5px; cursor: pointer; transition: background .1s;
 }

@@ -38,11 +38,11 @@ defineProps({
    wherever the grid box happens to end. */
 .hw { height: auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .hw-text { min-width: 0; }
-.hw-title { font-size: 16px; font-weight: 600; color: var(--foreground); letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hw-desc { font-size: 12.5px; color: var(--muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hw-title { font-size:var(--text-xl); font-weight: 600; color: var(--foreground); letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hw-desc { font-size:var(--text-sm); color: var(--muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hw-link {
   display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
-  font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: none;
+  font-size:var(--text-sm); font-weight: 600; color: var(--accent); text-decoration: none;
 }
 .hw-link:hover { text-decoration: underline; }
 </style>

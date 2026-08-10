@@ -3,11 +3,11 @@
   <div class="max-w-4xl mx-auto px-6 py-8">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-[22px] font-bold text-foreground tracking-tight">All Projects</h1>
-        <p class="text-[13px] text-muted mt-0.5">{{ store.projects.length }} project{{ store.projects.length !== 1 ? 's' : '' }}</p>
+        <h1 class="text-3xl font-bold text-foreground tracking-tight">All Projects</h1>
+        <p class="text-base text-muted mt-0.5">{{ store.projects.length }} project{{ store.projects.length !== 1 ? 's' : '' }}</p>
       </div>
       <button @click="$router.push(`/workspace/new-project`)"
-        class="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white text-[13px] font-semibold rounded-lg hover:bg-accent-hover shadow-sm shadow-accent-soft transition-[background-color]">
+        class="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white text-base font-semibold rounded-lg hover:bg-accent-hover shadow-sm shadow-accent-soft transition-[background-color]">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
         New Project
       </button>
@@ -24,14 +24,14 @@
         <ProjectAvatar :theme="p.theme" :seed="p.key" size="lg" />
 
         <div class="flex-1 min-w-0">
-          <div class="font-semibold text-[14px] text-foreground">{{ p.project_name }}</div>
-          <div class="text-[12px] text-muted mt-0.5">
+          <div class="font-semibold text-md text-foreground">{{ p.project_name }}</div>
+          <div class="text-sm text-muted mt-0.5">
             {{ p.open_count }} open · {{ p.issue_count }} total
           </div>
         </div>
 
         <span :class="p.status === 'Active' ? 'bg-success-soft text-success-soft-foreground' : 'bg-surface-secondary text-muted'"
-          class="px-2.5 py-0.5 text-[11px] font-semibold rounded-full shrink-0">
+          class="px-2.5 py-0.5 text-xs font-semibold rounded-full shrink-0">
           {{ p.status }}
         </span>
 
@@ -48,10 +48,10 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
           </svg>
         </div>
-        <h3 class="text-[16px] font-semibold text-foreground mb-1">No projects yet</h3>
-        <p class="text-[13px] text-muted mb-6">Create your first project to get started.</p>
+        <h3 class="text-xl font-semibold text-foreground mb-1">No projects yet</h3>
+        <p class="text-base text-muted mb-6">Create your first project to get started.</p>
         <button @click="$router.push(`/workspace/new-project`)"
-          class="flex items-center gap-2 px-5 py-2.5 bg-[var(--accent)] text-white text-[13px] font-semibold rounded-xl hover:bg-accent-hover transition-colors">
+          class="flex items-center gap-2 px-5 py-2.5 bg-[var(--accent)] text-white text-base font-semibold rounded-xl hover:bg-accent-hover transition-colors">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
           Create Project
         </button>

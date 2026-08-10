@@ -68,10 +68,10 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
           </svg>
         </div>
-        <p class="ia-drop-text">
+        <p class="ia-drop-text ">
           <span class="ia-drop-link">Click to attach</span> or drag and drop
+          <span class="ia-drop-hint">· up to {{ maxFileSizeMB }}MB</span>
         </p>
-        <p class="ia-drop-hint">Any file up to {{ maxFileSizeMB }}MB</p>
       </template>
       <template v-else>
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -244,17 +244,17 @@ function fmtSize(bytes) {
 .ia-file-icon {
   width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 700; letter-spacing: 0.03em;
+  font-size:var(--text-micro); font-weight: 700; letter-spacing: 0.03em;
   background: var(--border); color: var(--muted);
 }
 
 .ia-file-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ia-file-name {
-  font-size: 13px; font-weight: 500; color: var(--foreground);
+  font-size:var(--text-base); font-weight: 500; color: var(--foreground);
   text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ia-file-name:hover { color: var(--foreground); text-decoration: underline; }
-.ia-file-meta { font-size: 12px; color: var(--muted); }
+.ia-file-meta { font-size:var(--text-sm); color: var(--muted); }
 
 .ia-file-actions { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
 .ia-action-btn {
@@ -273,11 +273,15 @@ function fmtSize(bytes) {
 .ia-progress-bar { height: 100%; background: var(--foreground); transition: width .2s; }
 
 /* Drop zone */
+/* One compact row, not a 110px stacked panel. An empty attachments slot is
+   the least important thing on a task; it was taking more vertical space
+   than the description. The dashed edge stays — that's a genuine drop-target
+   affordance, not decoration. */
 .ia-drop {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px; padding: 22px 16px;
+  display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
+  gap: 9px; padding: 24px 24px;
   border: 1px dashed var(--border); border-radius: 8px;
-  background: var(--surface-secondary); cursor: pointer;
+  background: transparent; cursor: pointer;
   transition: border-color .15s, background .15s;
   user-select: none;
 }
@@ -295,8 +299,8 @@ function fmtSize(bytes) {
 .ia-drop--active .ia-drop-icon,
 .ia-drop:hover .ia-drop-icon { color: var(--muted); }
 
-.ia-drop-text { font-size: 13px; color: var(--muted); margin: 0; text-align: center; }
-.ia-drop-hint { font-size: 12px; color: var(--muted); margin: 0; }
+.ia-drop-text { font-size:var(--text-base); color: var(--muted); margin: 0; text-align: left; }
+.ia-drop-hint { font-size:var(--text-sm); color: var(--muted-tertiary); margin: 0; }
 /* Was permanently underlined — including "Attach more files", the row that
    sits below an already-populated attachment list and is visible on every
    task with files, not just the empty first-load state. A link styled as
@@ -305,8 +309,8 @@ function fmtSize(bytes) {
    (.ia-file-name below does the same hover-only underline). */
 .ia-drop-link { color: var(--foreground); font-weight: 600; }
 .ia-drop:hover .ia-drop-link { color: var(--accent); text-decoration: underline; }
-.ia-drop--compact .ia-drop-link { font-size: 13px; }
+.ia-drop--compact .ia-drop-link { font-size:var(--text-base); }
 
 .ia-hidden-input { display: none; }
-.ia-error { font-size: 12px; color: var(--danger); margin: 0; }
+.ia-error { font-size:var(--text-sm); color: var(--danger); margin: 0; }
 </style>

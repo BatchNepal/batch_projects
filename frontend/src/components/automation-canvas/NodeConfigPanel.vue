@@ -9,7 +9,7 @@
           <div class="min-w-0 flex-1">
             <input
               v-model="localLabel"
-              class="text-[15px] font-semibold text-foreground bg-transparent outline-none w-full truncate rounded px-1 -mx-1 focus:bg-surface-secondary"
+              class="text-md font-semibold text-foreground bg-transparent outline-none w-full truncate rounded px-1 -mx-1 focus:bg-surface-secondary"
             />
             <p class="text-xs text-muted mt-0.5 truncate">{{ categoryLabel }} · {{ meta?.label }}</p>
           </div>
@@ -47,7 +47,7 @@
             <div v-if="webhookTokensLoading" class="flex justify-center py-3">
               <Icon :icon="Loader2" :size="16" class="animate-spin text-muted" />
             </div>
-            <p v-else-if="webhookTokensError" class="text-[12px] text-danger">{{ webhookTokensError }}</p>
+            <p v-else-if="webhookTokensError" class="text-sm text-danger">{{ webhookTokensError }}</p>
 
             <template v-else>
               <Select v-model="localConfig[field.name]" size="sm" placeholder="Choose a token…">
@@ -58,17 +58,17 @@
 
               <template v-if="selectedWebhookToken">
                 <div class="flex items-center gap-1.5">
-                  <span class="flex-1 min-w-0 h-8 px-2.5 rounded-md bg-surface-secondary text-[12px] font-mono text-foreground truncate flex items-center">
+                  <span class="flex-1 min-w-0 h-8 px-2.5 rounded-md bg-surface-secondary text-sm font-mono text-foreground truncate flex items-center">
                     {{ webhookUrl }}
                   </span>
                   <Button size="sm" :variant="webhookUrlCopied ? 'outline' : 'light'" @click="copyWebhookUrl">
                     {{ webhookUrlCopied ? 'Copied' : 'Copy' }}
                   </Button>
                 </div>
-                <p v-if="options.gateway_public_url_is_internal" class="text-[11px] text-warning">
+                <p v-if="options.gateway_public_url_is_internal" class="text-xs text-warning">
                   Internal URL — set bp_gateway_public_url in site_config for a shareable address.
                 </p>
-                <div class="flex items-center justify-between text-[11px] text-muted px-0.5">
+                <div class="flex items-center justify-between text-xs text-muted px-0.5">
                   <span>{{ selectedWebhookToken.call_count || 0 }} call{{ selectedWebhookToken.call_count === 1 ? '' : 's' }}
                     <template v-if="selectedWebhookToken.last_used"> · last {{ fmtRelative(selectedWebhookToken.last_used) }}</template>
                     <template v-if="selectedWebhookToken.last_event"> · {{ selectedWebhookToken.last_event }}</template>
@@ -156,17 +156,17 @@
             <div class="flex items-center justify-between">
               <p class="text-xs font-medium text-foreground">{{ fieldLabel(field) }}<span v-if="field.required" class="text-danger">*</span></p>
               <button
-                type="button" class="text-[12px] text-accent font-medium hover:underline disabled:opacity-40 disabled:pointer-events-none"
+                type="button" class="text-sm text-accent font-medium hover:underline disabled:opacity-40 disabled:pointer-events-none"
                 :disabled="!!field.keyvalue_doctype_field && !doctypeFor(field.keyvalue_doctype_field)"
                 @click="addKeyValueRow(field.name)"
               >
                 + Add field
               </button>
             </div>
-            <p v-if="field.keyvalue_doctype_field && !doctypeFor(field.keyvalue_doctype_field)" class="text-[12px] text-muted italic">
+            <p v-if="field.keyvalue_doctype_field && !doctypeFor(field.keyvalue_doctype_field)" class="text-sm text-muted italic">
               Pick a document type above first.
             </p>
-            <p v-else-if="!keyValueRows(field.name).length" class="text-[12px] text-muted italic">No fields configured.</p>
+            <p v-else-if="!keyValueRows(field.name).length" class="text-sm text-muted italic">No fields configured.</p>
             <div v-for="(row, i) in keyValueRows(field.name)" :key="i" class="flex items-center gap-1.5">
               <!-- Real doctype fieldnames (typed, Select/Link-aware value
                    editor below) when this keyvalue field points at a
@@ -203,33 +203,33 @@
             <div class="flex items-center justify-between">
               <p class="text-xs font-medium text-foreground">{{ fieldLabel(field) }}<span v-if="field.required" class="text-danger">*</span></p>
               <button
-                type="button" class="text-[12px] text-accent font-medium hover:underline disabled:opacity-40 disabled:pointer-events-none"
+                type="button" class="text-sm text-accent font-medium hover:underline disabled:opacity-40 disabled:pointer-events-none"
                 :disabled="casesFor(field.name).length >= 5" @click="addCase(field.name)"
               >+ Add case</button>
             </div>
-            <p v-if="!casesFor(field.name).length" class="text-[12px] text-muted italic">No cases — everything falls through to Default.</p>
+            <p v-if="!casesFor(field.name).length" class="text-sm text-muted italic">No cases — everything falls through to Default.</p>
             <div v-for="(c, i) in casesFor(field.name)" :key="i" class="flex items-center gap-1.5">
-              <span class="text-[11px] text-muted w-11 shrink-0">Case {{ i + 1 }}</span>
+              <span class="text-xs text-muted w-11 shrink-0">Case {{ i + 1 }}</span>
               <Input v-model="casesFor(field.name)[i]" placeholder="value" size="sm" class="flex-1" />
               <IconButton size="sm" variant="light" aria-label="Remove case" @click="casesFor(field.name).splice(i, 1)">
                 <Icon :icon="Trash2" class="size-3.5" />
               </IconButton>
             </div>
-            <p class="text-[11px] text-muted">Anything not matching a case above routes to Default. Cap of 5 in v1.</p>
+            <p class="text-xs text-muted">Anything not matching a case above routes to Default. Cap of 5 in v1.</p>
           </div>
 
           <div v-else-if="field.type === 'conditions'" class="flex flex-col gap-1.5">
             <div class="flex items-center justify-between">
               <p class="text-xs font-medium text-foreground">{{ fieldLabel(field) }}</p>
-              <button type="button" class="text-[12px] text-accent font-medium hover:underline" @click="addCondition(field.name)">
+              <button type="button" class="text-sm text-accent font-medium hover:underline" @click="addCondition(field.name)">
                 + Add condition
               </button>
             </div>
-            <p v-if="!conditionsFor(field.name).length" class="text-[12px] text-muted italic">
+            <p v-if="!conditionsFor(field.name).length" class="text-sm text-muted italic">
               No conditions — always matches.
             </p>
             <p v-if="field.condition_fields_dynamic_doctype_field && !doctypeFor(field.condition_fields_dynamic_doctype_field)"
-              class="text-[12px] text-muted italic">
+              class="text-sm text-muted italic">
               Pick a document type above to get real field options here.
             </p>
             <div v-for="(c, i) in conditionsFor(field.name)" :key="i" class="flex items-center gap-1.5">
@@ -268,7 +268,7 @@
             </div>
           </div>
 
-          <p v-if="field.description" class="text-[11px] text-muted -mt-3">{{ field.description }}</p>
+          <p v-if="field.description" class="text-xs text-muted -mt-3">{{ field.description }}</p>
         </template>
 
         <p v-if="!schema.length" class="text-xs text-muted italic">This node has no configurable fields.</p>
@@ -285,8 +285,8 @@
             <div v-for="field in advancedFields" :key="field.name" class="flex flex-col gap-1">
               <label class="text-xs font-medium text-foreground">{{ fieldLabel(field) }}</label>
               <Textarea v-model="jsonDrafts[field.name]" :rows="4" class="font-mono text-xs" @blur="commitJson(field.name)" />
-              <p v-if="jsonErrors[field.name]" class="text-[11px] text-danger">{{ jsonErrors[field.name] }}</p>
-              <p v-if="field.description" class="text-[11px] text-muted">{{ field.description }}</p>
+              <p v-if="jsonErrors[field.name]" class="text-xs text-danger">{{ jsonErrors[field.name] }}</p>
+              <p v-if="field.description" class="text-xs text-muted">{{ field.description }}</p>
             </div>
           </template>
         </template>
@@ -300,21 +300,21 @@
               <Input v-model.number="retryAttempts" type="number" label="Attempts" size="sm" class="w-28" />
               <Input v-model.number="retryWaitSeconds" type="number" label="Wait between tries (sec)" size="sm" class="w-40" />
             </div>
-            <p class="text-[11px] text-muted mt-1">1 attempt = no retry.</p>
+            <p class="text-xs text-muted mt-1">1 attempt = no retry.</p>
           </div>
           <div>
             <p class="text-sm font-medium text-foreground mb-2">If this step fails</p>
             <Select v-model="onError" size="sm">
               <SelectItem v-for="opt in ON_ERROR_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
             </Select>
-            <p v-if="onError === 'error_branch'" class="text-[11px] text-muted mt-1">
+            <p v-if="onError === 'error_branch'" class="text-xs text-muted mt-1">
               An "error" output appeared on this node — connect it to whatever should run instead.
             </p>
           </div>
           <div class="flex items-center justify-between py-1">
             <div class="min-w-0 pr-3">
               <p class="text-sm text-foreground">Disable this node</p>
-              <p class="text-[11px] text-muted">Skipped — the workflow passes straight through to what's connected next.</p>
+              <p class="text-xs text-muted">Skipped — the workflow passes straight through to what's connected next.</p>
             </div>
             <Switch v-model="disabled" size="sm" />
           </div>

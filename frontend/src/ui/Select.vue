@@ -3,7 +3,7 @@
     :class="cn('flex flex-col gap-1.5', fullWidth ? 'w-full' : 'w-fit', $attrs.class)"
     v-bind="{ ...$attrs, class: undefined }"
   >
-    <label v-if="label" :for="uid" class="text-[13px] font-medium leading-none text-foreground">
+    <label v-if="label" :for="uid" class="text-base font-medium leading-none text-foreground">
       {{ label }}<span v-if="isRequired" class="text-danger ml-0.5" aria-hidden="true">*</span>
     </label>
 
@@ -58,8 +58,8 @@
       </Transition>
     </Teleport>
 
-    <p v-if="isInvalid && errorMessage" class="text-[12px] text-danger leading-snug">{{ errorMessage }}</p>
-    <p v-else-if="description" class="text-[12px] text-muted leading-snug">{{ description }}</p>
+    <p v-if="isInvalid && errorMessage" class="text-sm text-danger leading-snug">{{ errorMessage }}</p>
+    <p v-else-if="description" class="text-sm text-muted leading-snug">{{ description }}</p>
   </div>
 </template>
 
@@ -71,7 +71,7 @@ defineOptions({ inheritAttrs: false })
 
 // Field heights: sm 32 / md 36 / lg 40
 const SIZE = {
-  sm: 'h-8 text-[13px]',
+  sm: 'h-8 text-base',
   md: 'h-9 text-sm',
   lg: 'h-10 text-sm',
 }

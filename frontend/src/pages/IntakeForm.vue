@@ -5,15 +5,15 @@
     <header class="shrink-0 bg-surface border-b border-border">
       <div class="max-w-[600px] mx-auto w-full px-5 h-14 flex items-center justify-between gap-4">
         <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[11px] font-bold shrink-0"
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
                :style="{ background: 'var(--accent)' }">
             <FormInput class="size-4" />
           </div>
           <div class="min-w-0">
-            <p class="text-[14px] font-semibold text-foreground truncate leading-tight">
+            <p class="text-md font-semibold text-foreground truncate leading-tight">
               {{ form?.form_title || 'Intake Form' }}
             </p>
-            <p v-if="form?.project" class="text-[11px] text-muted leading-tight">{{ form.project }}</p>
+            <p v-if="form?.project" class="text-xs text-muted leading-tight">{{ form.project }}</p>
           </div>
         </div>
       </div>
@@ -30,8 +30,8 @@
         <div class="size-12 rounded-2xl bg-default flex items-center justify-center mx-auto mb-4">
           <AlertCircle class="size-6 text-muted" />
         </div>
-        <h1 class="text-[16px] font-semibold text-foreground">{{ error }}</h1>
-        <p class="text-[13px] text-muted mt-1.5">
+        <h1 class="text-xl font-semibold text-foreground">{{ error }}</h1>
+        <p class="text-base text-muted mt-1.5">
           This form may have been deactivated or the link is invalid.
         </p>
       </div>
@@ -43,8 +43,8 @@
         <div class="size-12 rounded-2xl bg-success-soft flex items-center justify-center mx-auto mb-4">
           <CheckCircle2 class="size-6 text-success" />
         </div>
-        <h1 class="text-[16px] font-semibold text-foreground">Form submitted</h1>
-        <p class="text-[13px] text-muted mt-1.5">
+        <h1 class="text-xl font-semibold text-foreground">Form submitted</h1>
+        <p class="text-base text-muted mt-1.5">
           Thank you! Your submission has been received.
         </p>
       </div>
@@ -56,7 +56,7 @@
         <div class="bg-surface rounded-lg border border-border p-6">
           <div class="space-y-4">
             <div v-for="(field, i) in form.fields" :key="i">
-              <label class="text-[13px] font-medium text-foreground mb-1 block">
+              <label class="text-base font-medium text-foreground mb-1 block">
                 {{ field.label }}
                 <span v-if="field.required" class="text-danger">*</span>
               </label>
@@ -67,7 +67,7 @@
 
               <textarea v-else-if="field.type === 'textarea'"
                 v-model="values[i]" :placeholder="field.label"
-                class="w-full h-24 px-3 py-2 text-[13px] rounded-lg border border-border bg-surface resize-none outline-none focus:border-accent" />
+                class="w-full h-24 px-3 py-2 text-base rounded-lg border border-border bg-surface resize-none outline-none focus:border-accent" />
 
               <Select v-else-if="field.type === 'select'"
                 v-model="values[i]" size="sm" class="w-full">

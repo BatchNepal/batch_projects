@@ -4,7 +4,7 @@
       <!-- Loading -->
       <div v-if="loading" class="flex flex-col items-center py-8">
         <Spinner />
-        <p class="text-[13px] text-muted mt-3">Loading invitation…</p>
+        <p class="text-base text-muted mt-3">Loading invitation…</p>
       </div>
 
       <!-- Invalid / resolved -->
@@ -12,8 +12,8 @@
         <div class="size-12 rounded-full bg-danger-soft flex items-center justify-center mx-auto mb-4">
           <Icon :icon="AlertTriangle" :size="22" class="text-danger" />
         </div>
-        <h1 class="text-[16px] font-semibold text-foreground">Invitation unavailable</h1>
-        <p class="text-[13px] text-muted mt-2 leading-relaxed">{{ error }}</p>
+        <h1 class="text-xl font-semibold text-foreground">Invitation unavailable</h1>
+        <p class="text-base text-muted mt-2 leading-relaxed">{{ error }}</p>
         <Button class="mt-6" color="primary" variant="flat" @click="goWorkspace">Go to workspace</Button>
       </div>
 
@@ -22,10 +22,10 @@
         <div class="size-12 rounded-full bg-accent-soft flex items-center justify-center mx-auto mb-4">
           <Icon :icon="Mail" :size="22" class="text-accent" />
         </div>
-        <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">
+        <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">
           You're invited to {{ invite.project_title }}
         </h1>
-        <p class="text-[13px] text-muted mt-2">
+        <p class="text-base text-muted mt-2">
           You'll join as <span class="font-medium text-foreground">{{ invite.role }}</span>.
         </p>
 
@@ -34,7 +34,7 @@
           <Button class="mt-6 w-full" color="primary" :isLoading="busy" @click="accept">
             Accept invitation
           </Button>
-          <p class="text-[11px] text-muted mt-3">Signed in as {{ invite.logged_in_as }}</p>
+          <p class="text-xs text-muted mt-3">Signed in as {{ invite.logged_in_as }}</p>
         </template>
 
         <!-- signup: brand-new guest sets a password inline -->
@@ -43,7 +43,7 @@
             <Input v-model="fullName" size="md" label="Your name" placeholder="Jane Cooper" />
             <Input v-model="password" size="md" type="password" label="Create a password"
               placeholder="At least 8 characters" @keyup.enter="signup" />
-            <p class="text-[11px] text-muted">Joining as {{ invite.email }}</p>
+            <p class="text-xs text-muted">Joining as {{ invite.email }}</p>
           </div>
           <Button class="mt-5 w-full" color="primary" :isLoading="busy"
             :isDisabled="!canSignup" @click="signup">
@@ -56,12 +56,12 @@
           <Button class="mt-6 w-full" color="primary" @click="login">
             Log in to accept
           </Button>
-          <p class="text-[11px] text-muted mt-3">Invitation for {{ invite.email }}</p>
+          <p class="text-xs text-muted mt-3">Invitation for {{ invite.email }}</p>
         </template>
 
         <!-- mismatch: signed in as the wrong user -->
         <template v-else-if="invite.needs === 'mismatch'">
-          <p class="text-[13px] text-muted mt-5 leading-relaxed">
+          <p class="text-base text-muted mt-5 leading-relaxed">
             This invitation was sent to <span class="font-medium text-foreground">{{ invite.email }}</span>,
             but you're signed in as {{ invite.logged_in_as }}.
           </p>

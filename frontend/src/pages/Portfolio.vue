@@ -4,7 +4,7 @@
       <header class="flex items-center justify-between mb-6 gap-4">
         <div>
           <h1 class="text-xl font-semibold text-foreground leading-7">Portfolio</h1>
-          <p v-if="data" class="text-[13px] text-muted mt-0.5">
+          <p v-if="data" class="text-base text-muted mt-0.5">
             {{ data.summary.projects }} active {{ data.summary.projects === 1 ? 'project' : 'projects' }}
           </p>
         </div>
@@ -50,7 +50,7 @@
 
         <template v-else>
           <div v-for="group in groupedProjects" :key="group.key" class="mb-5">
-            <p v-if="groupBy !== 'none'" class="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">
+            <p v-if="groupBy !== 'none'" class="text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">
               {{ group.label }} <span class="tabular-nums">({{ group.items.length }})</span>
             </p>
             <div class="pf-list" :class="{ 'pf-list--no-money': !data.can_view_money }">

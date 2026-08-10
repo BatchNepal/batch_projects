@@ -3,7 +3,7 @@
     <DrawerHeader @close="$emit('update:open', false)">
       <div class="flex items-center gap-2 min-w-0 flex-wrap">
         <Chip size="sm" variant="soft">{{ doctype }}</Chip>
-        <span class="font-semibold text-[13px] text-foreground truncate">{{ data?.title || name }}</span>
+        <span class="font-semibold text-base text-foreground truncate">{{ data?.title || name }}</span>
         <a :href="erpUrl" target="_blank" rel="noopener noreferrer" class="dq-erp-link ml-auto">
           Open in ERPNext <Icon :icon="ExternalLink" :size="12" />
         </a>
@@ -21,8 +21,8 @@
         <span class="size-10 rounded-lg bg-[var(--surface-secondary)] flex items-center justify-center mb-3">
           <Icon :icon="FileX" :size="18" class="text-muted" />
         </span>
-        <p class="text-[13px] font-medium text-foreground">Can't open this record</p>
-        <p class="text-[12.5px] text-muted mt-1 max-w-xs">{{ error }}</p>
+        <p class="text-base font-medium text-foreground">Can't open this record</p>
+        <p class="text-sm text-muted mt-1 max-w-xs">{{ error }}</p>
       </div>
 
       <div v-else-if="data" class="p-5">
@@ -99,11 +99,11 @@ watch(() => [props.open, props.doctype, props.name], ([isOpen]) => { if (isOpen)
 <style scoped>
 .dq-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
 .dq-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.dq-field-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
-.dq-field-value { font-size: 13px; font-weight: 500; color: var(--foreground); overflow-wrap: break-word; }
+.dq-field-label { font-size:var(--text-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
+.dq-field-value { font-size:var(--text-base); font-weight: 500; color: var(--foreground); overflow-wrap: break-word; }
 .dq-erp-link {
   display: inline-flex; align-items: center; gap: 4px;
-  font-size: 12px; font-weight: 600; color: var(--accent);
+  font-size:var(--text-sm); font-weight: 600; color: var(--accent);
   text-decoration: none; white-space: nowrap;
 }
 .dq-erp-link:hover { text-decoration: underline; }

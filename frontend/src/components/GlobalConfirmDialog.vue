@@ -14,8 +14,8 @@
           @click.stop
         >
           <div class="flex flex-col gap-1">
-            <h2 v-if="dialogState.title" id="gcd-title" class="text-[14px] font-semibold text-foreground">{{ dialogState.title }}</h2>
-            <p id="gcd-message" class="text-[13px] text-muted leading-relaxed whitespace-pre-line">{{ dialogState.message }}</p>
+            <h2 v-if="dialogState.title" id="gcd-title" class="text-md font-semibold text-foreground">{{ dialogState.title }}</h2>
+            <p id="gcd-message" class="text-base text-muted leading-relaxed whitespace-pre-line">{{ dialogState.message }}</p>
           </div>
 
           <Input

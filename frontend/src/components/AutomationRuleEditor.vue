@@ -1,14 +1,14 @@
 <template>
   <Drawer :open="open" size="xl" @update:open="v => emit('update:open', v)">
     <DrawerHeader @close="emit('update:open', false)">
-      <p class="text-[15px] font-semibold text-foreground">{{ draft.name ? 'Edit rule' : 'New automation rule' }}</p>
+      <p class="text-md font-semibold text-foreground">{{ draft.name ? 'Edit rule' : 'New automation rule' }}</p>
     </DrawerHeader>
     <DrawerBody class="space-y-6">
       <!-- Sentence hero. Bold tokens click-scroll to their
            section below (a real, if lighter-weight, interaction than a
            floating per-token popover — the sections ARE the pickers). -->
       <div class="are-sentence rounded-lg border border-border bg-[var(--surface-secondary)] px-4 py-3.5">
-        <p class="text-[15px] leading-relaxed text-foreground">
+        <p class="text-md leading-relaxed text-foreground">
           <span
             v-for="(s, i) in sentence" :key="i"
             :class="s.bold ? 'are-token' : ''"
@@ -22,8 +22,8 @@
 
       <!-- Scope (workspace surface only — project surface always scope=project) -->
       <div v-if="mode === 'workspace'">
-        <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Applies to</p>
-        <div class="flex rounded border border-border overflow-hidden text-[12px] font-medium w-fit">
+        <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">Applies to</p>
+        <div class="flex rounded border border-border overflow-hidden text-sm font-medium w-fit">
           <button type="button" class="px-3 py-1 transition-colors"
             :class="draft.scope === 'workspace' ? 'bg-primary text-white' : 'text-muted hover:text-foreground'"
             @click="draft.scope = 'workspace'">Every project</button>
@@ -34,14 +34,14 @@
         <Combobox v-if="draft.scope === 'project'" v-model="draft.project" size="sm" class="mt-2"
           :options="options.projects" placeholder="Search projects…" />
         <template v-else>
-          <p class="text-[12px] text-muted mt-2 mb-1">Limit to specific projects (optional — blank = all)</p>
+          <p class="text-sm text-muted mt-2 mb-1">Limit to specific projects (optional — blank = all)</p>
           <Combobox v-model="draft.project_filter" multiple size="sm" :options="options.projects" placeholder="Search projects…" />
         </template>
       </div>
 
       <!-- WHEN -->
       <div ref="triggerSecRef">
-        <p class="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">When</p>
+        <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">When</p>
         <Combobox v-model="draft.trigger_event" size="sm" fullWidth
           :options="options.triggers" placeholder="Search triggers…" @update:modelValue="onTriggerChange" />
 
@@ -54,11 +54,11 @@
         <div v-if="triggerNeedsConfig === 'field_changed'" class="mt-2 flex items-center gap-2">
           <Combobox v-model="draft.trig.field" size="sm" class="flex-1"
             :options="taskFieldOptions" placeholder="Field…" />
-          <span class="text-[12px] text-muted shrink-0">from</span>
+          <span class="text-sm text-muted shrink-0">from</span>
           <Combobox v-if="fieldChangedOptions(draft.trig.field).length" v-model="draft.trig.from" size="sm" class="w-[130px]"
             :options="fieldChangedOptions(draft.trig.field)" placeholder="any" allow-create />
           <Input v-else v-model="draft.trig.from" size="sm" class="w-[110px]" placeholder="any" />
-          <span class="text-[12px] text-muted shrink-0">to</span>
+          <span class="text-sm text-muted shrink-0">to</span>
           <Combobox v-if="fieldChangedOptions(draft.trig.field).length" v-model="draft.trig.to" size="sm" class="w-[130px]"
             :options="fieldChangedOptions(draft.trig.field)" placeholder="any" allow-create />
           <Input v-else v-model="draft.trig.to" size="sm" class="w-[110px]" placeholder="any" />
@@ -67,7 +67,7 @@
         <!-- schedule.relative config -->
         <div v-if="triggerNeedsConfig === 'relative_schedule'" class="mt-2 flex items-center gap-2">
           <Input v-model="draft.trig.offset_days" type="number" size="sm" class="w-[80px]" placeholder="3" />
-          <span class="text-[12px] text-muted shrink-0">day(s)</span>
+          <span class="text-sm text-muted shrink-0">day(s)</span>
           <Select v-model="draft.trig.direction" size="sm" class="w-[110px]">
             <SelectItem value="before">before</SelectItem>
             <SelectItem value="after">after</SelectItem>
@@ -81,8 +81,8 @@
       <div ref="condSecRef">
         <div class="flex items-center justify-between mb-1.5">
           <div class="flex items-center gap-2">
-            <p class="text-[11px] font-semibold text-muted uppercase tracking-wider">If</p>
-            <div class="flex rounded border border-border overflow-hidden text-[11px] font-semibold">
+            <p class="text-xs font-semibold text-muted uppercase tracking-wider">If</p>
+            <div class="flex rounded border border-border overflow-hidden text-xs font-semibold">
               <button type="button" class="px-2 py-0.5 transition-colors"
                 :class="draft.matchMode === 'all' ? 'bg-primary text-white' : 'text-muted hover:text-foreground'"
                 @click="draft.matchMode = 'all'">ALL</button>
@@ -90,13 +90,13 @@
                 :class="draft.matchMode === 'any' ? 'bg-primary text-white' : 'text-muted hover:text-foreground'"
                 @click="draft.matchMode = 'any'">ANY</button>
             </div>
-            <p class="text-[11px] text-muted">match</p>
+            <p class="text-xs text-muted">match</p>
           </div>
-          <button type="button" class="text-[12px] text-primary font-medium hover:underline" @click="addCondition">
+          <button type="button" class="text-sm text-primary font-medium hover:underline" @click="addCondition">
             + Add condition
           </button>
         </div>
-        <p v-if="!draft.conditions.length" class="text-[12.5px] text-muted italic">
+        <p v-if="!draft.conditions.length" class="text-sm text-muted italic">
           No conditions — runs every time the trigger fires.
         </p>
         <div v-for="(c, i) in draft.conditions" :key="i" class="flex items-center gap-2 mb-2">
@@ -125,8 +125,8 @@
       <!-- THEN — ordered, multi-action -->
       <div ref="actionSecRef">
         <div class="flex items-center justify-between mb-1.5">
-          <p class="text-[11px] font-semibold text-muted uppercase tracking-wider">Then</p>
-          <button type="button" class="text-[12px] text-primary font-medium hover:underline" @click="addAction">
+          <p class="text-xs font-semibold text-muted uppercase tracking-wider">Then</p>
+          <button type="button" class="text-sm text-primary font-medium hover:underline" @click="addAction">
             + Add action
           </button>
         </div>
@@ -134,7 +134,7 @@
         <div v-for="(act, ai) in draft.actions" :key="ai"
           class="mb-3 rounded-md border border-[var(--border-secondary)] p-3">
           <div class="flex items-center gap-2 mb-2">
-            <span class="text-[11px] font-semibold text-muted w-5 shrink-0">{{ ai + 1 }}.</span>
+            <span class="text-xs font-semibold text-muted w-5 shrink-0">{{ ai + 1 }}.</span>
             <!-- Select, not Combobox: a short fixed enum (9 action types).
                  Combobox pre-fills its search query with the CURRENT
                  selection's label on open, which then filters the listbox
@@ -162,7 +162,7 @@
               :options="(options.statuses || []).map(s => ({value: s, label: s}))" placeholder="Status…" />
 
             <template v-else-if="act.type === 'Assign Issue'">
-              <p class="text-[12px] text-muted mb-1">Assign to</p>
+              <p class="text-sm text-muted mb-1">Assign to</p>
               <Combobox v-model="act.cfg.assignees" multiple size="sm" fullWidth
                 :options="options.members.map(m => ({value: m.user, label: m.full_name}))" placeholder="Search people…" />
               <Select v-model="act.cfg.mode" size="sm" label="Mode" fullWidth>
@@ -184,7 +184,7 @@
             </template>
 
             <template v-else-if="act.type === 'Add Label'">
-              <p class="text-[12px] text-muted mb-1">Labels to add</p>
+              <p class="text-sm text-muted mb-1">Labels to add</p>
               <Combobox v-if="options.labels.length" v-model="act.cfg.labels" multiple size="sm" fullWidth
                 :options="options.labels.map(l => ({value: l, label: l}))" placeholder="Search labels…" />
               <Input v-else v-model="act.cfg.labelsFreeText" size="sm" fullWidth placeholder="comma separated, e.g. bug, urgent" />
@@ -200,7 +200,7 @@
                 <SelectItem value="">Specific people only</SelectItem>
               </Select>
               <div class="mt-2">
-                <p class="text-[12px] text-muted mb-1">{{ act.cfg.to ? 'Also notify' : 'Notify' }}</p>
+                <p class="text-sm text-muted mb-1">{{ act.cfg.to ? 'Also notify' : 'Notify' }}</p>
                 <Combobox v-model="act.cfg.notifyUsers" multiple size="sm" fullWidth
                   :options="options.members.map(m => ({value: m.user, label: m.full_name}))" placeholder="Search people…" />
               </div>
@@ -240,8 +240,8 @@
                 :options="taskFieldOptions" placeholder="Field…" />
               <div>
                 <div class="flex items-center justify-between mb-1.5">
-                  <p class="text-[12px] text-muted">Fields to set</p>
-                  <button type="button" class="text-[12px] text-primary font-medium hover:underline"
+                  <p class="text-sm text-muted">Fields to set</p>
+                  <button type="button" class="text-sm text-primary font-medium hover:underline"
                     :disabled="!act.cfg.doctype"
                     @click="act.cfg.fieldRows.push({ key: '', value: '' })">
                     + Add field
@@ -263,14 +263,14 @@
                     <Icon :icon="X" class="size-3.5 text-muted" />
                   </IconButton>
                 </div>
-                <p v-if="!act.cfg.fieldRows.length" class="text-[12.5px] text-muted italic">
+                <p v-if="!act.cfg.fieldRows.length" class="text-sm text-muted italic">
                   {{ act.cfg.doctype ? 'No fields configured yet.' : 'Pick a document type first.' }}
                 </p>
               </div>
             </template>
 
             <template v-else-if="act.type === 'Send Email'">
-              <p class="text-[12px] text-muted mb-1">To</p>
+              <p class="text-sm text-muted mb-1">To</p>
               <Combobox v-model="act.cfg.emailTo" multiple allowCreate size="sm" fullWidth
                 :options="options.members.map(m => ({value: m.user, label: m.full_name}))"
                 placeholder="Search people, or type an email…" />
@@ -279,7 +279,7 @@
             </template>
           </div>
         </div>
-        <p v-if="!draft.actions.length" class="text-[12.5px] text-muted italic">
+        <p v-if="!draft.actions.length" class="text-sm text-muted italic">
           No actions yet — add at least one.
         </p>
       </div>

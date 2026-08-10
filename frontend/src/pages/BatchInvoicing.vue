@@ -232,56 +232,56 @@ async function doCreate() {
   flex-shrink: 0; display: flex; align-items: flex-start; justify-content: space-between;
   gap: 16px; padding: 16px 20px 12px; border-bottom: 1px solid var(--border);
 }
-.bi-title { font-size: 16px; font-weight: 600; color: var(--foreground); letter-spacing: -0.01em; }
-.bi-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; max-width: 62ch; }
+.bi-title { font-size:var(--text-xl); font-weight: 600; color: var(--foreground); letter-spacing: -0.01em; }
+.bi-sub { font-size:var(--text-sm); color: var(--muted); margin-top: 2px; max-width: 62ch; }
 
 .bi-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 24px; }
 
 .bi-card { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); margin-bottom: 12px; overflow: hidden; }
 .bi-card-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; }
-.bi-client { font-size: 14px; font-weight: 600; color: var(--foreground); }
-.bi-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.bi-client { font-size:var(--text-md); font-weight: 600; color: var(--foreground); }
+.bi-meta { font-size:var(--text-sm); color: var(--muted); margin-top: 2px; }
 .bi-card-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-.bi-total { font-size: 14px; font-weight: 600; color: var(--foreground); }
+.bi-total { font-size:var(--text-md); font-weight: 600; color: var(--foreground); }
 
 .bi-warn {
   margin: 0 14px 10px; padding: 8px 10px; border-radius: 6px;
-  background: var(--warning-soft); color: var(--warning-soft-foreground); font-size: 12px;
+  background: var(--warning-soft); color: var(--warning-soft-foreground); font-size:var(--text-sm);
 }
 
 .bi-table { width: 100%; border-collapse: collapse; }
 .bi-table th {
-  text-align: left; font-size: 11px; font-weight: 500; text-transform: uppercase;
+  text-align: left; font-size:var(--text-xs); font-weight: 500; text-transform: uppercase;
   letter-spacing: 0.04em; color: var(--muted); padding: 6px 14px;
   border-bottom: 1px solid var(--border);
 }
 .bi-row { height: 36px; cursor: pointer; }
-.bi-row td { padding: 0 14px; font-size: 13px; color: var(--foreground); border-bottom: 1px solid var(--border); vertical-align: middle; }
+.bi-row td { padding: 0 14px; font-size:var(--text-base); color: var(--foreground); border-bottom: 1px solid var(--border); vertical-align: middle; }
 .bi-row:last-child td { border-bottom: none; }
 .bi-row:hover { background: var(--surface-hover); }
 .bi-row.is-on { background: var(--surface-secondary); }
 .bi-pname { font-weight: 500; }
-.bi-cur { font-size: 10.5px; color: var(--muted); margin-left: 6px; }
+.bi-cur { font-size:var(--text-xs); color: var(--muted); margin-left: 6px; }
 
 .ta-r { text-align: right; }
 .tnum { font-variant-numeric: tabular-nums; }
 
 .bi-error {
-  padding: 10px 12px; border-radius: 6px; font-size: 12.5px;
+  padding: 10px 12px; border-radius: 6px; font-size:var(--text-sm);
   background: var(--danger-soft); color: var(--danger-soft-foreground);
 }
 .mt-3 { margin-top: 12px; }
 
-.bi-confirm-line { font-size: 13px; color: var(--foreground); }
+.bi-confirm-line { font-size:var(--text-base); color: var(--foreground); }
 .bi-confirm-list { margin: 10px 0 0; padding: 0; list-style: none; }
 .bi-confirm-list li {
   display: flex; justify-content: space-between; gap: 12px;
-  font-size: 12.5px; color: var(--muted); padding: 3px 0;
+  font-size:var(--text-sm); color: var(--muted); padding: 3px 0;
 }
 
 .bi-adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
-.bi-adv summary { font-size: 12.5px; font-weight: 500; color: var(--foreground); cursor: pointer; }
-.bi-adv-help { font-size: 11.5px; color: var(--muted); margin: 6px 0 10px; line-height: 1.5; }
+.bi-adv summary { font-size:var(--text-sm); font-weight: 500; color: var(--foreground); cursor: pointer; }
+.bi-adv-help { font-size:var(--text-sm); color: var(--muted); margin: 6px 0 10px; line-height: 1.5; }
 .bi-adv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 
 @media (max-width: 720px) {

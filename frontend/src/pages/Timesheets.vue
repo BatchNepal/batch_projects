@@ -90,22 +90,22 @@
             <table class="w-full border-collapse text-sm">
               <thead>
                 <tr class="border-b border-separator bg-surface-secondary">
-                  <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted w-52 min-w-[200px]">
+                  <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted w-52 min-w-[200px]">
                     Member
                   </th>
-                  <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted min-w-[90px]">
+                  <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted min-w-[90px]">
                     Total
                   </th>
-                  <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted min-w-[90px]">
+                  <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted min-w-[90px]">
                     Billable
                   </th>
-                  <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted min-w-[100px]">
+                  <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted min-w-[100px]">
                     Non-billable
                   </th>
-                  <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted min-w-[80px]">
+                  <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted min-w-[80px]">
                     Bill %
                   </th>
-                  <th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted">
                     Projects
                   </th>
                 </tr>
@@ -121,28 +121,28 @@
                     <div class="flex items-center gap-2.5">
                       <Avatar :name="m.full_name" size="sm" />
                       <div class="min-w-0">
-                        <p class="text-[13px] font-medium text-foreground truncate leading-none">{{ m.full_name }}</p>
-                        <p class="text-[10.5px] text-muted mt-0.5 leading-none truncate">{{ m.user }}</p>
+                        <p class="text-base font-medium text-foreground truncate leading-none">{{ m.full_name }}</p>
+                        <p class="text-xs text-muted mt-0.5 leading-none truncate">{{ m.user }}</p>
                       </div>
                     </div>
                   </td>
                   <!-- Total -->
                   <td class="px-4 py-3 text-right">
-                    <p class="text-[13px] font-semibold tabular-nums text-foreground">{{ m.total_hours }}h</p>
+                    <p class="text-base font-semibold tabular-nums text-foreground">{{ m.total_hours }}h</p>
                   </td>
                   <!-- Billable -->
                   <td class="px-4 py-3 text-right">
-                    <p class="text-[13px] tabular-nums text-success font-medium">{{ m.billable_hours }}h</p>
+                    <p class="text-base tabular-nums text-success font-medium">{{ m.billable_hours }}h</p>
                   </td>
                   <!-- Non-billable -->
                   <td class="px-4 py-3 text-right">
-                    <p class="text-[13px] tabular-nums text-muted">{{ m.non_billable_hours }}h</p>
+                    <p class="text-base tabular-nums text-muted">{{ m.non_billable_hours }}h</p>
                   </td>
                   <!-- Billable % -->
                   <td class="px-4 py-3 text-right">
                     <div class="flex flex-col items-end gap-1.5">
                       <p
-                        class="text-[13px] font-medium tabular-nums"
+                        class="text-base font-medium tabular-nums"
                         :class="m.billable_pct >= 70 ? 'text-success' : m.billable_pct >= 40 ? 'text-warning' : 'text-muted'"
                       >
                         {{ m.billable_pct }}%
@@ -162,7 +162,7 @@
                       <span
                         v-for="proj in m.projects.slice(0, 4)"
                         :key="proj.project"
-                        class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-surface-secondary text-muted whitespace-nowrap"
+                        class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-surface-secondary text-muted whitespace-nowrap"
                       >
                         <span class="w-1.5 h-1.5 rounded-full shrink-0" :style="{ background: proj.project_color }" />
                         {{ proj.project_name }}
@@ -170,7 +170,7 @@
                       </span>
                       <span
                         v-if="m.projects.length > 4"
-                        class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-surface-secondary text-muted"
+                        class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-surface-secondary text-muted"
                       >
                         +{{ m.projects.length - 4 }}
                       </span>

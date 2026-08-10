@@ -5,7 +5,7 @@
       <div class="flex flex-col gap-1">
         <div v-for="s in SHORTCUTS" :key="s.label" class="flex items-center justify-between py-1.5">
           <span class="text-foreground">{{ s.label }}</span>
-          <kbd class="text-[10px] font-medium text-muted bg-overlay px-1.5 py-0.5 border border-border rounded shadow-sm shrink-0">{{ s.key }}</kbd>
+          <kbd class="text-xs font-medium text-muted bg-overlay px-1.5 py-0.5 border border-border rounded shadow-sm shrink-0">{{ s.key }}</kbd>
         </div>
       </div>
     </ModalBody>

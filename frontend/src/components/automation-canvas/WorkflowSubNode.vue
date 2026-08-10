@@ -8,7 +8,7 @@
     >
       <Icon :icon="data.icon" :size="18" :stroke-width="1.5" class="text-muted" />
     </div>
-    <p class="text-[11px] text-muted text-center leading-tight max-w-[72px] truncate">{{ data.label }}</p>
+    <p class="text-xs text-muted text-center leading-tight max-w-[72px] truncate">{{ data.label }}</p>
     <Handle type="target" :position="Position.Top" class="wf-handle" />
   </div>
 </template>

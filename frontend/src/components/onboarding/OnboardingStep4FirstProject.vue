@@ -18,10 +18,10 @@
     <!-- Project key -->
     <div>
       <div class="flex items-center gap-1 mb-1.5">
-        <label class="text-[13px] font-medium leading-none text-foreground">
+        <label class="text-base font-medium leading-none text-foreground">
           Key <span class="text-danger">*</span>
         </label>
-        <span v-if="autoKey" class="px-1 py-0.5 text-[10px] bg-default text-muted rounded-sm">auto</span>
+        <span v-if="autoKey" class="px-1 py-0.5 text-xs bg-default text-muted rounded-sm">auto</span>
       </div>
       <Input
         :modelValue="modelValue.key"

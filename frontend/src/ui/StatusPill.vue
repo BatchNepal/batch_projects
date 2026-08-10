@@ -4,12 +4,12 @@
       class="w-1.5 h-1.5 rounded-full shrink-0"
       :style="{ backgroundColor: resolvedColor }"
     />
-    <span class="text-[11px] font-medium uppercase tracking-wider text-foreground leading-none">
+    <span class="text-xs font-medium uppercase tracking-wider text-foreground leading-none">
       {{ label }}
     </span>
     <span
       v-if="count !== undefined"
-      class="inline-flex items-center justify-center min-w-[1rem] h-4 px-1 rounded-full text-[10px] font-medium text-muted bg-default tabular-nums"
+      class="inline-flex items-center justify-center min-w-[1rem] h-4 px-1 rounded-full text-xs font-medium text-muted bg-default tabular-nums"
     >
       {{ count }}
     </span>

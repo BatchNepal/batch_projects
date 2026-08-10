@@ -14,12 +14,12 @@
               class="text-sm font-medium text-foreground bg-transparent outline-none min-w-0 truncate focus:bg-surface-secondary rounded px-1.5 -mx-1.5 py-0.5"
               placeholder="Untitled workflow"
             />
-            <span class="text-[11px] font-medium uppercase tracking-wider text-muted px-1.5 py-0.5 rounded bg-surface-tertiary shrink-0">
+            <span class="text-xs font-medium uppercase tracking-wider text-muted px-1.5 py-0.5 rounded bg-surface-tertiary shrink-0">
               {{ scope }}
             </span>
           </div>
           <!-- A4: "surface last_run_at/last_run_status under the workflow title" -->
-          <p v-if="lastRunAt" class="text-[11px] text-muted px-1.5 -mx-1.5 mt-0.5">
+          <p v-if="lastRunAt" class="text-xs text-muted px-1.5 -mx-1.5 mt-0.5">
             Last run
             <span :class="lastRunStatus === 'Failed' ? 'text-danger' : 'text-success'">{{ lastRunStatus }}</span>
             {{ fmtLastRun(lastRunAt) }}
@@ -68,7 +68,7 @@
       <!-- Node palette -->
       <aside class="w-56 border-r border-border bg-surface shrink-0 overflow-y-auto py-3">
         <div v-for="group in paletteGroups" :key="group.category" class="mb-4">
-          <p class="px-3 mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted">{{ group.label }}</p>
+          <p class="px-3 mb-1.5 text-xs font-medium uppercase tracking-wider text-muted">{{ group.label }}</p>
           <button
             v-for="item in group.items"
             :key="item.type"

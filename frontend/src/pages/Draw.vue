@@ -5,8 +5,8 @@
       <!-- Header -->
       <div class="flex items-center justify-between gap-4 mb-6">
         <div>
-          <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Draw</h1>
-          <p class="text-[13px] text-muted mt-1">Whiteboards for this project — sketch it before you spec it.</p>
+          <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Draw</h1>
+          <p class="text-base text-muted mt-1">Whiteboards for this project — sketch it before you spec it.</p>
         </div>
         <Button v-if="canCreate && unlocked && ent.canWorkspace('draw')" variant="solid" color="primary" size="sm"
           :isLoading="creating" @click="openNewDrawing">
@@ -32,8 +32,8 @@
           <Icon :icon="Lock" class="size-5 text-primary" />
         </span>
         <div class="min-w-0 flex-1">
-          <p class="text-[14px] font-semibold text-foreground">Sketch it out with the whole team</p>
-          <p class="text-[13px] text-muted mt-1 leading-relaxed">
+          <p class="text-md font-semibold text-foreground">Sketch it out with the whole team</p>
+          <p class="text-base text-muted mt-1 leading-relaxed">
             A shared Excalidraw whiteboard per project — wireframes, flows, quick diagrams.
             Available on the <span class="font-semibold text-foreground">{{ requiredPlan }}</span> plan and above.
           </p>
@@ -41,7 +41,7 @@
             <Button size="sm" color="primary" @click="goUpgrade">
               <Icon :icon="Sparkles" class="size-3.5 mr-1" /> Upgrade to {{ requiredPlan }}
             </Button>
-            <span class="text-[12px] text-muted">You're on the {{ ent.tierLabel }} plan</span>
+            <span class="text-sm text-muted">You're on the {{ ent.tierLabel }} plan</span>
           </div>
         </div>
       </div>
@@ -66,10 +66,10 @@
           <div class="h-[72px] rounded-[6px] bg-[var(--surface-secondary)] flex items-center justify-center mb-3">
             <Icon :icon="PenTool" :size="20" class="text-muted" />
           </div>
-          <p class="text-[13px] font-semibold text-foreground truncate">{{ d.title || 'Untitled drawing' }}</p>
+          <p class="text-base font-semibold text-foreground truncate">{{ d.title || 'Untitled drawing' }}</p>
           <div class="flex items-center gap-1.5 mt-2">
             <Avatar :name="d.owner_name" size="xs" />
-            <span class="text-[11px] text-muted truncate">{{ d.owner_name }} · {{ fmtDate(d.modified) }}</span>
+            <span class="text-xs text-muted truncate">{{ d.owner_name }} · {{ fmtDate(d.modified) }}</span>
           </div>
         </RouterLink>
       </div>

@@ -16,8 +16,8 @@
             <slot name="icon"><component :is="icon" :size="16" :stroke-width="1.75" /></slot>
           </div>
           <div class="flex-1 min-w-0">
-            <p class="text-[13px] font-semibold text-foreground leading-snug">{{ title }}</p>
-            <p v-if="description" class="mt-0.5 text-[12.5px] text-muted leading-relaxed">{{ description }}</p>
+            <p class="text-base font-semibold text-foreground leading-snug">{{ title }}</p>
+            <p v-if="description" class="mt-0.5 text-sm text-muted leading-relaxed">{{ description }}</p>
             <div v-if="$slots.actions" class="mt-2.5 flex items-center gap-2">
               <slot name="actions" />
             </div>

@@ -11,7 +11,7 @@
         :style="pos"
         class="bp-overlay fixed z-tooltip pointer-events-none w-64 rounded-lg border border-border bg-overlay shadow-overlay p-3"
       >
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-muted mb-2">{{ doctype }}</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{{ doctype }}</p>
 
         <div v-if="!preview" class="flex items-center gap-2 text-xs text-muted py-1">
           <Spinner size="xs" /> Loading…

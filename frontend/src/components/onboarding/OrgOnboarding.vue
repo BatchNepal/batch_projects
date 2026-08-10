@@ -26,7 +26,7 @@
             @click="i < step && goTo(i)"
           >
             <span
-              class="ob-step-num w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+              class="ob-step-num w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
               :class="i === step ? 'bg-accent text-accent-foreground'
                     : i < step ? 'bg-accent-soft text-accent-soft-foreground'
                     : 'bg-default text-muted'"
@@ -35,7 +35,7 @@
               <template v-else>{{ i }}</template>
             </span>
             <span
-              class="text-[12.5px] font-medium hidden sm:inline"
+              class="text-sm font-medium hidden sm:inline"
               :class="i === step ? 'text-foreground' : 'text-muted'"
             >{{ stepLabels[i - 1] }}</span>
           </button>

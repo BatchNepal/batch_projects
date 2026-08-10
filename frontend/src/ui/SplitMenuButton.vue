@@ -99,7 +99,7 @@ onBeforeUnmount(() => {
 .smb-main, .smb-caret {
   display: inline-flex; align-items: center; gap: 7px;
   background: var(--accent); color: var(--accent-foreground);
-  border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600;
+  border: none; cursor: pointer; font-family: inherit; font-size:var(--text-base); font-weight: 600;
   transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-base) var(--ease-smooth);
   -webkit-tap-highlight-color: transparent; outline: none;
 }
@@ -139,8 +139,8 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md); background: var(--surface-secondary); color: var(--muted);
 }
 .smb-opt-text { display: flex; flex-direction: column; min-width: 0; }
-.smb-opt-label { font-size: 13px; font-weight: 500; color: var(--foreground); }
-.smb-opt-desc  { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.smb-opt-label { font-size:var(--text-base); font-weight: 500; color: var(--foreground); }
+.smb-opt-desc  { font-size:var(--text-sm); color: var(--muted); line-height: 1.35; }
 
 .smb-pop-enter-active { transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-smooth); transform-origin: top right; }
 .smb-pop-leave-active { transition: opacity var(--duration-fast) var(--ease-in), transform var(--duration-fast) var(--ease-in); }

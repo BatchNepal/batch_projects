@@ -370,7 +370,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 }
 .sp-icon { color: var(--muted); flex-shrink: 0; }
 .sp-input {
-  flex: 1; font-size: 15px; font-family: inherit;
+  flex: 1; font-size:var(--text-md); font-family: inherit;
   color: var(--foreground); background: none; border: none; outline: none;
 }
 /* The global *:focus-visible rule (index.css) draws its accent outline on
@@ -386,7 +386,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 }
 .sp-input::placeholder { color: var(--muted); }
 .sp-esc-hint {
-  font-size: 10.5px; font-weight: 600; color: var(--muted);
+  font-size:var(--text-xs); font-weight: 600; color: var(--muted);
   background: var(--surface-secondary); padding: 2px 6px; border-radius: 4px;
   border: 1px solid var(--border); letter-spacing: .03em;
   flex-shrink: 0;
@@ -401,15 +401,15 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .sp-chip {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 8px; border-radius: 4px;
-  font-size: 11.5px; font-weight: 500;
+  font-size:var(--text-sm); font-weight: 500;
   border: 1px solid transparent;
 }
 .sp-chip-x {
   border: none; background: none; cursor: pointer;
-  font-size: 13px; line-height: 1; padding: 0; opacity: .7;
+  font-size:var(--text-base); line-height: 1; padding: 0; opacity: .7;
 }
 .sp-chip-x:hover { opacity: 1; }
-.sp-syntax-hint { font-size: 11.5px; color: var(--muted); font-style: italic; }
+.sp-syntax-hint { font-size:var(--text-sm); color: var(--muted); font-style: italic; }
 
 /* Quick filters */
 .sp-quick-row {
@@ -417,11 +417,11 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   padding: 10px 16px;
   border-bottom: 1px solid var(--surface-secondary);
 }
-.sp-quick-label { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
+.sp-quick-label { font-size:var(--text-xs); font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
 .sp-quick-btn {
   display: inline-flex; align-items: center; gap: 5px;
   height: 24px; padding: 0 10px;
-  font-size: 12px; font-weight: 500; font-family: inherit;
+  font-size:var(--text-sm); font-weight: 500; font-family: inherit;
   color: var(--foreground); background: var(--surface-secondary);
   border: 1px solid var(--border); border-radius: 5px; cursor: pointer;
   transition: background .08s, border-color .08s;
@@ -435,17 +435,17 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   border-bottom: 1px solid var(--surface-secondary);
   background: var(--surface-secondary);
 }
-.sp-sg-title { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; }
+.sp-sg-title { font-size:var(--text-xs); font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; }
 .sp-sg-grid {
   display: grid; grid-template-columns: auto 1fr;
   gap: 4px 12px; align-items: center;
 }
 .sp-sg-code {
-  font-size: 11.5px; font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size:var(--text-sm); font-family: 'SFMono-Regular', Consolas, monospace;
   color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 3px;
   white-space: nowrap;
 }
-.sp-sg-desc { font-size: 12px; color: var(--muted); }
+.sp-sg-desc { font-size:var(--text-sm); color: var(--muted); }
 
 /* Divider */
 .sp-divider { height: 1px; background: var(--surface-secondary); }
@@ -453,7 +453,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 /* Loading */
 .sp-loading {
   display: flex; align-items: center; gap: 8px;
-  padding: 16px; font-size: 13px; color: var(--muted);
+  padding: 16px; font-size:var(--text-base); color: var(--muted);
 }
 .sp-spinner {
   width: 14px; height: 14px; border-radius: 50%;
@@ -463,7 +463,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 @keyframes sp-spin { to { transform: rotate(360deg) } }
 
 /* Results */
-.sp-section-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 6px 14px 3px; margin: 0; }
+.sp-section-label { font-size:var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 6px 14px 3px; margin: 0; }
 .sp-cmd-section { padding-bottom: 4px; }
 .sp-cmd {
   display: flex; align-items: center; gap: 9px;
@@ -477,7 +477,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   color: var(--muted); background: var(--surface-secondary);
 }
 .sp-cmd--active .sp-cmd-ic { color: var(--accent); }
-.sp-cmd-label { flex: 1; font-size: 13px; font-weight: 500; color: var(--foreground); }
+.sp-cmd-label { flex: 1; font-size:var(--text-base); font-weight: 500; color: var(--foreground); }
 .sp-results { max-height: 360px; overflow-y: auto; }
 .sp-result {
   display: flex; align-items: center; gap: 8px;
@@ -488,12 +488,12 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .sp-r-type {
   width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  color: var(--accent-foreground); font-size: 8px; font-weight: 700;
+  color: var(--accent-foreground); font-size:var(--text-micro); font-weight: 700;
 }
-.sp-r-key { font-size: 11px; font-weight: 700; color: var(--accent); font-family: monospace; white-space: nowrap; flex-shrink: 0; }
-.sp-r-title { flex: 1; font-size: 13px; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-r-key { font-size:var(--text-xs); font-weight: 700; color: var(--accent); font-family: monospace; white-space: nowrap; flex-shrink: 0; }
+.sp-r-title { flex: 1; font-size:var(--text-base); color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-r-status {
-  font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 3px;
+  font-size:var(--text-xs); font-weight: 700; padding: 1px 7px; border-radius: 3px;
   flex-shrink: 0; white-space: nowrap; text-transform: uppercase; letter-spacing: .03em;
 }
 .sp-r-priority { flex-shrink: 0; }
@@ -501,11 +501,11 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 /* Empty */
 .sp-empty {
   display: flex; flex-direction: column; align-items: center;
-  padding: 32px 16px; color: var(--muted); font-size: 13px; text-align: center;
+  padding: 32px 16px; color: var(--muted); font-size:var(--text-base); text-align: center;
 }
 .sp-empty p { margin: 0 0 4px; }
-.sp-empty-sub { font-size: 12px; color: var(--muted); }
-.sp-sg-code-inline { font-family: monospace; font-size: 11px; background: var(--surface-secondary); padding: 1px 5px; border-radius: 3px; color: var(--foreground); }
+.sp-empty-sub { font-size:var(--text-sm); color: var(--muted); }
+.sp-sg-code-inline { font-family: monospace; font-size:var(--text-xs); background: var(--surface-secondary); padding: 1px 5px; border-radius: 3px; color: var(--foreground); }
 
 /* Footer */
 .sp-footer {
@@ -514,16 +514,16 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   border-top: 1px solid var(--surface-secondary);
   background: var(--surface-secondary);
 }
-.sp-footer-hint { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+.sp-footer-hint { display: flex; align-items: center; gap: 8px; font-size:var(--text-sm); color: var(--muted); }
 .sp-footer-hint kbd {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 18px; height: 18px; padding: 0 4px;
   background: var(--surface-secondary); border: 1px solid var(--border); border-radius: 3px;
-  font-size: 10px; font-family: inherit; color: var(--muted);
+  font-size:var(--text-xs); font-family: inherit; color: var(--muted);
 }
 .sp-syntax-toggle {
   display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11.5px; font-weight: 500; color: var(--accent);
+  font-size:var(--text-sm); font-weight: 500; color: var(--accent);
   background: none; border: none; cursor: pointer; font-family: inherit;
   padding: 2px 4px; border-radius: 3px; transition: background .08s;
 }

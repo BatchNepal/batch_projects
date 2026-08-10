@@ -10,7 +10,7 @@
 
     <div v-else-if="!columns.length && !loading" class="kw-empty">
       <Inbox :size="18" class="text-muted opacity-60" />
-      <span class="text-[12px] text-muted">No data for this scope</span>
+      <span class="text-sm text-muted">No data for this scope</span>
     </div>
 
     <!-- Say plainly why cards can't be dragged, rather than leaving a board
@@ -290,12 +290,12 @@ onMounted(load)
 <style scoped>
 .kw { height: 100%; display: flex; flex-direction: column; min-height: 0; }
 .kw-readonly-note {
-  flex-shrink: 0; font-size: 11px; color: var(--muted);
+  flex-shrink: 0; font-size:var(--text-xs); color: var(--muted);
   padding: 4px 8px 6px;
 }
 .kw-cols { flex: 1; min-height: 0; display: flex; gap: 12px; align-items: stretch; overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
 .kw-col-body { flex: 1; min-height: 0; overflow-y: auto; }
-.kw-col-empty { text-align: center; font-size: 12px; color: var(--muted); padding: 24px 0; }
+.kw-col-empty { text-align: center; font-size:var(--text-sm); color: var(--muted); padding: 24px 0; }
 .kw-loading { flex: 1; display: flex; gap: 12px; }
 .kw-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
 </style>

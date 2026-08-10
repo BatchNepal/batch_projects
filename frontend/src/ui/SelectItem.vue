@@ -35,7 +35,7 @@ import { cn } from '@/lib/utils'
 
 // HeroUI list-box-item: min-h-9 rows at standard size, press scale(0.98)
 const ITEM_SIZE = {
-  sm: 'min-h-[30px] py-1 text-[13px]',
+  sm: 'min-h-[30px] py-1 text-base',
   md: 'min-h-[32px] py-1.5 text-sm',
   lg: 'min-h-9 py-2 text-sm',
 }

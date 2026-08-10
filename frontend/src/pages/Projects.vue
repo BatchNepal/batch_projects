@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-4xl mx-auto px-6 py-8">
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-foreground">Projects</h1>
+      <h1 class="text-3xl font-bold text-foreground">Projects</h1>
       <Button v-if="store.projects.length" color="primary" size="sm" @click="$router.push(`/workspace/new-project`)">
         New project
       </Button>

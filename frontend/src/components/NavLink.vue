@@ -27,14 +27,14 @@
 
     <!-- Project color avatar -->
     <div v-else-if="avatar" :style="{ backgroundColor: avatarBg }"
-      class="w-[18px] h-[18px] rounded-[4px] flex items-center justify-center text-white text-[9px] font-bold shrink-0">
+      class="w-[18px] h-[18px] rounded-[4px] flex items-center justify-center text-white text-micro font-bold shrink-0">
       {{
         avatar }}</div>
 
     <template v-if="!collapsed">
-      <span class="flex-1 text-[13px] truncate">{{ label }}</span>
+      <span class="flex-1 text-base truncate">{{ label }}</span>
       <span v-if="badge"
-        class="text-[10px] bg-border text-muted rounded-full px-1.5 min-w-[18px] text-center leading-snug">{{ badge
+        class="text-xs bg-border text-muted rounded-full px-1.5 min-w-[18px] text-center leading-snug">{{ badge
         }}</span>
     </template>
   </div>

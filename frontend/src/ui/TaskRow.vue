@@ -22,7 +22,7 @@
 
     <!-- Assignee avatar -->
     <div v-if="task.assignee_color || task.assignee_initials"
-      class="shrink-0 size-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+      class="shrink-0 size-5 rounded-full flex items-center justify-center text-white text-micro font-bold"
       :style="{ backgroundColor: task.assignee_color || 'var(--muted)' }"
       :title="task.assignee"
     >{{ task.assignee_initials || '?' }}</div>

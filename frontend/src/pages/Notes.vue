@@ -5,8 +5,8 @@
       <!-- Header -->
       <div class="flex items-center justify-between gap-4 mb-6">
         <div>
-          <h1 class="text-[17px] font-semibold text-foreground tracking-[-0.01em]">Notes</h1>
-          <p class="text-[13px] text-muted mt-1">Shared notes for this project — no digging through tasks.</p>
+          <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Notes</h1>
+          <p class="text-base text-muted mt-1">Shared notes for this project — no digging through tasks.</p>
         </div>
         <Button v-if="canCreate" variant="solid" color="primary" size="sm" @click="openCreate">
           <Icon :icon="Plus" class="size-3.5 mr-1" /> New note
@@ -38,7 +38,7 @@
       <template v-else>
         <!-- Pinned strip -->
         <div v-if="pinnedNotes.length" class="mb-6">
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-muted mb-2">Pinned</p>
+          <p class="text-xs font-semibold uppercase tracking-wider text-muted mb-2">Pinned</p>
           <div class="flex gap-3 overflow-x-auto pb-1">
             <NoteCard v-for="n in pinnedNotes" :key="n.name" :note="n" compact @open="openNote(n)" />
           </div>
@@ -46,7 +46,7 @@
 
         <!-- Card list -->
         <div>
-          <p v-if="pinnedNotes.length" class="text-[11px] font-semibold uppercase tracking-wider text-muted mb-2">All notes</p>
+          <p v-if="pinnedNotes.length" class="text-xs font-semibold uppercase tracking-wider text-muted mb-2">All notes</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
             <NoteCard v-for="n in unpinnedNotes" :key="n.name" :note="n" @open="openNote(n)" />
           </div>
@@ -57,20 +57,20 @@
     <!-- Editor / viewer drawer -->
     <Drawer :open="drawerOpen" @update:open="closeDrawer" size="lg">
       <DrawerHeader @close="closeDrawer">
-        <span class="text-[14px] font-semibold text-foreground">
+        <span class="text-md font-semibold text-foreground">
           {{ editing ? (canEditCurrent ? 'Edit note' : 'Note') : 'New note' }}
         </span>
       </DrawerHeader>
 
       <DrawerBody class="space-y-4">
         <Input v-if="canEditCurrent" v-model="draft.title" size="md" placeholder="Untitled note" />
-        <p v-else class="text-[16px] font-semibold text-foreground">{{ draft.title || 'Untitled note' }}</p>
+        <p v-else class="text-xl font-semibold text-foreground">{{ draft.title || 'Untitled note' }}</p>
 
         <RichTextEditor v-if="canEditCurrent" v-model="draft.content"
           placeholder="Write something the team should know…" min-height="240px" always-toolbar />
         <div v-else class="note-preview" v-html="draft.content || '<p class=\'text-muted\'>Nothing here yet.</p>'" />
 
-        <div v-if="editing" class="flex items-center gap-1.5 text-[12px] text-muted pt-1 border-t border-separator">
+        <div v-if="editing" class="flex items-center gap-1.5 text-sm text-muted pt-1 border-t border-separator">
           <Avatar :name="editing.owner_name" size="xs" />
           {{ editing.owner_name }} · {{ fmtDate(editing.modified) }}
         </div>
@@ -79,7 +79,7 @@
       <DrawerFooter class="justify-between">
         <div class="flex items-center gap-3">
           <template v-if="canEditCurrent">
-            <button type="button" class="flex items-center gap-1.5 text-[12.5px] text-muted hover:text-foreground transition-colors"
+            <button type="button" class="flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors"
               @click="draft.pinned = draft.pinned ? 0 : 1">
               <Icon :icon="draft.pinned ? Pin : PinOff" :size="14" :class="draft.pinned ? 'text-primary' : ''" />
               {{ draft.pinned ? 'Pinned' : 'Pin note' }}
@@ -264,13 +264,13 @@ const NoteCard = defineComponent({
       onClick: () => emit('open'),
     }, [
       h('div', { class: 'flex items-start justify-between gap-2 mb-1.5' }, [
-        h('p', { class: 'text-[13px] font-semibold text-foreground truncate' }, props.note.title || 'Untitled note'),
+        h('p', { class: 'text-base font-semibold text-foreground truncate' }, props.note.title || 'Untitled note'),
         props.note.pinned ? h(Icon, { icon: Pin, size: 13, class: 'text-primary shrink-0 mt-0.5' }) : null,
       ]),
-      h('p', { class: 'text-[12px] text-muted line-clamp-3 leading-relaxed min-h-[3.15em]' }, stripHtml(props.note.content) || 'No content yet.'),
+      h('p', { class: 'text-sm text-muted line-clamp-3 leading-relaxed min-h-[3.15em]' }, stripHtml(props.note.content) || 'No content yet.'),
       h('div', { class: 'flex items-center gap-1.5 mt-3' }, [
         h(Avatar, { name: props.note.owner_name, size: 'xs' }),
-        h('span', { class: 'text-[11px] text-muted truncate' }, `${props.note.owner_name} · ${fmtDate(props.note.modified)}`),
+        h('span', { class: 'text-xs text-muted truncate' }, `${props.note.owner_name} · ${fmtDate(props.note.modified)}`),
       ]),
     ])
   },
@@ -278,14 +278,14 @@ const NoteCard = defineComponent({
 </script>
 
 <style scoped>
-.note-preview { font-size: 13.5px; color: var(--foreground); line-height: 1.65; }
+.note-preview { font-size:var(--text-base); color: var(--foreground); line-height: 1.65; }
 .note-preview :deep(p) { margin: 0 0 10px; }
 .note-preview :deep(p:last-child) { margin: 0; }
-.note-preview :deep(h1) { font-size: 18px; font-weight: 600; margin: 0 0 10px; }
-.note-preview :deep(h2) { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
-.note-preview :deep(h3) { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.note-preview :deep(h1) { font-size:var(--text-metric); font-weight: 600; margin: 0 0 10px; }
+.note-preview :deep(h2) { font-size:var(--text-xl); font-weight: 600; margin: 0 0 8px; }
+.note-preview :deep(h3) { font-size:var(--text-md); font-weight: 600; margin: 0 0 8px; }
 .note-preview :deep(ul), .note-preview :deep(ol) { margin: 0 0 10px; padding-left: 20px; }
 .note-preview :deep(blockquote) { border-left: 2px solid var(--border); padding-left: 10px; color: var(--muted); margin: 0 0 10px; }
-.note-preview :deep(code) { background: var(--surface-secondary); border-radius: 4px; padding: 1px 4px; font-size: 12.5px; }
+.note-preview :deep(code) { background: var(--surface-secondary); border-radius: 4px; padding: 1px 4px; font-size:var(--text-sm); }
 .note-preview :deep(pre) { background: var(--surface-secondary); border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: 0 0 10px; }
 </style>

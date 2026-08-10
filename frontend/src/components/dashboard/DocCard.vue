@@ -8,31 +8,31 @@
     @dragstart="onDragStart"
     @dragend="isDragging = false"
   >
-    <h3 class="text-[14px] text-foreground font-semibold leading-snug tracking-tight line-clamp-2">
+    <h3 class="text-md text-foreground font-semibold leading-snug tracking-tight line-clamp-2">
       {{ row.title }}
     </h3>
 
     <div v-if="row.status" class="mt-2">
-      <span class="inline-flex items-center px-2 py-0.5 rounded-xs text-[11px] font-semibold text-muted bg-default border border-border">
+      <span class="inline-flex items-center px-2 py-0.5 rounded-xs text-xs font-semibold text-muted bg-default border border-border">
         {{ row.status }}
       </span>
     </div>
 
     <div v-if="row.labels?.length" class="mt-3 flex flex-col gap-1">
-      <div v-for="l in row.labels" :key="l.label" class="flex items-center gap-1.5 text-[12px]">
+      <div v-for="l in row.labels" :key="l.label" class="flex items-center gap-1.5 text-sm">
         <span class="text-muted">{{ l.label }}:</span>
         <span class="text-foreground font-medium truncate">{{ l.value ?? '—' }}</span>
       </div>
     </div>
 
     <div v-if="row.date" class="mt-2">
-      <span class="inline-flex items-center px-2 py-0.5 rounded-xs text-[11px] font-semibold text-muted bg-default border border-border">
+      <span class="inline-flex items-center px-2 py-0.5 rounded-xs text-xs font-semibold text-muted bg-default border border-border">
         {{ fmtDate(row.date) }}
       </span>
     </div>
 
     <div class="flex items-center pr-2 justify-between mt-3">
-      <span class="text-[11px] pt-[1px] font-semibold text-muted tracking-tight uppercase truncate">
+      <span class="text-xs pt-[1px] font-semibold text-muted tracking-tight uppercase truncate">
         {{ row.name }}
       </span>
       <Avatar v-if="row.owner" :name="row.owner.full_name" size="xs" class="shrink-0" />

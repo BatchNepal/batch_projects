@@ -3,29 +3,29 @@
     <!-- Page header -->
     <div class="px-8 pt-8 pb-6 border-b border-border">
       <h1 class="text-xl font-semibold text-foreground">Account settings</h1>
-      <p class="text-[13px] text-muted mt-1">Manage your profile and notification preferences.</p>
+      <p class="text-base text-muted mt-1">Manage your profile and notification preferences.</p>
     </div>
 
     <div class="flex flex-col gap-8 px-8 py-8 max-w-2xl">
 
       <!-- Profile -->
       <section>
-        <h2 class="text-[13px] font-semibold text-foreground mb-4">Profile</h2>
+        <h2 class="text-base font-semibold text-foreground mb-4">Profile</h2>
         <div class="bg-surface shadow-surface rounded-lg p-5 space-y-4">
           <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-full bg-accent-soft flex items-center justify-center text-accent text-lg font-semibold shrink-0 ring-1 ring-border">
+            <div class="w-12 h-12 rounded-full bg-accent-soft flex items-center justify-center text-accent text-md font-semibold shrink-0 ring-1 ring-border">
               {{ userInitials }}
             </div>
             <div class="min-w-0">
-              <p class="text-[14px] font-semibold text-foreground truncate">{{ userName }}</p>
-              <p class="text-[12px] text-muted truncate">{{ userEmail }}</p>
+              <p class="text-md font-semibold text-foreground truncate">{{ userName }}</p>
+              <p class="text-sm text-muted truncate">{{ userEmail }}</p>
             </div>
           </div>
           <div class="pt-2 border-t border-border">
             <a
               :href="`/app/user/${encodeURIComponent(userEmail)}`"
               target="_blank"
-              class="inline-flex items-center gap-1.5 text-[13px] text-primary hover:underline"
+              class="inline-flex items-center gap-1.5 text-base text-primary hover:underline"
             >
               Edit profile in Frappe
               <ExternalLink class="size-3" />
@@ -36,12 +36,12 @@
 
       <!-- Appearance -->
       <section>
-        <h2 class="text-[13px] font-semibold text-foreground mb-4">Appearance</h2>
+        <h2 class="text-base font-semibold text-foreground mb-4">Appearance</h2>
         <div class="bg-surface shadow-surface rounded-lg p-5">
           <div class="flex items-start justify-between gap-6">
             <div class="min-w-0">
-              <p class="text-[13px] font-medium text-foreground">Interface density</p>
-              <p class="text-[12px] text-muted mt-0.5 leading-relaxed">
+              <p class="text-base font-medium text-foreground">Interface density</p>
+              <p class="text-sm text-muted mt-0.5 leading-relaxed">
                 Comfortable enlarges the whole interface. Compact is denser — more on screen.
               </p>
             </div>
@@ -49,7 +49,7 @@
               <button
                 v-for="opt in DENSITY_OPTIONS" :key="opt.value"
                 type="button"
-                class="px-3 h-7 rounded-[6px] text-[13px] font-medium transition-colors duration-90 ease-out"
+                class="px-3 h-7 rounded-[6px] text-base font-medium transition-colors duration-90 ease-out"
                 :class="density === opt.value
                   ? 'bg-surface text-foreground shadow-xs'
                   : 'text-muted hover:text-foreground'"
@@ -63,7 +63,7 @@
 
       <!-- Notification preferences -->
       <section>
-        <h2 class="text-[13px] font-semibold text-foreground mb-4">Notifications</h2>
+        <h2 class="text-base font-semibold text-foreground mb-4">Notifications</h2>
         <div class="bg-surface shadow-surface rounded-lg divide-y divide-border">
 
           <div v-if="loadingPrefs" class="flex justify-center py-8">
@@ -73,7 +73,7 @@
           <template v-else>
             <!-- In-app -->
             <div class="px-5 py-4">
-              <p class="text-[12px] font-semibold uppercase tracking-wider text-muted mb-3">In-app</p>
+              <p class="text-sm font-semibold uppercase tracking-wider text-muted mb-3">In-app</p>
               <PrefRow
                 label="In-app notifications"
                 description="Show a badge and inbox entries for activity on your tasks."
@@ -84,7 +84,7 @@
 
             <!-- Desktop push -->
             <div class="px-5 py-4">
-              <p class="text-[12px] font-semibold uppercase tracking-wider text-muted mb-3">Desktop push</p>
+              <p class="text-sm font-semibold uppercase tracking-wider text-muted mb-3">Desktop push</p>
               <PrefRow
                 label="Desktop push notifications"
                 description="Native OS notifications via ERPDesktop — delivered instantly even when this tab is closed."
@@ -96,7 +96,7 @@
             <!-- Email master -->
             <div class="px-5 py-4">
               <div class="flex items-center justify-between mb-3">
-                <p class="text-[12px] font-semibold uppercase tracking-wider text-muted">Email</p>
+                <p class="text-sm font-semibold uppercase tracking-wider text-muted">Email</p>
                 <Switch :model-value="!!prefs.email_enabled" @update:model-value="toggle('email_enabled')" />
               </div>
               <div class="space-y-3" :class="!prefs.email_enabled && 'opacity-40 pointer-events-none'">
@@ -135,7 +135,7 @@
 
             <!-- Digests -->
             <div class="px-5 py-4">
-              <p class="text-[12px] font-semibold uppercase tracking-wider text-muted mb-3">Digests</p>
+              <p class="text-sm font-semibold uppercase tracking-wider text-muted mb-3">Digests</p>
               <div class="space-y-3" :class="!prefs.email_enabled && 'opacity-40 pointer-events-none'">
                 <PrefRow
                   label="Daily digest"
@@ -158,30 +158,30 @@
           <Button variant="solid" color="primary" size="sm" :isLoading="savingPrefs" @click="savePrefs">
             Save preferences
           </Button>
-          <span v-if="prefsSaved" class="text-[12px] text-success">Saved.</span>
+          <span v-if="prefsSaved" class="text-sm text-success">Saved.</span>
         </div>
       </section>
 
       <!-- Muted items -->
       <section>
-        <h2 class="text-[13px] font-semibold text-foreground mb-1">Muted items</h2>
-        <p class="text-[13px] text-muted mb-4">
+        <h2 class="text-base font-semibold text-foreground mb-1">Muted items</h2>
+        <p class="text-base text-muted mb-4">
           Items you muted won't send notifications regardless of your settings above.
           Unmute from the task or project context menu.
         </p>
-        <div v-if="loadingMutes" class="text-[13px] text-muted">Loading…</div>
-        <div v-else-if="!muted.tasks.length && !muted.projects.length" class="text-[13px] text-muted">
+        <div v-if="loadingMutes" class="text-base text-muted">Loading…</div>
+        <div v-else-if="!muted.tasks.length && !muted.projects.length" class="text-base text-muted">
           No muted items.
         </div>
         <div v-else class="bg-surface shadow-surface rounded-lg divide-y divide-border">
           <div
             v-for="task in muted.tasks"
             :key="'t-' + task"
-            class="flex items-center justify-between px-4 py-3 text-[13px]"
+            class="flex items-center justify-between px-4 py-3 text-base"
           >
             <span class="font-mono text-muted">{{ task }}</span>
             <button
-              class="text-[12px] text-muted hover:text-foreground transition-colors"
+              class="text-sm text-muted hover:text-foreground transition-colors"
               @click="unmute({ task })"
             >
               Unmute
@@ -190,11 +190,11 @@
           <div
             v-for="proj in muted.projects"
             :key="'p-' + proj"
-            class="flex items-center justify-between px-4 py-3 text-[13px]"
+            class="flex items-center justify-between px-4 py-3 text-base"
           >
             <span class="text-foreground">{{ projectLabel(proj) }}</span>
             <button
-              class="text-[12px] text-muted hover:text-foreground transition-colors"
+              class="text-sm text-muted hover:text-foreground transition-colors"
               @click="unmute({ project: proj })"
             >
               Unmute
@@ -313,9 +313,9 @@ const PrefRow = defineComponent({
     return () =>
       h('div', { class: 'flex items-start justify-between gap-4' }, [
         h('div', { class: 'flex-1' }, [
-          h('p', { class: 'text-[13px] text-foreground' }, props.label),
+          h('p', { class: 'text-base text-foreground' }, props.label),
           props.description
-            ? h('p', { class: 'text-[12px] text-muted mt-0.5' }, props.description)
+            ? h('p', { class: 'text-sm text-muted mt-0.5' }, props.description)
             : null,
         ]),
         h(Switch, {

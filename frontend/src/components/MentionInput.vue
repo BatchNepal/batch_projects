@@ -213,7 +213,7 @@ defineExpose({ focus, clear })
 .mi-wrap { position: relative; width: 100%; }
 .mi-input {
   min-height: 56px; width: 100%; padding: 8px 10px;
-  font-size: 13px; line-height: 1.7; color: var(--foreground); outline: none;
+  font-size:var(--text-base); line-height: 1.7; color: var(--foreground); outline: none;
   white-space: pre-wrap; word-break: break-word; cursor: text;
 }
 .mi-input:empty::before { content: attr(data-placeholder); color: var(--muted); }
@@ -229,14 +229,14 @@ defineExpose({ focus, clear })
 .mi-opt {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 6px 8px; border: none; background: none; cursor: pointer;
-  border-radius: 6px; font-size: 13px; color: var(--foreground); text-align: left;
+  border-radius: 6px; font-size:var(--text-base); color: var(--foreground); text-align: left;
 }
 .mi-opt:hover, .mi-opt.active { background: var(--surface-secondary); }
 .mi-av {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
-  color: var(--accent-foreground); font-size: 10px; font-weight: 600; flex-shrink: 0;
+  color: var(--accent-foreground); font-size:var(--text-xs); font-weight: 600; flex-shrink: 0;
 }
 .mi-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mi-sub { margin-left: auto; font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.mi-sub { margin-left: auto; font-size:var(--text-xs); color: var(--muted); flex-shrink: 0; }
 </style>

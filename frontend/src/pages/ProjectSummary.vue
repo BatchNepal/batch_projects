@@ -16,7 +16,7 @@
           <div class="flex items-center gap-3 min-w-0">
             <ProjectAvatar v-if="project" :theme="project.theme" :seed="project.key" size="md" />
             <div class="min-w-0">
-              <h1 class="text-2xl font-semibold text-foreground leading-tight">
+              <h1 class="text-3xl font-semibold text-foreground leading-tight">
                 {{ project?.project_name || project?.name || 'Project Summary' }}
               </h1>
               <p v-if="project?.description" class="text-sm text-muted mt-1 line-clamp-2">
@@ -27,7 +27,7 @@
 
           <!-- Health pulse: manual override, falls back to auto-derived when unset -->
           <div v-if="project" class="shrink-0 flex items-center gap-2">
-            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] font-medium border" :class="healthChipClass">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm font-medium border" :class="healthChipClass">
               <span class="size-1.5 rounded-full shrink-0" :class="healthDotClass" />
               {{ healthLabel }}
             </span>
@@ -64,20 +64,20 @@
 
         <!-- ── Engagement meta (non-internal projects) ── -->
         <div v-if="project?.project_type && project.project_type !== 'internal'" class="flex flex-wrap items-center gap-3">
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] font-medium border"
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm font-medium border"
             :class="projectTypeBadgeClass(project.project_type)">
             {{ projectTypeLabel(project.project_type) }}
           </span>
-          <span v-if="project.client" class="text-[12.5px] text-muted">
+          <span v-if="project.client" class="text-sm text-muted">
             <span class="text-muted mr-1">Client:</span>{{ project.client }}
           </span>
-          <span v-if="project.hourly_rate" class="text-[12.5px] text-muted">
+          <span v-if="project.hourly_rate" class="text-sm text-muted">
             <span class="text-muted mr-1">Rate:</span>{{ project.currency || 'USD' }} {{ project.hourly_rate }}/hr
           </span>
-          <span v-if="project.budget_amount" class="text-[12.5px] text-muted">
+          <span v-if="project.budget_amount" class="text-sm text-muted">
             <span class="text-muted mr-1">Budget:</span>{{ project.currency || 'USD' }} {{ Number(project.budget_amount).toLocaleString() }}
           </span>
-          <router-link :to="`/workspace/${projectKey}/settings/billing`" class="ml-auto text-[11.5px] text-muted hover:text-accent transition-colors">
+          <router-link :to="`/workspace/${projectKey}/settings/billing`" class="ml-auto text-sm text-muted hover:text-accent transition-colors">
             Edit billing →
           </router-link>
         </div>
@@ -205,13 +205,13 @@
                     </button>
                     <span
                       v-if="item.new_value"
-                      class="ml-1 text-[10.5px] font-medium px-1 py-0.5 rounded-sm"
+                      class="ml-1 text-xs font-medium px-1 py-0.5 rounded-sm"
                       :style="statusBadgeStyle(item.new_value)"
                     >
                       {{ item.new_value }}
                     </span>
                   </div>
-                  <div class="text-[11px] text-muted mt-0.5">{{ relTime(item.creation) }}</div>
+                  <div class="text-xs text-muted mt-0.5">{{ relTime(item.creation) }}</div>
                 </div>
               </div>
             </div>
@@ -254,7 +254,7 @@
                     <span class="text-muted"> {{ item.action_text }} </span>
                     <button class="font-medium text-primary hover:underline" @click="store.openTaskDetail(item.issue)">{{ item.task_key }}</button>
                   </div>
-                  <div class="text-[11px] text-muted mt-0.5">{{ relTime(item.creation) }}</div>
+                  <div class="text-xs text-muted mt-0.5">{{ relTime(item.creation) }}</div>
                 </div>
               </div>
             </div>
@@ -273,7 +273,7 @@
           <DataTable :columns="attentionColumns" :rows="attentionTasks">
             <template #cell-priority="{ row }">
               <span
-                class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold leading-none"
+                class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold leading-none"
                 :style="{ backgroundColor: priorityPill(row.priority).bg, color: priorityPill(row.priority).color }"
               >
                 {{ priorityPill(row.priority).label }}
@@ -310,7 +310,7 @@
               <span
                 v-if="row.due_date"
                 class="text-xs"
-                :class="isOverdue(row) ? 'text-red-500 font-medium' : 'text-muted'"
+                :class="isOverdue(row) ? 'text-danger-soft-foreground font-medium' : 'text-muted'"
               >
                 {{ formatDate(row.due_date) }}
               </span>
@@ -382,7 +382,7 @@
               <div v-for="m in visibleMilestones" :key="m.name" class="flex items-start gap-3 group">
                 <span
                   class="shrink-0 w-12 text-right text-xs font-semibold tabular-nums pt-0.5"
-                  :class="milestoneOverdue(m) ? 'text-red-500' : 'text-muted'"
+                  :class="milestoneOverdue(m) ? 'text-danger-soft-foreground' : 'text-muted'"
                 >
                   {{ m.due_date ? formatDate(m.due_date) : '—' }}
                 </span>
@@ -392,7 +392,7 @@
                 <button
                   v-if="m.status === 'Completed'"
                   type="button"
-                  class="shrink-0 text-[11px] font-medium text-primary hover:underline whitespace-nowrap"
+                  class="shrink-0 text-xs font-medium text-primary hover:underline whitespace-nowrap"
                   title="Generate Sales Invoice"
                   :disabled="invoicingMilestone === m.name"
                   @click="generateMilestoneInvoiceRow(m)"
@@ -400,13 +400,13 @@
                 <button
                   v-else
                   type="button"
-                  class="shrink-0 text-xs text-muted hover:text-green-600 transition-colors opacity-0 group-hover:opacity-100"
+                  class="shrink-0 text-xs text-muted hover:text-success-soft-foreground transition-colors opacity-0 group-hover:opacity-100"
                   title="Mark completed"
                   @click="completeMilestone(m)"
                 >✓</button>
                 <button
                   type="button"
-                  class="shrink-0 text-xs text-muted hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                  class="shrink-0 text-xs text-muted hover:text-danger-soft-foreground transition-colors opacity-0 group-hover:opacity-100"
                   title="Delete milestone"
                   @click="deleteMilestoneRow(m)"
                 >✕</button>
@@ -465,13 +465,13 @@
                 </div>
                 <button
                   type="button"
-                  class="shrink-0 text-xs text-muted hover:text-green-600 transition-colors opacity-0 group-hover:opacity-100"
+                  class="shrink-0 text-xs text-muted hover:text-success-soft-foreground transition-colors opacity-0 group-hover:opacity-100"
                   title="Mark mitigated"
                   @click="resolveRisk(r)"
                 >✓</button>
                 <button
                   type="button"
-                  class="shrink-0 text-xs text-muted hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                  class="shrink-0 text-xs text-muted hover:text-danger-soft-foreground transition-colors opacity-0 group-hover:opacity-100"
                   title="Delete risk"
                   @click="deleteRiskRow(r)"
                 >✕</button>
@@ -638,11 +638,14 @@ function milestoneOverdue(m) {
 }
 
 function riskDotClass(severity) {
+  // Severity is DATA, so it carries saturated colour — but from the semantic
+  // ramp, not raw palette steps, so it follows the theme. The -hover tokens
+  // give a genuine fourth step between warning and danger.
   return {
-    low:      'bg-blue-400',
-    medium:   'bg-amber-400',
-    high:     'bg-orange-500',
-    critical: 'bg-red-500',
+    low:      'bg-accent',
+    medium:   'bg-warning',
+    high:     'bg-warning-hover',
+    critical: 'bg-danger',
   }[severity] || 'bg-muted'
 }
 
@@ -770,9 +773,9 @@ function projectTypeLabel(t) {
 function projectTypeBadgeClass(t) {
   return {
     internal: 'bg-surface-secondary border-border text-muted',
-    fixed:    'bg-blue-50 border-blue-200 text-blue-700',
-    retainer: 'bg-violet-50 border-violet-200 text-violet-700',
-    tm:       'bg-amber-50 border-amber-200 text-amber-700',
+    fixed:    'bg-accent-soft border-border text-accent-soft-foreground',
+    retainer: 'bg-accent-soft border-border text-accent-soft-foreground',
+    tm:       'bg-warning-soft border-border text-warning-soft-foreground',
   }[t] || 'bg-surface-secondary border-border text-muted'
 }
 

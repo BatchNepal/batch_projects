@@ -26,14 +26,14 @@
         class="group flex items-center gap-1 rounded-md hover:bg-default"
       >
         <button
-          class="flex-1 flex items-center gap-2 px-2.5 py-2 text-[12.5px] text-left min-w-0"
+          class="flex-1 flex items-center gap-2 px-2.5 py-2 text-sm text-left min-w-0"
           :class="store.activeViewId === v.id ? 'text-accent font-medium' : 'text-foreground'"
           @click="applyAndClose(v)"
         >
           <Check v-if="store.activeViewId === v.id" :size="13" class="shrink-0" />
           <span v-else class="w-[13px] shrink-0" />
           <span class="truncate">{{ v.name }}</span>
-          <span v-if="v.is_default" class="text-[9px] font-semibold uppercase tracking-wide bg-warning-soft text-warning-soft-foreground px-1 py-0.5 rounded shrink-0">Default</span>
+          <span v-if="v.is_default" class="text-micro font-semibold uppercase tracking-wide bg-warning-soft text-warning-soft-foreground px-1 py-0.5 rounded shrink-0">Default</span>
           <Mail v-if="v.subscribed" :size="11" class="text-success shrink-0" :title="`Subscribed (${v.subscription_frequency})`" />
         </button>
         <div class="flex items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">

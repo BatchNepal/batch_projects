@@ -54,7 +54,7 @@
   <div v-else-if="fieldMeta?.fieldtype === 'Link'" class="flex-1 flex flex-col gap-0.5">
     <Input :model-value="modelValue" size="sm" :placeholder="placeholder || 'Value…'"
       @update:model-value="v => emit('update:modelValue', v)" />
-    <p class="text-[10.5px] text-muted leading-snug">
+    <p class="text-xs text-muted leading-snug">
       {{ fieldMeta.options }} isn't searchable here yet — type the exact document name.
     </p>
   </div>

@@ -30,14 +30,42 @@
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 
-  --text-xs:   0.6875rem;   /* 11px */
-  --text-sm:   0.75rem;     /* 12px */
-  --text-base: 0.8125rem;   /* 13px */
-  --text-md:   0.875rem;    /* 14px */
-  --text-lg:   0.9375rem;   /* 15px */
-  --text-xl:   1rem;        /* 16px */
+  /* The scale is DESIGN_PATTERNS.md's composition law §2, verbatim:
+       11 uppercase labels · 12.5 secondary · 13 body · 14 section titles
+       · 16+ page titles only.
+     --text-sm was 12px, which quietly disagreed with the law's 12.5
+     "secondary" step — so the codebase grew BOTH (245 `text-[12px]` +
+     232 `text-sm` + 68 `text-[12.5px]`), three spellings of one intended
+     size. Setting it to 12.5 makes the law true and collapses all three
+     onto a single step; the +0.5px shift on former-12px text is
+     sub-pixel and visually inert.
+     xs/sm/base/md are the four working sizes. lg/xl/2xl/3xl are the
+     "16+ page titles only" tier — lg (15px) is the one legacy step NOT
+     in the law, kept only until the dialog-rhythm pass retires it. */
+  --text-xs:   0.6875rem;   /* 11px   — uppercase labels */
+  --text-sm:   0.78125rem;  /* 12.5px — secondary */
+  --text-base: 0.8125rem;   /* 13px   — body */
+  --text-md:   0.875rem;    /* 14px   — section titles */
+  --text-lg:   0.9375rem;   /* 15px   — DEPRECATED: not in the law, now
+                                         unreferenced. Dialog titles that
+                                         used it are on --text-md (section
+                                         title) to match ModalHeader's own
+                                         default. Do not reintroduce. */
+  --text-xl:   1rem;        /* 16px   — page titles */
   --text-2xl:  1.125rem;    /* 18px */
   --text-3xl:  1.25rem;     /* 20px */
+
+  /* Two CLOSED tiers that sit outside the body scale on purpose. Both are
+     data, not chrome, which is why the law's 11-16 range doesn't cover them:
+       micro  — initials inside 14-20px avatars/badges. The body scale's
+                11px physically overflows a 16px circle, which is why these
+                kept getting written as one-off 8/8.5/9/9.5px values.
+       metric — the ONE big-number size (KpiTile, MetricRow, pricing).
+                Law §2: numbers are data and always tabular-nums.
+     Anything reaching for a size outside xs..3xl belongs to one of these
+     two or it doesn't belong. */
+  --text-micro:  0.5625rem;  /* 9px  — avatar/badge initials ONLY */
+  --text-metric: 1.75rem;    /* 28px — KPI/metric numerals ONLY */
 
   --font-normal:   400;
   --font-medium:   500;
@@ -160,7 +188,7 @@
      the "one step past the card" surface, matches our usage). */
   --surface:                      var(--white);
   --surface-foreground:           var(--foreground);
-  --surface-secondary:            #fbfbfb;
+  --surface-secondary:            #f3f3f4;
   --surface-secondary-foreground: var(--foreground);
   --surface-tertiary:             oklch(0.955 0.003 264);
   --surface-tertiary-foreground:  var(--foreground);
@@ -183,12 +211,12 @@
   --default-hover:      oklch(0.885 0.006 264);
 
   /* ── ACCENT (Primary) — oklch(0.62 0.195 254) ── */
-  --accent:                oklch(0.62 0.195 254);
+  --accent:                oklch(63% 41% 259deg);
   --accent-foreground:     oklch(1 0 0);
-  --accent-hover:          oklch(0.555 0.205 254);
-  --accent-soft:           oklch(0.62 0.195 254 / 0.11);
-  --accent-soft-foreground:oklch(0.44 0.18 254);
-  --accent-soft-hover:     oklch(0.62 0.195 254 / 0.17);
+  --accent-hover:          oklch(55% 41% 259deg);
+  --accent-soft:           oklch(63% 41% 259deg / 0.11);
+  --accent-soft-foreground:oklch(44% 18% 254deg);
+  --accent-soft-hover:     oklch(63% 41% 259deg / 0.17);
 
   /* ── SUCCESS — vibrant spring green ── */
   --success:                oklch(0.73 0.193 151);
@@ -334,6 +362,7 @@
 
   /* Foreground — Brex dark --color-content-primary:#fcfcfd. */
   --foreground: #fcfcfd;
+  --secondary-new: #f8f8f8;
 
   /* Surfaces */
   --surface:                      #15191e;
@@ -349,7 +378,7 @@
   --overlay-foreground: var(--foreground);
 
   /* Muted — Brex dark --color-content-secondary:#d0d2dd. */
-  --muted: #d0d2dd;
+  --muted: #6b6e76;
   /* Third ink tier — Brex dark --color-content-tertiary:#8b8d98. */
   --muted-tertiary: #8b8d98;
 
@@ -418,7 +447,7 @@
   /* Borders & separators — Phase 22F: white-alpha tint, Brex's own dark
      --color-border/--color-border-hover/--color-border-pressed values
      (verified present in their captured CSS). */
-  --border:              rgba(255, 255, 255, 0.15);
+  --border:              #0B120E24;
   --border-secondary:    rgba(255, 255, 255, 0.3);
   --border-tertiary:     rgba(255, 255, 255, 0.35);
   --separator:           rgba(255, 255, 255, 0.08);

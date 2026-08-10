@@ -68,7 +68,7 @@
         </div>
         <div class="stat-card">
           <span class="stat-label">Scope Change</span>
-          <span class="stat-value" :class="data.burndown.scope_change > 0 ? 'text-amber-500' : 'text-emerald-500'">{{ data.burndown.scope_change > 0 ? '+' : '' }}{{ data.burndown.scope_change }} {{ labels.effortAbbr }}</span>
+          <span class="stat-value" :class="data.burndown.scope_change > 0 ? 'text-warning-soft-foreground' : 'text-success-soft-foreground'">{{ data.burndown.scope_change > 0 ? '+' : '' }}{{ data.burndown.scope_change }} {{ labels.effortAbbr }}</span>
         </div>
       </div>
 
@@ -401,7 +401,7 @@ watch(() => route.params.key, refresh);
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size:var(--text-xs);
   font-weight: 500;
   color: var(--muted);
   text-transform: uppercase;
@@ -410,7 +410,7 @@ watch(() => route.params.key, refresh);
 
 .stat-value {
   display: block;
-  font-size: 22px;
+  font-size:var(--text-3xl);
   font-weight: 700;
   color: var(--foreground);
   line-height: 1.1;
@@ -444,7 +444,7 @@ watch(() => route.params.key, refresh);
 }
 
 .chart-title {
-  font-size: 14px;
+  font-size:var(--text-md);
   font-weight: 600;
   color: var(--foreground);
   display: flex;
@@ -467,7 +467,7 @@ watch(() => route.params.key, refresh);
   border: 1px solid var(--border-secondary);
   background: var(--surface);
   color: var(--foreground);
-  font-size: 12px;
+  font-size:var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background-color 140ms var(--ease-out), border-color 140ms var(--ease-out);

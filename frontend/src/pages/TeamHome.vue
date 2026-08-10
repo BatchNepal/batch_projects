@@ -159,7 +159,7 @@
                   class="flex items-center gap-3 px-5 h-12 border-b border-separator last:border-b-0">
                   <Avatar :src="m.user_image" :name="m.full_name" size="sm" />
                   <div class="min-w-0 flex-1">
-                    <p class="text-[13px] font-medium text-foreground truncate leading-snug">{{ m.full_name }}</p>
+                    <p class="text-base font-medium text-foreground truncate leading-snug">{{ m.full_name }}</p>
                     <div class="w-full bg-surface-secondary rounded-sm overflow-hidden mt-1" style="height:5px">
                       <div class="h-full rounded-sm transition-[width,background-color] duration-400 ease-out"
                         :class="m.weekly?.[0]?.load_pct >= 100 ? 'bg-danger' : m.weekly?.[0]?.load_pct >= 80 ? 'bg-warning' : 'bg-success'"
@@ -183,7 +183,7 @@
               </div>
               <div v-if="team.active_sprint" class="px-5 py-4">
                 <div class="flex items-center justify-between mb-3">
-                  <p class="text-[13px] font-medium text-foreground">{{ team.active_sprint.sprint_name }}</p>
+                  <p class="text-base font-medium text-foreground">{{ team.active_sprint.sprint_name }}</p>
                   <span class="text-xs text-muted tabular-nums">{{ sprintDaysRemaining }} day{{ sprintDaysRemaining === 1 ? '' : 's' }} left</span>
                 </div>
                 <template v-if="team.sprint_burndown?.burndown">
@@ -794,7 +794,7 @@
                   <tr v-for="m in capData.members" :key="m.user" class="hover:bg-surface-secondary transition-colors">
                     <td class="pr-4 py-2">
                       <div class="flex items-center gap-2">
-                        <div class="size-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                        <div class="size-6 rounded-full flex items-center justify-center text-white text-micro font-bold shrink-0"
                           :style="{ backgroundColor: m.color }">{{ m.initials }}</div>
                         <span class="text-sm font-medium text-muted truncate max-w-[80px]">{{ m.full_name.split(' ')[0] }}</span>
                       </div>
@@ -803,7 +803,7 @@
                       <div class="size-7 rounded-sm cursor-pointer transition-transform hover:scale-110 flex items-center justify-center relative group"
                         :class="heatmapCellClass(m.allocations[dk], m.daily_cap)"
                         :title="`${m.full_name}: ${(m.allocations[dk] || 0).toFixed(1)}h of ${m.daily_cap.toFixed(1)}h capacity`">
-                        <span v-if="m.allocations[dk] > 0" class="text-[9px] font-bold opacity-60">{{ Math.round(m.allocations[dk]) }}</span>
+                        <span v-if="m.allocations[dk] > 0" class="text-micro font-bold opacity-60">{{ Math.round(m.allocations[dk]) }}</span>
                       </div>
                     </td>
                     <td class="pl-3 py-2 text-right">
@@ -865,9 +865,9 @@
                 <span v-if="a.activity_type"
                   class="text-xs font-medium px-1.5 py-px rounded-sm leading-none"
                   :class="{
-                    'bg-emerald-50 text-emerald-700': a.activity_type === 'created',
-                    'bg-blue-50 text-blue-700': a.activity_type === 'status_changed',
-                    'bg-purple-50 text-purple-700': a.activity_type === 'comment',
+                    'bg-success-soft text-success-soft-foreground': a.activity_type === 'created',
+                    'bg-accent-soft text-accent-soft-foreground': a.activity_type === 'status_changed',
+                    'bg-accent-soft text-accent-soft-foreground': a.activity_type === 'comment',
                     'bg-surface-secondary text-muted': !['created','status_changed','comment'].includes(a.activity_type),
                   }">{{ a.activity_type.replace('_', ' ') }}</span>
               </div>
@@ -1224,9 +1224,9 @@ function hexAlpha(hex, alpha) {
 
 function roleBadgeClass(role) {
   const r = (role || '').toLowerCase()
-  if (r === 'admin')   return 'bg-blue-50   text-blue-700   border border-blue-200'
-  if (r === 'manager') return 'bg-violet-50  text-violet-700 border border-violet-200'
-  if (r === 'member')  return 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+  if (r === 'admin')   return 'bg-accent-soft   text-accent-soft-foreground   border border-border'
+  if (r === 'manager') return 'bg-accent-soft  text-accent-soft-foreground border border-border'
+  if (r === 'member')  return 'bg-success-soft text-success-soft-foreground border border-border'
   return 'bg-surface-secondary text-muted border border-border'
 }
 
