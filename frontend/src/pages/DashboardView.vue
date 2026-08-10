@@ -19,13 +19,13 @@
             <div class="grid">
               <div>
               <input v-if="titleEditing" ref="titleInput" v-model="titleVal"
-              class="text-[16px] font-medium text-[--foreground] bg-transparent outline-none border-b border-accent min-w-[140px] max-w-[420px]"
+              class="text-xl font-medium text-[--foreground] bg-transparent outline-none border-b border-accent min-w-[140px] max-w-[420px]"
               @blur="commitTitle" @keydown.enter="commitTitle" @keydown.esc="titleEditing = false" />
                <h1 v-else
-              class="text-[16px] font-medium text-[--foreground] tracking-tight truncate max-w-[420px] cursor-pointer rounded-md px-1.5 py-0.5 -mx-1.5 hover:bg-default transition-colors"
+              class="text-xl font-medium text-[--foreground] tracking-tight truncate max-w-[420px] cursor-pointer rounded-md px-1.5 py-0.5 -mx-1.5 hover:bg-default transition-colors"
               title="Click to rename" @click="startTitleEdit">{{ dashboard?.name || 'Dashboard' }}</h1>
             </div> 
-            <span class="text-[10px] text-[--muted] font-medium  -ml-5 -mt-0.5">
+            <span class="text-xs text-[--muted] font-medium  -ml-5 -mt-0.5">
               Last Updated At: {{ lastUpdatedLabel }}
             </span>
             </div>
@@ -52,13 +52,13 @@
                  dropdown in the app. -->
               <DropdownItem v-if="!editMode" class="dv-more-item" @click="editMode = true">
                 <template #startContent>
-                  <Icon :icon="Edit3" :size="14" class="text-gray-800 shrink-0" />
+                  <Icon :icon="Edit3" :size="14" class="text-foreground shrink-0" />
                 </template>
                 Edit Dashboard
               </DropdownItem>
               <DropdownItem class="dv-more-item" @click="present">
                 <template #startContent>
-                  <Icon :icon="Maximize2" :size="14" class="text-gray-800 shrink-0" />
+                  <Icon :icon="Maximize2" :size="14" class="text-foreground shrink-0" />
                 </template>
                 Present
               </DropdownItem>
@@ -76,25 +76,25 @@
               <DropdownSeparator />
               <DropdownItem class="dv-more-item" @click="startTitleEdit">
                 <template #startContent>
-                  <Icon :icon="Edit3" :size="14" class="text-gray-800 shrink-0" />
+                  <Icon :icon="Edit3" :size="14" class="text-foreground shrink-0" />
                 </template>
                 Rename
               </DropdownItem>
               <DropdownItem class="dv-more-item" @click="duplicate">
                 <template #startContent>
-                  <Icon :icon="Copy" :size="14" class="text-gray-800 shrink-0" />
+                  <Icon :icon="Copy" :size="14" class="text-foreground shrink-0" />
                 </template>
                 Duplicate
               </DropdownItem>
               <DropdownItem class="dv-more-item" @click="togglePin">
                 <template #startContent>
-                  <Icon :icon="dashboard?.pinned ? PinOff : Pin" :size="14" class="text-gray-800 shrink-0" />
+                  <Icon :icon="dashboard?.pinned ? PinOff : Pin" :size="14" class="text-foreground shrink-0" />
                 </template>
                 {{ dashboard?.pinned ? 'Unpin from sidebar' : 'Pin to sidebar' }}
               </DropdownItem>
               <DropdownItem class="dv-more-item" @click="printDashboard">
                 <template #startContent>
-                  <Icon :icon="Printer" :size="14" class="text-gray-800 shrink-0" />
+                  <Icon :icon="Printer" :size="14" class="text-foreground shrink-0" />
                 </template>
                 Export / Print
               </DropdownItem>
@@ -102,7 +102,7 @@
               <DropdownSeparator />
               <DropdownItem class="dv-more-item" color="danger" @click="deleting = true">
                 <template #startContent>
-                  <Icon :icon="Trash2" :size="14" class="text-red-600 shrink-0" />
+                  <Icon :icon="Trash2" :size="14" class="text-danger-soft-foreground shrink-0" />
                 </template>
                 Delete dashboard
               </DropdownItem>
@@ -122,7 +122,7 @@
            user does on a board they're here to READ. -->
       <div class="flex border h-fit py-2 mt-2.5 px-6 items-center gap-1.5 ">
         <!-- By text -->
-        <div class="text-[12px] border px-3 py-1 rounded-md shadow-sm flex  gap-1 items-center text-[--muted]">
+        <div class="text-sm border px-3 py-1 rounded-md shadow-sm flex  gap-1 items-center text-[--muted]">
           <svg stroke="currentColor" class="mb-[2px]" fill="#101112" stroke-width="0" viewBox="0 0 24 24" height="14px" width="14px"
             xmlns="http://www.w3.org/2000/svg">
             <path fill="none" d="M0 0h24v24H0z"></path>
@@ -130,7 +130,7 @@
               d="M12 5.9a2.1 2.1 0 1 1 0 4.2 2.1 2.1 0 0 1 0-4.2m0 9c2.97 0 6.1 1.46 6.1 2.1v1.1H5.9V17c0-.64 3.13-2.1 6.1-2.1M12 4C9.79 4 8 5.79 8 8s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4m0 9c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4">
             </path>
           </svg>
-          <p class="font-medium text-gray-600">
+          <p class="font-medium text-muted">
             By {{ dashboard?.owner_full_name || dashboard?.owner }}
           </p>
         </div>
@@ -179,7 +179,7 @@
           <Button class="ml-auto shrink-0" variant="outline" size="sm"
             :title="`Updated ${lastUpdatedLabel} — click to refresh`" @click="refreshAll">
             <Icon :icon="RefreshCw" :size="11"
-              :class="refreshing ? 'animate-spin text-[--accent]' : 'text-gray-600 font-medium'" />
+              :class="refreshing ? 'animate-spin text-[--accent]' : 'text-muted font-medium'" />
           </Button>
         </div>
       </div>
@@ -195,11 +195,24 @@
          canvasEl measures THIS element (the flex-sized, viewport-driven
          outer box) — never the grid wrapper inside it, which is
          deliberately allowed to grow wider than its parent. -->
-    <div ref="canvasEl" class="flex-1 overflow-auto px-5 pt-3 pb-5 bg-[#f9f9f9df]">
+    <!-- overflow-y only, deliberately — see the ResizeObserver below. If this
+         element also carried overflow-x, it would be both the box the
+         ResizeObserver measures AND the box whose own scrollbar visibility
+         gridWrapperStyle's pixel width (computed FROM that measurement)
+         controls: growing past 48 cols makes gridWrapperStyle wider than
+         this box, which grows a horizontal scrollbar, which eats height,
+         which can tip THIS SAME element's vertical scrollbar on/off, which
+         eats width — feeding a new number back into the observer. That's a
+         real, self-sustaining loop (continuous, not the same-frame storm
+         browsers cap), and it only ever shows up as flicker on whichever
+         rows sit right at that few-px boundary. The horizontal scrollbar
+         now lives one level down (see the wrapper around gridWrapperStyle
+         below) on a box that never feeds back into canvasWidth. -->
+    <div ref="canvasEl" class="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-3 pb-5 bg-[#f9f9f9df]">
       <div v-if="renderError"
-        class="mb-4 rounded-lg border border-[--danger-soft] bg-[--danger-soft] px-4 py-3 text-[13px] text-[--danger-soft-foreground]">
+        class="mb-4 rounded-lg border border-[--danger-soft] bg-[--danger-soft] px-4 py-3 text-base text-[--danger-soft-foreground]">
         <p class="font-semibold mb-0.5">This dashboard hit an error while rendering</p>
-        <p class="text-[12px] opacity-90 break-words">{{ renderError }}</p>
+        <p class="text-sm opacity-90 break-words">{{ renderError }}</p>
       </div>
 
       <!-- Loading — prevents the "Empty dashboard" flash before the dashboard
@@ -270,7 +283,11 @@
            (the vertical-compact already on below then pulls things back up
            to close any gap left behind) — the expected canvas behaviour of
            "drop a small widget onto a big one, it makes room". -->
-      <div v-else :style="gridWrapperStyle">
+      <!-- Horizontal overflow lives HERE, one level below canvasEl — this box's
+           own width is free to be driven by its content (gridWrapperStyle)
+           without that in turn changing canvasEl's measured width. -->
+      <div v-else class="overflow-x-auto">
+      <div :style="gridWrapperStyle">
       <GridLayout ref="gridLayoutRef" v-model:layout="localLayout" :col-num="effectiveColNum" :row-height="10" :margin="[12, 12]"
         :is-draggable="editMode" :is-resizable="false" :is-bounded="false" :vertical-compact="true"
         :prevent-collision="false"
@@ -315,21 +332,21 @@
                   </button>
                 </template>
                 <DropdownItem class="font-medium" @click="loadWidget(wmap[item.i])"><template #startContent>
-                    <Icon :icon="RefreshCw" :size="14" class="text-gray-700" />
+                    <Icon :icon="RefreshCw" :size="14" class="text-foreground" />
                   </template>Refresh</DropdownItem>
                 <DropdownItem class="font-medium" @click="openConfigure(item.i)"><template #startContent>
-                    <Icon :icon="Settings" :size="14" class="text-gray-700" />
+                    <Icon :icon="Settings" :size="14" class="text-foreground" />
                   </template>Configure</DropdownItem>
                 <DropdownItem v-if="wmap[item.i].type === 'column'" class="font-medium" @click="openRowDesigner(item.i)"><template #startContent>
-                    <Icon :icon="Rows3" :size="14" class="text-gray-700" />
+                    <Icon :icon="Rows3" :size="14" class="text-foreground" />
                   </template>Customize row</DropdownItem>
                 <DropdownItem class="font-medium" @click="openWidgetPage(item.i)"><template #startContent>
-                    <Icon :icon="ExternalLink" :size="14" class="text-gray-700" />
+                    <Icon :icon="ExternalLink" :size="14" class="text-foreground" />
                   </template>Open as page
                 </DropdownItem>
                 <DropdownSeparator />
                 <DropdownItem class="font-medium" color="danger" @click="removeWidget(item.i)"><template #startContent>
-                    <Icon :icon="X" :size="14" class="text-red-600" />
+                    <Icon :icon="X" :size="14" class="text-danger-soft-foreground" />
                   </template>Remove widget</DropdownItem>
               </Dropdown>
             </div>
@@ -348,14 +365,15 @@
         </GridItem>
       </GridLayout>
       </div>
+      </div>
     </div>
 
     <!-- Add-widget catalog -->
     <Modal :open="catalogOpen" @update:open="v => !v && (catalogOpen = false)" size="md" radius="lg" hideCloseButton>
       <ModalHeader class="px-5 pt-5">
         <div>
-          <p class="text-[15px] font-semibold text-[--foreground]">Add widget</p>
-          <p class="text-[12px] text-[--muted] mt-0.5">Choose a widget type to add</p>
+          <p class="text-md font-semibold text-[--foreground]">Add widget</p>
+          <p class="text-sm text-[--muted] mt-0.5">Choose a widget type to add</p>
         </div>
       </ModalHeader>
       <ModalBody class="px-5 py-3 max-h-[60vh] overflow-y-auto">
@@ -365,8 +383,8 @@
             @click="addWidget(c.type)">
             <Icon :icon="c.icon" :size="18" class="shrink-0 text-[--muted]" />
             <span class="flex-1 min-w-0">
-              <span class="block text-[13px] font-semibold text-[--foreground]">{{ c.label }}</span>
-              <span class="block text-[12px] text-[--muted] mt-0.5 leading-snug">{{ c.desc }}</span>
+              <span class="block text-base font-semibold text-[--foreground]">{{ c.label }}</span>
+              <span class="block text-sm text-[--muted] mt-0.5 leading-snug">{{ c.desc }}</span>
             </span>
             <Icon :icon="Plus" :size="14" class="text-[--muted] shrink-0" />
           </button>
@@ -383,8 +401,8 @@
       <template v-if="cfg">
         <ModalHeader class="px-5 pt-5">
           <div>
-            <p class="text-[15px] font-semibold text-[--foreground]">Configure widget</p>
-            <p class="text-[12px] text-[--muted] mt-0.5 capitalize">{{ configTypeLabel }}</p>
+            <p class="text-md font-semibold text-[--foreground]">Configure widget</p>
+            <p class="text-sm text-[--muted] mt-0.5 capitalize">{{ configTypeLabel }}</p>
           </div>
         </ModalHeader>
         <ModalBody class="px-5 py-4">
@@ -394,8 +412,8 @@
 
             <div class="col-span-2 flex items-center justify-between gap-3 pt-1">
               <div class="min-w-0">
-                <p class="text-[13px] font-medium text-[--foreground]">Borderless</p>
-                <p class="text-[11.5px] text-[--muted] mt-0.5">Hide the border and shadow so it reads as part of the
+                <p class="text-base font-medium text-[--foreground]">Borderless</p>
+                <p class="text-sm text-[--muted] mt-0.5">Hide the border and shadow so it reads as part of the
                   page.</p>
               </div>
               <Switch v-model="cfg.borderless" />
@@ -421,10 +439,10 @@
                  the original behavior with nothing lost. -->
             <div v-if="cfg.type === 'metric'" class="col-span-2 flex flex-col gap-2 pt-1">
               <div class="flex items-center justify-between">
-                <label class="text-[12px] font-medium text-[--foreground]">Sources
-                  <span class="text-[11px] text-[--muted] font-normal">— optional, counts records instead of the task metric above</span>
+                <label class="text-sm font-medium text-[--foreground]">Sources
+                  <span class="text-xs text-[--muted] font-normal">— optional, counts records instead of the task metric above</span>
                 </label>
-                <button type="button" class="text-[11px] font-semibold text-[--accent] hover:underline shrink-0"
+                <button type="button" class="text-xs font-semibold text-[--accent] hover:underline shrink-0"
                   @click="addMetricSource">+ Add source</button>
               </div>
               <div v-for="(src, i) in (cfg.sources || [])" :key="i"
@@ -474,12 +492,12 @@
             </Select>
 
             <div v-if="cfg.type === 'column'" class="col-span-2">
-              <label class="text-[12px] font-medium text-[--foreground] mb-1 block">
+              <label class="text-sm font-medium text-[--foreground] mb-1 block">
                 Filters
-                <span class="text-[11px] text-[--muted] font-normal">— any field on {{ widgetSourceLabel(cfg.doctype) }}</span>
+                <span class="text-xs text-[--muted] font-normal">— any field on {{ widgetSourceLabel(cfg.doctype) }}</span>
               </label>
               <FilterBuilder :doctype="cfg.doctype || 'BP Task'" v-model="cfg.filters" />
-              <p v-if="quickFilterConverted" class="mt-1.5 text-[11px] text-[--accent]">
+              <p v-if="quickFilterConverted" class="mt-1.5 text-xs text-[--accent]">
                 This widget's old quick filter was converted into the filter above.
               </p>
             </div>
@@ -509,7 +527,7 @@
                 </SelectItem>
               </Select>
               <div class="col-span-2">
-                <label class="text-[12px] font-medium text-[--foreground] mb-1.5 block">Filters</label>
+                <label class="text-sm font-medium text-[--foreground] mb-1.5 block">Filters</label>
                 <FilterBuilder :doctype="cfg.doctype || 'BP Task'" v-model="cfg.filters" />
               </div>
             </template>
@@ -521,10 +539,10 @@
                  settings competing over the same line, one of them silently
                  capped at three, is worse than one that isn't. -->
             <div v-if="cfg.type === 'kanban' && !isTaskDoctype(cfg.doctype)" class="col-span-2">
-              <label class="text-[12px] font-medium text-[--foreground] mb-1.5 block">Card labels</label>
+              <label class="text-sm font-medium text-[--foreground] mb-1.5 block">Card labels</label>
               <div class="flex flex-wrap gap-1.5">
                 <button v-for="f in sourceFields" :key="f.fieldname" type="button"
-                  class="h-7 px-2.5 rounded-md text-[12px] font-medium border transition-colors" :class="(cfg.label_fields || []).includes(f.fieldname)
+                  class="h-7 px-2.5 rounded-md text-sm font-medium border transition-colors" :class="(cfg.label_fields || []).includes(f.fieldname)
                     ? 'bg-[--accent-soft] border-[--accent-soft] text-[--accent-soft-foreground]'
                     : 'bg-[--surface] text-[--muted] hover:bg-[--surface-secondary]'"
                   @click="toggleLabelField(f.fieldname)">{{ f.label }}</button>
@@ -568,9 +586,9 @@
                    project boundary is set, and naming it after the thing it
                    selects makes that obvious next to the field-level
                    filters above. -->
-              <label class="text-[12px] font-medium text-[--foreground]">
+              <label class="text-sm font-medium text-[--foreground]">
                 Projects
-                <span class="ml-1 text-[11px] text-[--muted] font-normal">— which projects this widget reads: one,
+                <span class="ml-1 text-xs text-[--muted] font-normal">— which projects this widget reads: one,
                   several, or inherit from the dashboard</span>
               </label>
               <div class="flex items-center gap-2">
@@ -585,36 +603,36 @@
               </div>
             </div>
             <p v-else-if="cfg.type !== 'query' && cfg.type !== 'text' && cfg.type !== 'header'"
-              class="col-span-2 text-[12px] text-[--muted]">
+              class="col-span-2 text-sm text-[--muted]">
               {{ widgetSourceLabel(cfg.doctype) }} isn't project-scoped — this widget shows workspace-wide data.
             </p>
 
             <!-- BQL query editor -->
             <div v-if="cfg.type === 'query'" class="col-span-2">
               <div class="flex items-center justify-between mb-1.5">
-                <p class="text-[12px] font-medium text-[--foreground]">Batch Query Language (BQL)</p>
-                <button class="flex items-center gap-1 text-[11px] text-[--accent] hover:opacity-80 transition-opacity"
+                <p class="text-sm font-medium text-[--foreground]">Batch Query Language (BQL)</p>
+                <button class="flex items-center gap-1 text-xs text-[--accent] hover:opacity-80 transition-opacity"
                   @click.prevent="bqlDocsOpen = !bqlDocsOpen">
                   <Icon :icon="BookOpen" :size="12" />{{ bqlDocsOpen ? 'Hide' : 'Field reference' }}
                 </button>
               </div>
               <textarea v-model="cfg.bql" rows="4"
-                class="w-full text-[12px] font-mono leading-relaxed rounded-md border px-3 py-2.5 outline-none resize-none transition-colors bg-[--surface-secondary] text-[--foreground]"
+                class="w-full text-sm font-mono leading-relaxed rounded-md border px-3 py-2.5 outline-none resize-none transition-colors bg-[--surface-secondary] text-[--foreground]"
                 :class="bqlError ? 'border-[--danger]' : ' focus:border-[--accent]'"
                 placeholder='project = "PROJ" AND status = "Open" AND assignee = "me"' @input="bqlError = ''" />
-              <p v-if="bqlError" class="text-[11px] text-[--danger] mt-1">{{ bqlError }}</p>
-              <p v-else class="text-[11px] text-[--muted] mt-1">Combine filters with AND. Use quotes around values.</p>
+              <p v-if="bqlError" class="text-xs text-[--danger] mt-1">{{ bqlError }}</p>
+              <p v-else class="text-xs text-[--muted] mt-1">Combine filters with AND. Use quotes around values.</p>
 
               <!-- BQL quick examples -->
               <div class="flex flex-wrap gap-1.5 mt-2">
                 <button v-for="ex in BQL_EXAMPLES" :key="ex.label" type="button"
-                  class="h-6 px-2 rounded text-[11px] border bg-[--surface] text-[--muted] hover:bg-[--surface-secondary] transition-colors"
+                  class="h-6 px-2 rounded text-xs border bg-[--surface] text-[--muted] hover:bg-[--surface-secondary] transition-colors"
                   @click="cfg.bql = ex.bql; bqlError = ''">{{ ex.label }}</button>
               </div>
 
               <!-- field reference -->
               <div v-if="bqlDocsOpen" class="mt-3 rounded-md border overflow-hidden">
-                <table class="w-full text-[11px]">
+                <table class="w-full text-xs">
                   <thead>
                     <tr class="bg-[--surface-secondary]">
                       <th class="px-3 py-1.5 text-left font-semibold text-[--muted] border-b ">Field</th>
@@ -634,9 +652,9 @@
 
             <!-- text / note content -->
             <div v-if="cfg.type === 'text'" class="col-span-2">
-              <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Content</p>
+              <p class="text-sm font-medium text-[--foreground] mb-1.5">Content</p>
               <textarea v-model="cfg.text" rows="6"
-                class="w-full text-[13px] leading-relaxed rounded-md border bg-[--surface-secondary] text-[--foreground] px-3 py-2.5 outline-none resize-none focus:border-[--accent] transition-colors"
+                class="w-full text-base leading-relaxed rounded-md border bg-[--surface-secondary] text-[--foreground] px-3 py-2.5 outline-none resize-none focus:border-[--accent] transition-colors"
                 placeholder="Write your note or annotation here…" />
             </div>
 
@@ -649,17 +667,17 @@
 
             <!-- table columns -->
             <div v-if="cfg.type === 'table' || cfg.type === 'query'" class="col-span-2">
-              <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Columns</p>
+              <p class="text-sm font-medium text-[--foreground] mb-1.5">Columns</p>
               <div class="flex flex-wrap gap-1.5">
                 <button v-for="c in COLUMN_OPTIONS" :key="c.v" type="button"
-                  class="h-7 px-2.5 rounded-md text-[12px] font-medium border transition-colors" :class="(cfg.columns || []).includes(c.v)
+                  class="h-7 px-2.5 rounded-md text-sm font-medium border transition-colors" :class="(cfg.columns || []).includes(c.v)
                     ? 'bg-[--accent-soft] border-[--accent-soft] text-[--accent-soft-foreground]'
                     : 'bg-[--surface]  text-[--muted] hover:bg-[--surface-secondary]'" @click="toggleColumn(c.v)">{{
                   c.l }}</button>
               </div>
             </div>
             <div v-if="cfg.type === 'metric'" class="col-span-2">
-              <p class="text-[12px] font-medium text-[--foreground] mb-1.5">Accent</p>
+              <p class="text-sm font-medium text-[--foreground] mb-1.5">Accent</p>
               <div class="flex gap-2">
                 <button v-for="(p, k) in PILL" :key="k" class="w-6 h-6 rounded-md border-2 transition-colors"
                   :class="cfg.colorScheme === k ? 'border-[--foreground]' : 'border-transparent'"
@@ -689,10 +707,10 @@
     <!-- Delete confirm -->
     <Modal :open="deleting" @update:open="v => !v && (deleting = false)" size="sm" radius="lg" hideCloseButton>
       <ModalHeader class="px-5 pt-5">
-        <p class="text-[15px] font-semibold text-[--foreground]">Delete dashboard?</p>
+        <p class="text-md font-semibold text-[--foreground]">Delete dashboard?</p>
       </ModalHeader>
       <ModalBody class="px-5 py-4">
-        <p class="text-[13px] text-[--muted]">"{{ dashboard?.name }}" and its {{ widgets.length }} widget{{
+        <p class="text-base text-[--muted]">"{{ dashboard?.name }}" and its {{ widgets.length }} widget{{
           widgets.length
             === 1 ? '' : 's' }} will be permanently removed.</p>
       </ModalBody>
@@ -1609,7 +1627,7 @@ watch(dashboardId, init)
 }
 .dv-more-item{
   font-weight: 600 !important;
-  font-size: 12px !important;
+  font-size:var(--text-sm) !important;
 }
 /* Column widgets specifically: flat, no elevation, an explicit border
    color per design direction — kept scoped to .widget-card-column (applied

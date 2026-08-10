@@ -18,7 +18,7 @@
            width-measured overflow collapses extra items into a "+N" badge
            (hover for the rest). -->
       <div v-if="line2.length || dateLabel" class="w-row-line w-row-line2">
-        <div ref="line2El" class="w-row-line2-items">
+        <div ref="line2El" class="w-row-line2-items" :class="{ 'w-row-line2-measuring': !line2Ready }">
           <template v-for="(it, i) in line2" :key="i">
             <RowItem v-if="i < visible2" :item="it" />
           </template>
@@ -64,16 +64,28 @@ const BADGE_W = 32   // reserve for the "+N" pill when it will actually appear
 function useOverflow(itemsRef) {
   const el = ref(null)
   const visible = ref(Infinity) // optimistic: show everything until measured
+  // Large widgets (a few hundred rows) mount every row's DOM in one shot;
+  // the browser lays out/paints off-screen ones lazily as they scroll into
+  // view rather than all at once up front. Each row's very first paint —
+  // whenever that actually happens — would otherwise show the optimistic
+  // "everything" state for one frame before this measurement collapses it,
+  // which reads as a flash concentrated wherever the user happens to be
+  // scrolling, not as a one-time load-time flicker. `ready` masks the
+  // content (not display:none — clientWidth still needs the real layout)
+  // until the very first measurement has actually run, so nothing is ever
+  // painted in its pre-measurement shape. Later re-measurements (real
+  // resizes) never re-hide — that itself would flicker on every resize.
+  const ready = ref(false)
   function measure() {
     const row = el.value
     if (!row) return
     const kids = [...row.children].filter((c) => !c.classList.contains('w-row-overflow-btn'))
-    if (!kids.length) { visible.value = Infinity; return }
+    if (!kids.length) { visible.value = Infinity; ready.value = true; return }
     const avail = row.clientWidth
     if (!avail) return
     const widths = kids.map((k) => k.getBoundingClientRect().width)
     const totalAll = widths.reduce((a, b) => a + b, 0) + GAP * (widths.length - 1)
-    if (totalAll <= avail) { visible.value = Infinity; return }
+    if (totalAll <= avail) { visible.value = Infinity; ready.value = true; return }
     // Doesn't fit: re-fit against a budget that leaves room for the badge.
     const budget = avail - BADGE_W - GAP
     let used = 0, count = 0
@@ -84,6 +96,7 @@ function useOverflow(itemsRef) {
       count++
     }
     visible.value = Math.max(1, count) // never hide everything
+    ready.value = true
   }
   let ro
   onMounted(() => {
@@ -93,9 +106,9 @@ function useOverflow(itemsRef) {
   })
   onBeforeUnmount(() => ro?.disconnect())
   watch(itemsRef, () => nextTick(measure), { deep: true })
-  return { el, visible }
+  return { el, visible, ready }
 }
-const { el: line2El, visible: visible2 } = useOverflow(() => props.line2)
+const { el: line2El, visible: visible2, ready: line2Ready } = useOverflow(() => props.line2)
 
 const TEXT_COLOR = {
   default: 'var(--muted)',
@@ -254,16 +267,22 @@ const dateLabel = computed(() => {
 .w-row-line { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: nowrap; overflow: hidden; }
 .w-row-line2 { justify-content: space-between; gap: 8px; }
 .w-row-line2-items { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden; }
+/* Masked (not display:none — width is still needed for measurement) until
+   the first real fit calculation lands, so a row's very first paint —
+   whenever the browser actually gets to laying it out — never shows the
+   optimistic "everything" shape for a frame before snapping to the fitted
+   one. See useOverflow()'s `ready` in the script block. */
+.w-row-line2-measuring { visibility: hidden; }
 
-.w-row-title { flex: 0 1 auto; min-width: 0; font-size: 14px; font-weight: 500; color: var(--foreground); line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.w-row-chip { flex-shrink: 0; font-size: 11px; font-weight: 600; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+.w-row-title { flex: 0 1 auto; min-width: 0; font-size:var(--text-md); font-weight: 500; color: var(--foreground); line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-row-chip { flex-shrink: 0; font-size:var(--text-xs); font-weight: 600; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
 /* Opt-in filled treatment — only ever applied when explicitly turned on. */
 .w-row-filled { padding: 1px 7px; border-radius: 999px; }
 
 .w-row-img { width: 18px; height: 18px; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0; }
 .w-row-avatars { display: flex; align-items: center; flex-shrink: 0; }
 .w-row-avatars > * + * { margin-left: -6px; }
-.w-row-avatar-overflow { width: 20px; height: 20px; border-radius: 999px; background: var(--default); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 9px; font-weight: 700; box-shadow: 0 0 0 2px var(--surface); flex-shrink: 0; margin-left: -6px; }
+.w-row-avatar-overflow { width: 20px; height: 20px; border-radius: 999px; background: var(--default); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size:var(--text-micro); font-weight: 700; box-shadow: 0 0 0 2px var(--surface); flex-shrink: 0; margin-left: -6px; }
 
 /* ── Solo anchor ──────────────────────────────────────────────────────────
    38px against a ~58px row: deliberately more than half the row height, so
@@ -279,18 +298,18 @@ const dateLabel = computed(() => {
 .w-row-solo-img { width: 38px; height: 38px; border-radius: var(--radius-md); object-fit: cover; }
 .w-row-solo :deep(.size-10), .w-row-solo :deep(.size-9) { width: 38px; height: 38px; }
 .w-row-solo-text {
-  font-size: 12px; font-weight: 700; line-height: 1.2; text-align: center;
+  font-size:var(--text-sm); font-weight: 700; line-height: 1.2; text-align: center;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
 .w-row-solo-avatars { display: flex; align-items: center; }
 .w-row-solo-avatars > * + * { margin-left: -8px; }
-.w-row-solo-avatar-overflow { width: 30px; height: 30px; border-radius: 999px; background: var(--default); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 10px; font-weight: 700; box-shadow: 0 0 0 2px var(--surface); flex-shrink: 0; margin-left: -8px; }
+.w-row-solo-avatar-overflow { width: 30px; height: 30px; border-radius: 999px; background: var(--default); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size:var(--text-xs); font-weight: 700; box-shadow: 0 0 0 2px var(--surface); flex-shrink: 0; margin-left: -8px; }
 
 .w-row-overflow-btn { position: relative; flex-shrink: 0; display: inline-flex; }
 .w-row-overflow-trigger {
   display: flex; align-items: center; justify-content: center;
   height: 17px; padding: 0 6px; border-radius: 999px;
-  font-size: 10px; font-weight: 700; color: var(--muted);
+  font-size:var(--text-xs); font-weight: 700; color: var(--muted);
   background: var(--default); border: none; cursor: pointer;
 }
 .w-row-overflow-trigger:hover { color: var(--foreground); background: var(--surface-secondary); }
@@ -302,7 +321,7 @@ const dateLabel = computed(() => {
 }
 .w-row-overflow-item { max-width: 240px !important; }
 
-.w-row-date { flex-shrink: 0; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.w-row-date { flex-shrink: 0; font-size:var(--text-xs); font-weight: 600; white-space: nowrap; }
 .w-row-date-overdue { color: var(--danger); }
 .w-row-date-soon { color: var(--warning-soft-foreground); }
 .w-row-date-normal { color: var(--muted); }
