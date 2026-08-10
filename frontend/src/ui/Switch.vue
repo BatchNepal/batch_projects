@@ -77,8 +77,19 @@ function onClick() {
 .sw-off { background: var(--default); }
 .sw-on  { background: var(--sw-accent); }
 
+/* --surface-hover was the wrong token — it's tuned for hover on a white
+   panel background, not on --default (an already-grey track). In dark
+   theme the two are the EXACT same oklch value, so hover did nothing at
+   all; in light theme the delta was 0.018 lightness, not perceptible.
+   --default-hover exists for precisely this — "the hover state of
+   --default" — and has real contrast in both themes. */
 @media (hover: hover) {
-  .sw-off:not(:disabled):hover { background: var(--surface-hover); }
+  .sw-off:not(:disabled):hover { background: var(--default-hover); }
+  /* ON had no hover rule at all — --sw-accent is set dynamically per
+     data-color, so there's no matching "-hover" token to reach for the way
+     the off-track has one; a filter darkens whichever accent is active
+     without needing a hover variant of every colour variable. */
+  .sw-on:not(:disabled):hover { filter: brightness(0.92); }
 }
 
 .sw-thumb {

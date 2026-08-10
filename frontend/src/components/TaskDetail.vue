@@ -9,7 +9,7 @@
     <header class="jv-header">
       <div class="jv-crumb">
         <LayoutGrid class="size-3 shrink-0 text-muted" />
-        <span class="jv-crumb-project">{{ store.currentProject?.project_name }}</span>
+        <span class="jv-crumb-project">Manage Task</span>
         <span class="jv-crumb-sep">/</span>
         <span v-if="issue" class="jv-crumb-key">{{ issue.task_key }}</span>
       </div>
@@ -20,26 +20,61 @@
             {{ saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Failed' }}
           </span>
         </Transition>
+        <!-- Eye/EyeOff is the right semantic (watch = visibility, kept
+             distinct from Bell = notifications/mute in the More menu below)
+             — Jira uses the same pairing. What actually read wrong was
+             SIZE: EyeOff's diagonal slash fills its box far more than a
+             glyph like X or the three dots beside it, so identical size-3.5
+             looked visually heavier. Dropped one step to match their
+             apparent weight, not their nominal box. -->
         <button class="jv-hbtn jv-watch-btn" :class="{ active: watching }" @click="toggleWatch" :title="watching ? 'Stop watching' : 'Watch this issue'">
-          <component :is="watching ? Eye : EyeOff" class="size-3.5" />
+          <component :is="watching ? Eye : EyeOff" class="size-3" />
         </button>
+        <!-- Real people, not a count in a box — who's actually looking at
+             this task right now, stacked like Assignee's own avatar stack
+             above. Real photo when the user has one (jv-av-img), the usual
+             hashed initials otherwise — same fallback rule as everywhere
+             else in this file, no longer initials-only like the dropdown
+             list below used to be either. No presence dot IN the stack: a
+             6px dot at an avatar's own bottom-right corner sits exactly
+             where the NEXT overlapping avatar paints on top of it, so
+             anything but the last avatar would show a clipped dot — real,
+             accurate presence stays one click away in the roomy dropdown
+             list, which has no overlap to clip it. Click opens that list. -->
         <FieldDropdown v-if="watcherCount" ref="watcherRef" @open="loadWatchers" align="right" width="w-52">
           <template #trigger>
-            <span class="jv-watch-count jv-watch-count-btn">{{ watcherCount }}</span>
+            <button class="jv-watch-stack-btn" :title="`${watcherCount} watching`">
+              <span v-if="headerWatchers.length" class="jv-av-stack">
+                <span v-for="w in headerWatchers" :key="w.user" class="jv-av jv-av-xs jv-av-stacked"
+                  :class="{ 'jv-av-img': w.user_image }"
+                  :style="w.user_image ? {} : { background: aColor(w.user) }">
+                  <img v-if="w.user_image" :src="w.user_image" :alt="w.full_name" class="jv-av-photo" />
+                  <template v-else>{{ ini(w.full_name) }}</template>
+                </span>
+              </span>
+              <!-- Only ever the OVERFLOW, never the raw total — a bare "4"
+                   next to 3 avatars already told you nothing the avatars
+                   didn't; "+1" tells you there's someone NOT pictured. -->
+              <span v-if="watcherOverflow > 0" class="jv-watch-count">+{{ watcherOverflow }}</span>
+            </button>
           </template>
-          <div v-if="watchersLoading" class="px-3 py-2 text-[12px] text-muted">Loading…</div>
+          <div v-if="watchersLoading" class="px-3 py-2 text-sm text-muted">Loading…</div>
           <template v-else-if="watcherList">
             <div v-if="watcherList.length">
               <div v-for="w in watcherList" :key="w.user" class="flex items-center gap-2.5 px-3 py-1.5">
                 <span class="relative shrink-0">
-                  <span class="jv-av jv-av-xs" :style="{ background: aColor(w.user) }">{{ ini(w.full_name) }}</span>
+                  <span class="jv-av jv-av-xs" :class="{ 'jv-av-img': w.user_image }"
+                    :style="w.user_image ? {} : { background: aColor(w.user) }">
+                    <img v-if="w.user_image" :src="w.user_image" :alt="w.full_name" class="jv-av-photo" />
+                    <template v-else>{{ ini(w.full_name) }}</template>
+                  </span>
                   <span v-if="isOnline(w.user)" class="jv-presence-dot" title="Online" />
                 </span>
-                <span class="text-[12.5px] text-foreground truncate">{{ w.full_name }}</span>
-                <span v-if="isOnline(w.user)" class="text-[10.5px] text-success-soft-foreground ml-auto shrink-0">Online</span>
+                <span class="text-sm text-foreground truncate">{{ w.full_name }}</span>
+                <span v-if="isOnline(w.user)" class="text-xs text-success-soft-foreground ml-auto shrink-0">Online</span>
               </div>
             </div>
-            <div v-else class="px-3 py-2 text-[12px] text-muted">No watchers</div>
+            <div v-else class="px-3 py-2 text-sm text-muted">No watchers</div>
           </template>
         </FieldDropdown>
         <FieldDropdown ref="moreRef" align="right" width="w-44">
@@ -87,18 +122,6 @@
 
         <!-- Action bar (transition buttons) -->
         <div class="jv-action-bar">
-          <FieldDropdown width="w-44">
-            <template #trigger>
-              <button class="jv-transition-btn" :style="{ background: statusColor + '1A', color: statusColor, borderColor: statusColor + '50' }">
-                {{ issue.status }}
-                <ChevronDown class="size-2.5" />
-              </button>
-            </template>
-            <DropdownItem v-for="s in store.workflowStates" :key="s.name" :active="issue.status === s.name" @click="setField('status', s.name)">
-              <span class="w-2 h-2 rounded-sm shrink-0" :style="{ background: s.color }"/>{{ s.name }}
-            </DropdownItem>
-          </FieldDropdown>
-
           <button class="jv-action-btn" @click="focusComposer">
             <MessageCircle class="size-3" />
             Comment
@@ -135,10 +158,18 @@
 
         <!-- Checklist -->
         <div class="jv-section">
-          <div class="jv-section-title">
-            Checklist
-            <span v-if="checklistItems.length" class="jv-section-count">{{ checklistDone }}/{{ checklistItems.length }}</span>
-            <div v-if="checklistItems.length" class="jv-mini-progress"><div class="jv-mini-fill" :style="{ width: checklistPct + '%' }"/></div>
+          <div class="flex items-center justify-between">
+
+            <div class="jv-section-title">
+              Checklist
+              <span v-if="checklistItems.length" class="jv-section-count">{{ checklistDone }}/{{ checklistItems.length }}</span>
+              <div v-if="checklistItems.length" class="jv-mini-progress"><div class="jv-mini-fill" :style="{ width: checklistPct + '%' }"/></div>
+            </div>
+           <div class="jv-cl-add">
+              <button class="jv-cl-add-btn" @click="addCheck">
+                <Plus class="size-3" />
+              </button>
+            </div>
           </div>
           <div class="jv-checklist">
             <div v-for="item in checklistItems" :key="item.id" class="jv-cl-row">
@@ -158,21 +189,38 @@
                 <X class="size-3" />
               </button>
             </div>
-            <div class="jv-cl-add">
+             <div v-if="!checklistItems.length" class="jv-cl-add">
               <button class="jv-cl-add-btn" @click="addCheck">
                 <Plus class="size-3" />
-                Add item
+                Add Checklist Item
               </button>
             </div>
           </div>
         </div>
 
+        <!-- Attachments (capability off = hide outright) -->
+        <div v-if="canViewFiles" class="jv-section">
+          <div class="jv-section-title">Attachments</div>
+          <TaskAttachments
+            :modelValue="attachments"
+            :issue-name="issue?.name"
+            @update:modelValue="v => { if (store.selectedTask) store.selectedTask.attachments = v }"
+          />
+        </div>
+
         <!-- Child Issues / Subtasks -->
         <div class="jv-section">
-          <div class="jv-section-title">
-            Child issues
-            <span v-if="subtasks.length" class="jv-section-count">{{ doneCount }}/{{ subtasks.length }}</span>
-            <div v-if="subtasks.length" class="jv-mini-progress"><div class="jv-mini-fill" :style="{ width: progressPct + '%' }"/></div>
+          <div class="flex items-center justify-between">
+            <div class="jv-section-title">
+              SUBTASKS
+              <span v-if="subtasks.length" class="jv-section-count">{{ doneCount }}/{{ subtasks.length }}</span>
+              <div v-if="subtasks.length" class="jv-mini-progress"><div class="jv-mini-fill" :style="{ width: progressPct + '%' }"/></div>
+            </div>
+            <div v-if="!subtasks.length" class="jv-sub-empty">
+             <button v-if="!showAddSub" class="jv-add-child-btn" @click="showAddSub=true">
+            <Plus class="size-2.5" />
+          </button>
+          </div>
           </div>
 
           <div v-if="subtasks.length" class="jv-subtasks">
@@ -180,7 +228,7 @@
               <button class="jv-st-check" :class="{ done: isCompleted(st.status) }" @click.stop="toggleSubtask(st)">
                 <Check v-if="isCompleted(st.status)" class="size-2 text-white" :stroke-width="3.5" />
               </button>
-              <span class="jv-st-type" :style="{ background: st.task_type ? taskTypeColor : '#0B6BCB' }">{{ (st.task_type || 'T').charAt(0) }}</span>
+              <span class="jv-st-type" :style="{ background: st.task_type ? taskTypeColor : 'var(--accent)' }">{{ (st.task_type || 'T').charAt(0) }}</span>
               <span class="jv-st-key">{{ st.task_key }}</span>
               <span class="jv-st-title" :class="{ done: isCompleted(st.status) }">{{ st.title }}</span>
               <div class="jv-st-meta">
@@ -236,18 +284,28 @@
             <div class="jv-st-pill-wrap">
               <FieldDropdown width="w-32">
                 <template #trigger>
-                  <button class="jv-add-chip"><PriorityIcon :priority="newSubPriority"/><span style="font-size:11px" class="text-foreground">{{ newSubPriority }}</span></button>
+                  <button class="jv-add-chip"><PriorityIcon :priority="newSubPriority"/><span style="font-size:var(--text-xs)" class="text-foreground">{{ newSubPriority }}</span></button>
                 </template>
                 <DropdownItem v-for="p in PRIORITIES" :key="p.value" :active="newSubPriority===p.value" @click="newSubPriority=p.value"><PriorityIcon :priority="p.value"/><span class="text-foreground">{{ p.label }}</span></DropdownItem>
               </FieldDropdown>
             </div>
-            <button class="jv-btn-save" @click="addSubtask" :disabled="!newSubTitle.trim()">Create</button>
-            <button class="jv-btn-cancel" @click="showAddSub=false;newSubTitle=''">Cancel</button>
+            <button class="jv-btn-save" @click="addSubtask" :disabled="!newSubTitle.trim()">
+              <svg stroke="currentColor" fill="currentColor" 
+              stroke-width="0" viewBox="0 0 20 20" aria-hidden="true" 
+              height="16px" width="16px" 
+              xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M16.25 3a.75.75 0 0 0-.75.75v7.5H4.56l1.97-1.97a.75.75 0 0 0-1.06-1.06l-3.25 3.25a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 0 0 1.06-1.06l-1.97-1.97h11.69A.75.75 0 0 0 17 12V3.75a.75.75 0 0 0-.75-.75Z" clip-rule="evenodd"></path></svg>
+            </button>
+            <button class="jv-btn-cancel" @click="showAddSub=false;newSubTitle=''">
+              <svg stroke="currentColor" fill="none" 
+              stroke-width="0" viewBox="0 0 15 15" 
+              height="15px" width="15px" 
+              xmlns="http://www.w3.org/2000/svg"><path d="M10.9688 3.21871C11.1933 2.99416 11.5567 2.99416 11.7813 3.21871C12.0056 3.44328 12.0057 3.80673 11.7813 4.03121L8.31251 7.49996L11.7813 10.9687L11.8555 11.0586C12.0026 11.2817 11.9777 11.5848 11.7813 11.7812C11.5849 11.9776 11.2818 12.0026 11.0586 11.8554L10.9688 11.7812L7.50001 8.31246L4.03126 11.7812C3.80677 12.0057 3.44332 12.0056 3.21876 11.7812C2.99421 11.5567 2.99421 11.1933 3.21876 10.9687L6.68751 7.49996L3.21876 4.03121L3.14454 3.94137C2.99723 3.71819 3.0223 3.41517 3.21876 3.21871C3.41522 3.02225 3.71823 2.99719 3.94141 3.14449L4.03126 3.21871L7.50001 6.68746L10.9688 3.21871Z" fill="currentColor"></path></svg>
+            </button>
           </div>
 
-          <button v-if="!showAddSub" class="jv-add-child-btn" @click="showAddSub=true">
+          <button v-if="!showAddSub && !subtasks.length" class="jv-add-child-btn" @click="showAddSub=true">
             <Plus class="size-2.5" />
-            Add child issue
+            Add Subtasks
           </button>
         </div>
 
@@ -261,7 +319,7 @@
                 <template #trigger>
                   <button class="jv-add-chip">{{ newLinkType }}<ChevronDown class="size-2" /></button>
                 </template>
-                <DropdownItem v-for="lt in LINK_TYPES" :key="lt" :active="newLinkType===lt" @click="newLinkType=lt">{{ lt }}</DropdownItem>
+                <DropdownItem class="capitalize" v-for="lt in LINK_TYPES" :key="lt" :active="newLinkType===lt" @click="newLinkType=lt">{{ lt }}</DropdownItem>
               </FieldDropdown>
             </div>
             <div class="jv-link-search">
@@ -272,7 +330,7 @@
             <div v-if="linkResults.length" class="jv-link-results">
               <div v-for="r in linkResults" :key="r.name" class="jv-link-result" @click="confirmLink(r)">
                 <span class="jv-st-key">{{ r.task_key }}</span>
-                <span class="flex-1 truncate" style="font-size:12.5px;color:var(--foreground)">{{ r.title }}</span>
+                <span class="flex-1 truncate" style="font-size:var(--text-sm);color:var(--foreground)">{{ r.title }}</span>
                 <span class="jv-st-status" :style="{ background: wfColor(r.status)+'1A', color: wfColor(r.status) }">{{ r.status }}</span>
               </div>
             </div>
@@ -284,7 +342,7 @@
               <div v-for="lk in group" :key="lk.linked_task" class="jv-link-row">
                 <Link2 class="size-3 shrink-0 text-primary-400" />
                 <span class="jv-st-key">{{ lk.linked_task_key }}</span>
-                <span class="flex-1 truncate" style="font-size:12.5px;color:var(--foreground)">{{ lk.linked_task_title }}</span>
+                <span class="flex-1 truncate" style="font-size:var(--text-sm);color:var(--foreground)">{{ lk.linked_task_title }}</span>
                 <span v-if="lk.linked_task_status" class="jv-st-status" :style="{ background: wfColor(lk.linked_task_status)+'1A', color: wfColor(lk.linked_task_status) }">{{ lk.linked_task_status }}</span>
                 <button class="jv-remove-btn" @click="deleteLink(lk)" title="Remove">
                   <X class="size-2" />
@@ -335,7 +393,7 @@
                 <span v-if="r.label !== r.name" class="jv-ref-result-label">{{ r.label }}</span>
               </div>
             </div>
-            <button class="jv-btn-cancel" @click="showAddRef=false; refQuery=''; refResults=[]">Cancel</button>
+            <button class="jv-btn-cancel w-fit" @click="showAddRef=false; refQuery=''; refResults=[]">Cancel</button>
           </div>
 
           <!-- References list -->
@@ -364,19 +422,9 @@
             </div>
           </div>
           <div v-else-if="!showAddRef" class="jv-linked-empty">
-            <span>No references.</span>
+            <span>No references yet.</span>
             <button class="jv-add-link-btn" @click="showAddRef=true">Add reference</button>
           </div>
-        </div>
-
-        <!-- Attachments (capability off = hide outright) -->
-        <div v-if="canViewFiles" class="jv-section">
-          <div class="jv-section-title">Attachments</div>
-          <TaskAttachments
-            :modelValue="attachments"
-            :issue-name="issue?.name"
-            @update:modelValue="v => { if (store.selectedTask) store.selectedTask.attachments = v }"
-          />
         </div>
 
         <!-- Activity -->
@@ -482,7 +530,7 @@
           <div class="jv-sb-val"><div class="jv-sb-pill-wrap">
           <FieldDropdown>
             <template #trigger>
-              <button class="jv-sb-inline-btn">
+              <button class="jv-sb-inline-btn right-btn">
                 <div class="jv-sb-inline-btn-content">
                   <span class="jv-sb-dot" :style="{ background: statusColor }"/>
                   <span>{{ issue.status }}</span>
@@ -535,45 +583,25 @@
 
         <div class="jv-sb-sep"/>
 
-        <!-- APPROVAL -->
-        <div class="jv-sb-field" v-if="issue.approval_status && issue.approval_status !== 'Approval Not Required'">
-          <div class="jv-sb-label">Approval</div>
-          <div class="jv-sb-val">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span
-                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
-                :class="{
-                  'bg-amber-50 text-amber-600': issue.approval_status === 'Pending',
-                  'bg-emerald-50 text-emerald-600': issue.approval_status === 'Approved',
-                  'bg-red-50 text-red-600': issue.approval_status === 'Rejected',
-                }"
-              >{{ issue.approval_status }}</span>
-              <span v-if="issue.approver" class="text-[11px] text-muted">{{ issue.approver }}</span>
-              <template v-if="issue.approval_status === 'Pending' && issue.approver === store.currentUser?.user">
-                <button class="text-[11px] font-semibold text-emerald-600 hover:underline" @click="doApprove">Approve</button>
-                <button class="text-[11px] font-semibold text-red-600 hover:underline" @click="showRejectInput = true">Reject</button>
-                <div v-if="showRejectInput" class="flex items-center gap-1 mt-1">
-                  <input v-model="rejectReason" class="w-32 h-6 px-2 text-[11px] rounded border border-border bg-surface" placeholder="Reason…" @keydown.enter="doReject" />
-                  <button class="text-[11px] text-muted hover:text-foreground" @click="showRejectInput = false">Cancel</button>
+        <!-- PRIORITY -->
+        <div class="jv-sb-field">
+          <div class="jv-sb-label">Priority</div>
+          <div class="jv-sb-val"><div class="jv-sb-pill-wrap">
+          <FieldDropdown>
+            <template #trigger>
+              <button class="jv-sb-inline-btn">
+                <div class="jv-sb-inline-btn-content">
+                  <PriorityIcon :priority="issue.priority"/>
+                  <span :class="issue.priority ? '' : 'jv-sb-unset'">{{ issue.priority || 'None' }}</span>
                 </div>
-              </template>
-            </div>
-          </div>
-        </div>
-        <div v-else-if="store.hasCapability('bp_manager')" class="jv-sb-field">
-          <div class="jv-sb-label">Approval</div>
-          <div class="jv-sb-val">
-            <button class="text-[11px] text-muted hover:text-accent" @click="showApproverSelect = !showApproverSelect">
-              Request approval…
-            </button>
-            <div v-if="showApproverSelect" class="mt-1 flex items-center gap-1">
-              <select v-model="selectedApprover" class="h-6 text-[11px] rounded border border-border bg-surface px-1">
-                <option value="">Select approver…</option>
-                <option v-for="m in store.projectMembers" :key="m.user" :value="m.user">{{ m.full_name }}</option>
-              </select>
-              <button class="text-[11px] font-semibold text-accent hover:underline" :disabled="!selectedApprover" @click="doRequestApproval">Send</button>
-            </div>
-          </div>
+                <svg class="jv-sb-inline-btn-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+            </template>
+            <DropdownItem v-for="p in PRIORITIES" :key="p.value" :active="issue.priority===p.value" @click="setField('priority',p.value)">
+              <PriorityIcon :priority="p.value"/><span class="text-foreground">{{ p.label }}</span>
+            </DropdownItem>
+          </FieldDropdown>
+          </div></div>
         </div>
 
         <div class="jv-sb-sep"/>
@@ -610,7 +638,7 @@
           </FieldDropdown>
           </div></div>
         </div>
-
+          <hr class="my-3"/>
         <!-- TEAM -->
         <div class="jv-sb-field">
           <div class="jv-sb-label">Team</div>
@@ -641,10 +669,59 @@
           </div></div>
         </div>
 
+        <!-- APPROVAL -->
+        <div class="jv-sb-field mt-3" v-if="issue.approval_status && issue.approval_status !== 'Approval Not Required'">
+          <div class="jv-sb-label">Approval</div>
+          <!-- Read-only state uses the same .jv-sb-static row every other
+               non-editable field uses (Reporter), so the rail keeps one
+               34px rhythm instead of this row free-styling its own height. -->
+          <div class="jv-sb-val border rounded-md shadow-sm">
+            <div class="jv-sb-static">
+              <span class="jv-sb-chip" :class="approvalChipClass">{{ issue.approval_status }}</span>
+              <span v-if="issue.approver" class="jv-sb-sub font-medium text-gray-800" :title="issue.approver">
+                {{ issue.approver_name || shortUser(issue.approver) }}
+              </span>
+            </div>
+            <div v-if="issue.approval_status === 'Pending' && issue.approver === store.currentUser?.user"
+                 class="jv-sb-actions">
+              <button class="jv-sb-action jv-sb-action--ok" @click="doApprove">Approve</button>
+              <button class="jv-sb-action jv-sb-action--no" @click="showRejectInput = true">Reject</button>
+            </div>
+            <div v-if="showRejectInput" class="jv-sb-actions">
+              <input v-model="rejectReason" class="jv-sb-input" placeholder="Reason…" @keydown.enter="doReject" />
+              <button class="jv-sb-action" @click="showRejectInput = false">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div v-else-if="store.hasCapability('bp_manager')" class="jv-sb-field">
+          <div class="jv-sb-label">Approval</div>
+          <!-- Requesting approval is an ACTION, so it gets the interactive
+               affordance (.jv-sb-inline-btn) the other editable fields have,
+               not bare muted text that reads as a disabled placeholder. -->
+          <div class="jv-sb-val">
+            <button v-if="!showApproverSelect" class="jv-sb-inline-btn" @click="showApproverSelect = true">
+              <div class="jv-sb-inline-btn-content">
+                <span class="jv-sb-unset">Request approval…</span>
+              </div>
+              <svg class="jv-sb-inline-btn-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <template v-else>
+              <select v-model="selectedApprover" class="jv-sb-select">
+                <option value="">Select approver…</option>
+                <option v-for="m in store.projectMembers" :key="m.user" :value="m.user">{{ m.full_name }}</option>
+              </select>
+              <div class="jv-sb-actions">
+                <button class="jv-sb-action jv-sb-action--ok" :disabled="!selectedApprover" @click="doRequestApproval">Send</button>
+                <button class="jv-sb-action" @click="showApproverSelect = false">Cancel</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
         <!-- RESOLUTION (only once the task is in a completed status) -->
         <div v-if="isCompleted(issue.status)" class="jv-sb-field">
           <div class="jv-sb-label">Resolution</div>
-          <div class="jv-sb-val"><div class="jv-sb-pill-wrap">
+          <div class="jv-sb-val right-btn"><div class="jv-sb-pill-wrap">
           <FieldDropdown>
             <template #trigger>
               <button class="jv-sb-inline-btn">
@@ -656,27 +733,6 @@
             </template>
             <DropdownItem v-for="r in RESOLUTIONS" :key="r" :active="(issue.resolution||'Done')===r" @click="setField('resolution', r)">
               <span class="text-foreground">{{ r }}</span>
-            </DropdownItem>
-          </FieldDropdown>
-          </div></div>
-        </div>
-
-        <!-- PRIORITY -->
-        <div class="jv-sb-field">
-          <div class="jv-sb-label">Priority</div>
-          <div class="jv-sb-val"><div class="jv-sb-pill-wrap">
-          <FieldDropdown>
-            <template #trigger>
-              <button class="jv-sb-inline-btn">
-                <div class="jv-sb-inline-btn-content">
-                  <PriorityIcon :priority="issue.priority"/>
-                  <span :class="issue.priority ? '' : 'jv-sb-unset'">{{ issue.priority || 'None' }}</span>
-                </div>
-                <svg class="jv-sb-inline-btn-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-              </button>
-            </template>
-            <DropdownItem v-for="p in PRIORITIES" :key="p.value" :active="issue.priority===p.value" @click="setField('priority',p.value)">
-              <PriorityIcon :priority="p.value"/><span class="text-foreground">{{ p.label }}</span>
             </DropdownItem>
           </FieldDropdown>
           </div></div>
@@ -763,10 +819,10 @@
         <!-- REPORTER (read-only) -->
         <div class="jv-sb-field">
           <div class="jv-sb-label">Reporter</div>
-          <div class="jv-sb-static">
+          <div class="jv-sb-static border py-1 rounded-md shadow-sm">
             <template v-if="issue.reporter_name || issue.reporter || issue.owner">
               <span class="jv-av jv-av-sm" :style="{ background: aColor(issue.reporter || issue.owner || '') }">{{ ini(issue.reporter_name || shortUser(issue.reporter || issue.owner || '')) }}</span>
-              <span style="font-size:13px;color:var(--foreground)">{{ issue.reporter_name || shortUser(issue.reporter || issue.owner || '') }}</span>
+              <span style="font-size:var(--text-base);color:var(--foreground)">{{ issue.reporter_name || shortUser(issue.reporter || issue.owner || '') }}</span>
             </template>
             <span v-else class="jv-sb-unset">—</span>
           </div>
@@ -777,7 +833,7 @@
         <!-- START DATE -->
         <div class="jv-sb-field">
           <div class="jv-sb-label">Start date</div>
-          <div class="jv-sb-val jv-sb-val--date">
+          <div class="jv-sb-val jv-sb-val--date border rounded-md shadow-sm">
             <DatePicker :modelValue="issue.start_date||null" placeholder="None" @update:modelValue="val=>setField('start_date',val||null)"/>
           </div>
         </div>
@@ -785,7 +841,7 @@
         <!-- DUE DATE -->
         <div class="jv-sb-field" :class="{ 'jv-overdue': isOverdue }">
           <div class="jv-sb-label" :class="{ 'jv-lbl-danger': isOverdue }">Due date</div>
-          <div class="jv-sb-val jv-sb-val--date">
+          <div class="jv-sb-val jv-sb-val--date border rounded-md shadow-sm">
             <DatePicker :modelValue="issue.due_date||null" placeholder="None" @update:modelValue="val=>setField('due_date',val||null)"/>
           </div>
         </div>
@@ -804,7 +860,7 @@
             <div class="jv-sb-val">
               <FieldDropdown width="w-36">
                 <template #trigger>
-                  <span class="text-[12.5px] text-foreground">{{ issue.recurrence_frequency || 'Choose…' }}</span>
+                  <span class="text-sm text-foreground">{{ issue.recurrence_frequency || 'Choose…' }}</span>
                 </template>
                 <DropdownItem v-for="f in ['Daily','Weekly','Biweekly','Monthly']" :key="f" @click="setField('recurrence_frequency', f)">
                   {{ f }}
@@ -825,7 +881,7 @@
           <div class="jv-sb-sep"/>
           <div class="jv-sb-field">
             <div class="jv-sb-label">Est. hours</div>
-            <div class="jv-sb-val">
+            <div class="jv-sb-val border rounded-md shadow-sm">
               <input type="number" min="0" step="0.5" class="jv-hrs-input"
                 :value="issue.estimated_hours || ''"
                 placeholder="—"
@@ -834,13 +890,13 @@
           </div>
           <div v-if="issue.actual_hours" class="jv-sb-field">
             <div class="jv-sb-label">Actual hours</div>
-            <div class="jv-sb-static" style="font-size:13px;color:var(--foreground)">{{ issue.actual_hours }}h</div>
+            <div class="jv-sb-static border rounded-md shadow-sm" style="font-size:var(--text-base);color:var(--foreground)">{{ issue.actual_hours }}h</div>
           </div>
           <div class="jv-sb-field">
             <div class="jv-sb-label" style="display:flex;align-items:center;gap:6px">
               Timer
               <span v-if="!timerEnabled"
-                class="inline-flex items-center gap-1 text-[10px] font-semibold px-1 py-0.5 rounded
+                class="inline-flex items-center gap-1 text-xs font-semibold px-1 py-0.5 rounded
                        bg-[var(--surface-secondary)] text-muted uppercase tracking-wider">
                 {{ ent.requiredPlanFor('time_tracking') }}
               </span>
@@ -1088,6 +1144,16 @@ async function toggleMute() {
 // Per-issue watch (follow) — initialised from get_task's watching/watcher_count
 const watching = computed(() => !!issue.value?.watching)
 const watcherCount = computed(() => issue.value?.watcher_count || 0)
+// Declared here, not down by loadChecklist() where they read most naturally
+// (see that function's own comment for what checklistSeq is for) — this
+// codebase's known TDZ footgun: the immediate:true watch a few lines below
+// calls loadChecklist() SYNCHRONOUSLY during setup(), which is before a
+// `const`/`let` further down the file has executed, throwing "Cannot access
+// before initialization". Hoisting the two bindings the function closes over
+// above the watch is enough; the function declaration itself is hoisted by
+// JS regardless of where it's written.
+const checklistItems = ref([])
+let checklistSeq = 0
 async function toggleWatch() {
   const t = issue.value
   if (!t?.name) return
@@ -1108,11 +1174,26 @@ const watcherList     = ref(null)
 const watchersLoading = ref(false)
 const watchersLoaded  = ref(false)
 
+// { immediate: true } is load-bearing, not decoration — App.vue mounts
+// TaskDetail with `v-if="store.showTaskDetail && store.selectedTask"`, so by
+// the time this component's setup() runs, `issue.value.name` is ALREADY the
+// real task (selectedTask only goes non-null once get_task has resolved).
+// A non-immediate watch establishes ITS baseline at that same already-
+// populated value, so the undefined -> name transition it's listening for
+// already happened before the watcher existed to see it — the callback
+// never fires on a task's first open, only on a later same-drawer subtask
+// hop where .name genuinely changes again. That silently broke loadChecklist
+// on every first open (nobody noticed on tasks with empty checklists) and
+// would have broken the new eager watcher load below the same way.
 watch(() => issue.value?.name, () => {
   watcherList.value = null
   watchersLoaded.value = false
   loadChecklist()
-})
+  // Eager, not lazy: the header now shows real stacked avatars (not just a
+  // count), so the list has to exist before the dropdown is ever opened.
+  // loadWatchers' own guard keeps this a no-op once cached.
+  if (watcherCount.value) loadWatchers()
+}, { immediate: true })
 
 async function loadWatchers() {
   if (watchersLoaded.value || watchersLoading.value) return
@@ -1127,6 +1208,12 @@ async function loadWatchers() {
     watchersLoading.value = false
   }
 }
+// First 3 for the header stack — same cap the Assignee stack above uses.
+const headerWatchers = computed(() => (watcherList.value || []).slice(0, 3))
+// 0 (not just falsy) until watcherList genuinely resolves — otherwise the
+// brief window before the eager load lands would show "+4" instead of the
+// real avatars for a moment, since headerWatchers.length is 0 that whole time.
+const watcherOverflow = computed(() => watcherList.value ? Math.max(0, watcherCount.value - headerWatchers.value.length) : 0)
 
 const titleEl    = ref(null)
 const composerEl = ref(null)
@@ -1279,8 +1366,6 @@ const LINK_TYPES = ['blocks','is blocked by','clones','is cloned by','duplicates
 // 4. No optimistic toggle — checking a box waited a full round trip before
 //    flipping, and no focus landed in a freshly-added row, so every "Add
 //    item" click required a second click to start typing.
-const checklistItems = ref([])
-let checklistSeq = 0
 const checklistInputs = new Map() // item.id -> <input> element, for post-add focus
 function setChecklistInputRef(id, el) {
   if (el) checklistInputs.set(id, el)
@@ -1383,6 +1468,13 @@ async function saveCustomField(fieldId, value) {
 const statusColor    = computed(() => store.workflowStateMap?.[issue.value?.status]?.color|| 'var(--muted)')
 const taskTypeColor = computed(() => store.taskTypeMap?.[issue.value?.task_type]?.color|| 'var(--accent)')
 const selectedTeam   = computed(() => store.teams.find(t => t.name === issue.value?.team) || null)
+// Approval state is data, so it reads as a soft chip off the semantic ramp
+// (composition law §1) — not raw palette steps, which ignored dark theme.
+const approvalChipClass = computed(() => ({
+  Pending:  'jv-sb-chip--warn',
+  Approved: 'jv-sb-chip--ok',
+  Rejected: 'jv-sb-chip--no',
+}[issue.value?.approval_status] || ''))
 const aColor = avatarColor
 const ini    = initials
 function wfColor(s) { return store.workflowStateMap?.[s]?.color|| 'var(--muted)' }
@@ -1703,7 +1795,7 @@ async function doDuplicate(){
 /* ─── ROOT ─── */
 .jv-root {
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 14px;
+  font-size:var(--text-md);
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
 }
@@ -1743,29 +1835,51 @@ async function doDuplicate(){
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .jv-crumb { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
-.jv-crumb-project { font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
-.jv-crumb-sep { color: var(--border); font-size: 13px; }
-.jv-crumb-key { font-size: 12px; font-weight: 700; color: var(--accent); white-space: nowrap; background: var(--accent-soft); padding: 1px 7px; border-radius: 4px; }
+.jv-crumb-project { font-size:13px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; padding-top:2px; }
+.jv-crumb-sep { color: var(--border); font-size:var(--text-base); }
+.jv-crumb-key { font-size:var(--text-sm); font-weight: 700; color: var(--muted); white-space: nowrap; padding: 1px 7px; border-radius: 4px; }
 .jv-header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.jv-watch-btn { display: inline-flex; align-items: center; gap: 4px; width: auto; padding: 0 7px; }
-.jv-watch-btn.active { color: var(--accent); background: var(--accent-soft); }
-.jv-watch-count { font-size: 11px; font-weight: 600; }
-.jv-watch-count-btn { cursor: pointer; padding: 0 6px; height: 28px; display: inline-flex; align-items: center; border-radius: 5px; transition: background .08s; }
-.jv-watch-count-btn:hover { background: var(--overlay); }
+.jv-watch-count { font-size:var(--text-xs); font-weight: 600; color: var(--muted); }
+/* Ghost trigger, not a filled pill — the avatar stack itself is the visual
+   weight here, same register as every other chrome control in this rail. */
+.jv-watch-stack-btn {
+  cursor: pointer; padding: 0 8px 0 4px; height: 28px; display: inline-flex;
+  align-items: center; gap: 5px; border: none; background: none;
+  border-radius: 6px; transition: background .1s;
+}
+.jv-watch-stack-btn:hover { background: var(--surface-secondary); }
+.jv-watch-stack-btn:hover .jv-watch-count { color: var(--foreground); }
 .jv-hbtn { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; background: none; cursor: pointer; color: var(--muted); border-radius: 6px; transition: background 0.1s, color 0.1s; }
 .jv-hbtn:hover { background: var(--surface-secondary); color: var(--foreground); }
+/* Declared AFTER .jv-hbtn deliberately — this button carries BOTH classes,
+   and at equal specificity the later rule wins the tie regardless of which
+   one "sounds" more specific. Was silently losing its own background to
+   .jv-hbtn's `background: none` for exactly that reason. Rests on a grey
+   chip like Mute/Watch toggles elsewhere in the app, not bare-icon
+   transparent like Close/More beside it — this one holds a persistent
+   on/off state, so it should read as a toggle at a glance, not only on
+   hover. */
+.jv-watch-btn { display: inline-flex; align-items: center; gap: 4px; width: auto; padding: 0 7px; background: var(--surface-secondary); }
+.jv-watch-btn:hover { background: var(--default-hover); color: var(--foreground); }
+.jv-watch-btn.active { color: var(--accent); background: var(--accent-soft); }
+.jv-watch-btn.active:hover { background: var(--accent-soft-hover); }
 
-.jv-autosave { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 500; }
+.jv-autosave { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size:var(--text-xs); font-weight: 500; }
 .jv-save-saving { background: var(--surface-secondary); color: var(--muted); }
-.jv-save-saved  { background: var(--success-soft); color: var(--success); }
-.jv-save-error  { background: var(--danger-soft); color: var(--danger); }
+/* Were --success/--danger — the SATURATED variant, not the "-soft-foreground"
+   one every other soft chip in this file pairs with its own -soft background
+   (Approval, status chips). --success is lightness 0.73 in light theme,
+   nearly the same lightness as the 12%-tint background it sat on top of —
+   low contrast text on its own pill. */
+.jv-save-saved  { background: var(--success-soft); color: var(--success-soft-foreground); }
+.jv-save-error  { background: var(--danger-soft); color: var(--danger-soft-foreground); }
 .jv-spin { animation: jv-spin 0.8s linear infinite; flex-shrink: 0; }
 @keyframes jv-spin { to { transform: rotate(360deg) } }
 .jv-fade-enter-active, .jv-fade-leave-active { transition: all 0.15s; }
 .jv-fade-enter-from, .jv-fade-leave-to { opacity: 0; }
 
 /* ─── LOADING ─── */
-.jv-loading { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.jv-loading { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size:var(--text-base); }
 .jv-loader  { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: jv-spin 0.8s linear infinite; }
 
 /* ─── TWO-COLUMN LAYOUT ─── */
@@ -1793,70 +1907,87 @@ async function doDuplicate(){
 
 /* Title block */
 .jv-title-block { margin-bottom: 8px; }
-.jv-type-badge { width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent-foreground); font-size: 8px; font-weight: 700; flex-shrink: 0; }
+.jv-type-badge { width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent-foreground); font-size:var(--text-micro); font-weight: 700; flex-shrink: 0; }
 .jv-team-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .jv-st-type {
   width: 16px; height: 16px; border-radius: 4px;
   display: inline-flex; align-items: flex-start; justify-content: flex-start;
   padding: 2px 2px 0 2px;
-  color: var(--accent-foreground) !important; font-size: 8px; font-weight: 800; flex-shrink: 0; line-height: 1;
+  color: var(--accent-foreground) !important; font-size:var(--text-micro); font-weight: 800; flex-shrink: 0; line-height: 1;
 }
-.jv-type-label { font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
-.jv-parent-link { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--accent); margin-left: 8px; }
+.jv-type-label { font-size:var(--text-sm); font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.jv-parent-link { display: inline-flex; align-items: center; gap: 3px; font-size:var(--text-xs); font-weight: 600; color: var(--accent); margin-left: 8px; }
 .jv-parent-link:hover { text-decoration: underline; cursor: pointer; }
 
 .jv-title {
-  font-size: 20px; font-weight: 700; color: var(--foreground);
-  letter-spacing: -0.015em; line-height: 1.35;
+  font-size:var(--text-3xl);
+   font-weight: 700;
+   color: var(--foreground);
+  letter-spacing: -0.015em;
+   line-height: 1.35;
   outline: none; cursor: text;
-  border-radius: 6px; padding: 2px 4px; margin: 0 -4px;
-  transition: background 0.1s;
+  border-radius: 6px;
+   padding: 6px 6px; 
+   margin: 0 -4px;
+  transition: background 0.3s;
 }
-.jv-title:hover { background: var(--surface-secondary); }
-.jv-title:focus { background: var(--overlay); box-shadow: 0 0 0 3px var(--accent-soft); }
+.jv-title:hover { background: #f8f8f8; }
+.jv-title:focus { background: var(--surface-secondary);  }
 
 /* Action bar */
+/* Law §3: a border may not do what whitespace can. The rule that used to sit
+   above this bar just added a horizontal line to an already-busy panel. */
 .jv-action-bar {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 4px;
   flex-wrap: wrap;
-  padding: 10px 0 14px;
-  border-top: 1px solid var(--surface-secondary);
-  margin-top: 14px;
+  padding: 4px 0 16px;
+  margin-top: 12px;
 }
 
-
+/* Status is DATA, so it keeps its colour — as a soft chip (tinted bg + full
+   colour text), which needs no border to read as a control. */
 .jv-transition-btn {
   display: inline-flex; align-items: center; gap: 5px;
-  height: 28px; padding: 0 11px;
-  font-size: 12px; font-weight: 600; font-family: inherit;
-  border: 1px solid; border-radius: 6px; cursor: pointer;
-  transition: opacity 0.1s;
+  height: 28px; padding: 0 10px;
+  font-size:var(--text-sm); font-weight: 600; font-family: inherit;
+  border: none; border-radius: 6px; cursor: pointer;
+  transition: filter 0.12s;
 }
-.jv-transition-btn:hover { opacity: 0.85; }
+.jv-transition-btn:hover { filter: brightness(0.96); }
 
+.right-btn :hover {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+
+/* Law §4: chrome buttons are GHOST. These were filled + bordered, which is
+   exactly the "Bootstrap toolbar" tell — four boxed buttons in a row. */
 .jv-action-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  height: 28px; padding: 0 11px;
-  font-size: 12px; font-weight: 500; font-family: inherit;
-  color: var(--foreground); background: var(--surface-secondary);
-  border: 1px solid var(--border); border-radius: 6px;
-  cursor: pointer; transition: background 0.1s, border-color 0.1s;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  border: 2px solid var(--border);
+  font-size:var(--text-sm); font-weight: 500; font-family: inherit;
+  color: #000000;
+  border: 1px solid #e1e2e1 ; border-radius: 6px;
+  cursor: pointer; transition: background 0.12s, color 0.12s;
 }
-.jv-action-btn:hover { background: var(--border); border-color: var(--border); }
+.jv-action-btn:hover { background: var(--surface-hover); color: var(--foreground); }
 
-/* Sections — flat, continuous */
+/* Sections — separated by whitespace, not by a rule per section. */
 .jv-section {
-  padding: 18px 24px;
-  border-bottom: 1px solid var(--surface-secondary);
+  padding: 16px 24px;
 }
+/* Law §2: uppercase labels are the 11px step. This and .jv-sb-label are a
+   deliberate two-tier pair — content sections shout in uppercase/600, field
+   labels stay sentence-case/500 — so they must NOT share a size. */
 .jv-section-title {
   display: flex; align-items: center; gap: 8px;
-  font-size: 11.5px; font-weight: 600; color: var(--muted);
+  font-size: 14px; font-weight: 800; 
+  color: #292a2e;
   text-transform: uppercase; letter-spacing: 0.05em;
   margin-bottom: 10px;
 }
-.jv-section-count { font-size: 12px; font-weight: 500; color: var(--muted); }
-.jv-section--activity { }
+.jv-section-count { font-size:var(--text-sm); font-weight: 500; color: var(--muted); }
 .jv-section-add-btn {
   display: flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border: none; background: none;
@@ -1870,7 +2001,7 @@ async function doDuplicate(){
 .jv-mini-fill { height: 100%; background: var(--success); border-radius: 4px; transition: width 0.3s; }
 
 /* Hours input */
-.jv-hrs-input { width: 72px; height: 26px; padding: 0 8px; font-size: 13px; font-family: inherit; color: var(--foreground); background: var(--surface-secondary); border: 1px solid var(--border); border-radius: 6px; outline: none; transition: border-color 0.15s; }
+.jv-hrs-input { width: 72px; height: 26px; padding: 0 8px; font-size:var(--text-base); font-family: inherit; color: var(--foreground); background: var(--surface-secondary); border: 1px solid var(--border); border-radius: 6px; outline: none; transition: border-color 0.15s; }
 .jv-hrs-input:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px rgba(11,107,203,0.08); }
 .jv-hrs-input::placeholder { color: var(--muted); }
 
@@ -1881,13 +2012,13 @@ async function doDuplicate(){
 .jv-toggle.active .jv-toggle-thumb { transform: translateX(14px); }
 
 /* Task timer */
-.jv-timer-btn { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; font-size: 12.5px; font-weight: 600; color: var(--foreground); background: var(--surface-secondary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+.jv-timer-btn { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; font-size:var(--text-sm); font-weight: 600; color: var(--foreground); background: var(--surface-secondary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: background 0.15s; }
 .jv-timer-btn:hover:not(:disabled) { background: var(--surface-tertiary, var(--border)); }
 .jv-timer-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .jv-timer-running { display: inline-flex; align-items: center; gap: 8px; }
 .jv-timer-stop { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--danger); color: var(--accent-foreground); border: none; cursor: pointer; flex-shrink: 0; }
 .jv-timer-stop:disabled { opacity: 0.6; cursor: not-allowed; }
-.jv-timer-elapsed { font-size: 13px; font-weight: 600; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.jv-timer-elapsed { font-size:var(--text-base); font-weight: 600; color: var(--foreground); font-variant-numeric: tabular-nums; }
 
 /* Description */
 .jv-desc-wrap {
@@ -1897,14 +2028,14 @@ async function doDuplicate(){
 }
 .jv-desc-wrap:hover { background: var(--surface-secondary); }
 .jv-desc-wrap:has(.ql-editor) { background: transparent; cursor: default; padding: 0; margin: 0; }
-.jv-desc-placeholder { font-size: 13.5px; color: var(--muted); }
-.jv-desc-preview { font-size: 13.5px; color: var(--foreground); line-height: 1.65; }
+.jv-desc-placeholder { font-size:var(--text-base); color: var(--muted); }
+.jv-desc-preview { font-size:var(--text-base); color: var(--foreground); line-height: 1.65; }
 .jv-desc-preview :deep(p) { margin: 0 0 8px; }
 .jv-desc-preview :deep(p:last-child) { margin: 0; }
 .jv-desc-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .jv-desc-spinner { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); border-top-color: var(--accent-foreground); animation: jv-spin .6s linear infinite; }
 @keyframes jv-spin { to { transform: rotate(360deg); } }
-.jv-btn-cancel { height: 28px; padding: 0 12px; font-size: 12px; font-weight: 600; font-family: inherit; color: var(--muted); background: none; border: 1.5px solid var(--border); border-radius: 8px; cursor: pointer; transition: background .1s; }
+.jv-btn-cancel { height: 28px; padding: 0 12px; font-size:var(--text-sm); font-weight: 600; font-family: inherit; color: var(--muted); background: none; border: 1.5px solid var(--border); border-radius: 8px; cursor: pointer; transition: background .1s; }
 .jv-btn-cancel:hover { background: var(--surface-secondary); }
 
 /* Subtasks */
@@ -1913,10 +2044,20 @@ async function doDuplicate(){
 /* ── Checklist ── */
 .jv-checklist { display: flex; flex-direction: column; gap: 1px; margin: 4px 0 0; }
 .jv-cl-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
-.jv-cl-check { width: 16px; height: 16px; border-radius: 3px; border: 1.5px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .12s; }
+.jv-cl-check { width: 16px; height: 16px; 
+  border-radius: 3px; 
+  border: 2px solid #e0e0e0;
+   background: var(--surface); 
+   display: flex;
+    align-items: center; 
+    justify-content: center;
+     cursor: pointer;
+      flex-shrink: 0;
+       transition: all .12s;
+       }
 .jv-cl-check:hover { border-color: var(--accent); }
 .jv-cl-check.done { background: var(--accent); border-color: var(--accent); }
-.jv-cl-text { flex: 1; min-width: 0; border: none; background: transparent; font-size: 13px; color: var(--foreground); outline: none; padding: 2px 0; }
+.jv-cl-text { flex: 1; min-width: 0; border: none; background: transparent; font-size:var(--text-base); color: var(--foreground); outline: none; padding: 2px 0; }
 .jv-cl-text:hover { border-bottom: 1px solid var(--border); }
 .jv-cl-text:focus { border-bottom: 1px solid var(--accent); }
 .jv-cl-text.done { text-decoration: line-through; color: var(--muted); }
@@ -1924,8 +2065,22 @@ async function doDuplicate(){
 .jv-cl-row:hover .jv-cl-del { opacity: 1; }
 .jv-cl-del:hover { color: var(--danger); background: var(--danger-soft); }
 .jv-cl-add { margin-top: 4px; }
-.jv-cl-add-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); background: none; border: none; cursor: pointer; transition: color .1s; padding: 2px 4px; border-radius: 3px; }
-.jv-cl-add-btn:hover { color: var(--accent); background: var(--accent-soft); }
+.jv-cl-add-btn { 
+  display: inline-flex;
+   align-items: center;
+    gap: 4px;
+     font-size:var(--text-sm);
+     font-weight: 600;
+      color: var(--muted);
+       background: none;
+         cursor: pointer;
+          transition: color .1s;
+           padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); 
+           }
+.jv-cl-add-btn:hover { color: var(--foreground); background: var(--surface-secondary); }
 .jv-subtask {
   display: grid;
   grid-template-columns: 18px 16px 56px 1fr auto;
@@ -1941,8 +2096,8 @@ async function doDuplicate(){
 .jv-st-check { width: 14px; height: 14px; border-radius: 4px; border: 2px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.1s; flex-shrink: 0; }
 .jv-st-check:hover { border-color: var(--accent); }
 .jv-st-check.done { background: var(--success); border-color: var(--success); }
-.jv-st-key { font-size: 11px; font-weight: 700; color: var(--accent); white-space: nowrap; font-family: monospace; }
-.jv-st-title { font-size: 13px; color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jv-st-key { font-size:var(--text-xs); font-weight: 700; color: var(--accent); white-space: nowrap; font-family: monospace; }
+.jv-st-title { font-size:var(--text-base); color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jv-st-title.done { text-decoration: line-through; color: var(--muted); }
 
 /* Subtask pills — must be inline, force FieldDropdown internal divs */
@@ -1953,29 +2108,33 @@ async function doDuplicate(){
 .jv-st-pill {
   display: inline-flex; align-items: center; gap: 3px;
   padding: 2px 5px; border-radius: 4px; border: none;
-  background: transparent; cursor: pointer; font-size: 11px;
+  background: transparent; cursor: pointer; font-size:var(--text-xs);
   transition: background 0.1s;
 }
 .jv-st-pill:hover { background: var(--border); }
-.jv-st-status { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.jv-st-status { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 4px; font-size:var(--text-xs); font-weight: 700; white-space: nowrap; }
 
 /* Add child issue row */
 .jv-add-row {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 0 12px; height: 36px; background: var(--surface-secondary);
+  padding: 8px 8px; background: #fff;
+  border: 1px solid var(--border);
   border-radius: 6px; margin: 8px 0 0;
 }
-.jv-add-row--link { background: var(--surface-secondary); }
-.jv-add-row--link:hover { background: var(--border); }
-.jv-add-input { flex: 1; min-width: 160px; font-size: 13px; font-family: inherit; color: var(--foreground); background: transparent; border: none; outline: none; }
+.jv-add-row--link { background: #f8f8f8; }
+.jv-add-row--link:hover { background: var(--surface-secondary); }
+.jv-add-input { flex: 1; min-width: 160px; font-size:14px; font-weight:500; font-family: "Inter"; color: var(--foreground); background: transparent; border: none; outline: none; }
 .jv-add-input::placeholder { color: var(--muted); }
-.jv-add-child-btn { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; font-size: 12px; font-weight: 500; font-family: inherit; color: var(--foreground); background: var(--surface-secondary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: background 0.1s; }
-.jv-add-child-btn:hover { background: var(--border); }
-.jv-add-chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; font-size: 11.5px; font-weight: 500; font-family: inherit; color: var(--foreground); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: background 0.1s; white-space: nowrap; }
+.jv-add-child-btn { display: inline-flex; align-items: center; gap: 5px;  padding: 4px 10px; font-size:var(--text-sm); font-weight: 600; font-family: inherit; 
+  color: var(--muted);
+   background: #fff; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: background 0.1s; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); 
+ }
+.jv-add-child-btn:hover { background: #f8f8f8; color: black }
+.jv-add-chip { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 8px; font-size:var(--text-sm); font-weight: 500; font-family: inherit; color: var(--foreground); background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; transition: background 0.1s; white-space: nowrap; }
 .jv-add-chip:hover { background: var(--surface-secondary); }
 
 /* Linked issues */
-.jv-link-type { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 6px 0 3px; }
+.jv-link-type { font-size:var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 6px 0 3px; }
 .jv-link-row { display: flex; align-items: center; gap: 7px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--surface-secondary); background: var(--surface-secondary); margin: 0 0 4px; transition: background 0.1s; }
 .jv-link-row:hover { background: var(--surface-secondary); }
 .jv-link-search { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 7px; padding: 5px 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
@@ -1990,21 +2149,21 @@ async function doDuplicate(){
 
 /* Tabs */
 .jv-tabs { display: flex; border-bottom: 1px solid var(--surface-secondary); margin: 0; }
-.jv-tab { display: inline-flex; align-items: center; gap: 5px; padding: 8px 0; margin-right: 20px; margin-bottom: -1px; font-size: 13px; font-weight: 500; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: color 0.1s, border-color 0.1s; }
+.jv-tab { display: inline-flex; align-items: center; gap: 5px; padding: 8px 0; margin-right: 20px; margin-bottom: -1px; font-size:var(--text-base); font-weight: 500; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: color 0.1s, border-color 0.1s; }
 .jv-tab:hover { color: var(--foreground); }
 .jv-tab.active { color: var(--foreground); border-bottom-color: var(--foreground); font-weight: 700; }
-.jv-tab-n { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 10px; background: var(--surface-secondary); color: var(--muted); }
+.jv-tab-n { font-size:var(--text-xs); font-weight: 700; padding: 1px 5px; border-radius: 10px; background: var(--surface-secondary); color: var(--muted); }
 .jv-tab.active .jv-tab-n { background: var(--border); color: var(--foreground); }
 
 /* Compose */
 .jv-compose { display: flex; gap: 10px; padding: 12px 0 8px; }
-.jv-me-av { width: 28px; height: 28px; border-radius: 50%; background: var(--foreground); color: var(--background); font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+.jv-me-av { width: 28px; height: 28px; border-radius: 50%; background: var(--foreground); color: var(--background); font-size:var(--text-micro); font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
 .jv-composer { flex: 1; border: 1.5px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); transition: border-color 0.15s; }
 .jv-composer.focused { border-color: var(--muted); box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
-.jv-composer-ta { width: 100%; padding: 8px 12px; font-size: 13px; font-family: inherit; color: var(--foreground); background: transparent; border: none; outline: none; resize: none; line-height: 1.6; }
+.jv-composer-ta { width: 100%; padding: 8px 12px; font-size:var(--text-base); font-family: inherit; color: var(--foreground); background: transparent; border: none; outline: none; resize: none; line-height: 1.6; }
 .jv-composer-ta::placeholder { color: var(--muted); }
 .jv-composer-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--border); background: var(--surface-secondary); }
-.jv-hint { font-size: 11px; color: var(--muted); margin-right: auto; }
+.jv-hint { font-size:var(--text-xs); color: var(--muted); margin-right: auto; }
 .jv-slide-enter-active, .jv-slide-leave-active { transition: all 0.12s; max-height: 44px; overflow: hidden; }
 .jv-slide-enter-from, .jv-slide-leave-to { opacity: 0; max-height: 0; }
 
@@ -2012,8 +2171,8 @@ async function doDuplicate(){
 .jv-comments { display: flex; flex-direction: column; gap: 14px; padding: 0 0 8px; }
 .jv-comment { display: flex; gap: 10px; }
 .jv-comment-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; position: relative; }
-.jv-comment-name { font-size: 13px; font-weight: 700; color: var(--foreground); }
-.jv-comment-time { font-size: 11px; color: var(--muted); }
+.jv-comment-name { font-size:var(--text-base); font-weight: 700; color: var(--foreground); }
+.jv-comment-time { font-size:var(--text-xs); color: var(--muted); }
 .jv-comment-actions { display: flex; gap: 2px; margin-left: auto; opacity: 0; transition: opacity 0.12s; }
 .jv-comment:hover .jv-comment-actions { opacity: 1; }
 .jv-comment-action {
@@ -2024,26 +2183,26 @@ async function doDuplicate(){
 }
 .jv-comment-action:hover { background: var(--surface-secondary); color: var(--foreground); }
 .jv-comment-action--delete:hover { background: var(--danger-soft); color: var(--danger); }
-.jv-comment-body { background: var(--surface-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 1.6; color: var(--foreground); }
+.jv-comment-body { background: var(--surface-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size:var(--text-base); line-height: 1.6; color: var(--foreground); }
 .jv-mention { color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 1px 5px; font-weight: 500; cursor: pointer; transition: background 0.12s; }
 .jv-mention:hover { background: var(--accent-soft); }
 .jv-composer { position: relative; }
 .jv-mention-menu { position: absolute; left: 8px; bottom: calc(100% + 4px); z-index: 30; min-width: 200px; background: var(--overlay); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 4px; }
-.jv-mention-opt { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: none; background: none; cursor: pointer; border-radius: 6px; font-size: 13px; color: var(--foreground); text-align: left; }
+.jv-mention-opt { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: none; background: none; cursor: pointer; border-radius: 6px; font-size:var(--text-base); color: var(--foreground); text-align: left; }
 .jv-mention-opt:hover, .jv-mention-opt.active { background: var(--surface-secondary); }
-.jv-mention-av { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-foreground); font-size: 10px; font-weight: 600; flex-shrink: 0; }
+.jv-mention-av { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-foreground); font-size:var(--text-xs); font-weight: 600; flex-shrink: 0; }
 .jv-comment-edit-ta { width: 100%; margin-top: 4px; }
-.jv-no-comments { font-size: 13px; color: var(--muted); padding: 10px 0 4px; }
+.jv-no-comments { font-size:var(--text-base); color: var(--muted); padding: 10px 0 4px; }
 
 /* History */
-.jv-hist-date { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 0 4px; border-top: 1px solid var(--surface-secondary); margin-top: 4px; }
+.jv-hist-date { font-size:var(--text-xs); font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 0 4px; border-top: 1px solid var(--surface-secondary); margin-top: 4px; }
 .jv-hist-date:first-child { border-top: none; margin-top: 0; }
 .jv-hist-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 5px; }
 .jv-hist-rows-end { padding-bottom: 8px; }
 .jv-hist-row:hover { background: var(--surface-secondary); }
 .jv-hist-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); border: 2px solid var(--border); flex-shrink: 0; }
-.jv-hist-text { flex: 1; font-size: 12.5px; color: var(--foreground); }
-.jv-hist-time { font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+.jv-hist-text { flex: 1; font-size:var(--text-sm); color: var(--foreground); }
+.jv-hist-time { font-size:var(--text-xs); color: var(--muted); white-space: nowrap; flex-shrink: 0; }
 
 /* ─── SIDEBAR ─── */
 .jv-sidebar {
@@ -2055,37 +2214,162 @@ async function doDuplicate(){
 }
 
 /* Field block — label above value */
-.jv-sb-field { padding: 9px 16px; border: none; }
-.jv-sb-field--status { padding-top: 12px; }
-.jv-sb-label { font-size: 11.5px; font-weight: 500; color: var(--muted); margin-bottom: 5px; }
+.jv-sb-field { padding: 5px 16px; border: none; }
+.jv-sb-field--status { padding-top: 12px; padding-bottom:6px; }
+/* padding-left matches the value row's, so label and value sit on one edge. */
+.jv-sb-label {
+  font-size: 13px; font-weight: 600; color: black;
+  margin-bottom: 4px; padding-left: 0px;
+}
 .jv-lbl-danger { color: var(--danger) !important; }
 
 /* Value wrapper */
-.jv-sb-val { display: flex; flex-direction: column; }
+.jv-sb-val { display: flex; flex-direction: column;
+  min-height: 32px;
+}
+
+.jv-sb-val :hover {
+  background: #f8f8f8;
+}
+
 .jv-sb-val--date { display: flex; width: 100%; }
 
 /* Pill wrap — forces FieldDropdown to full width */
 .jv-sb-pill-wrap { display: block; width: 100%; }
+.jv-sb-pill-wrap :hover {
+  background-color: #f8f8f8;
+}
 .jv-sb-pill-wrap :deep(.relative) { display: block !important; width: 100% !important; }
 .jv-sb-pill-wrap :deep(.relative > div) { display: block !important; width: 100% !important; }
 
 /* Inline btn */
+/* GHOST, not filled. Nine permanently-grey boxes stacked down the rail is
+   the "stack of form controls" look; a polished rail shows values as text
+   and reveals the control only under the pointer (law §4). Padding matches
+   .jv-sb-label's so label and value share one left edge — with no fill,
+   any indent difference reads as broken alignment. */
 .jv-sb-inline-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  width: 100%; padding: 0 10px; height: 34px;
-  font-size: 13px; font-weight: 500; font-family: inherit;
-  color: var(--foreground); background: var(--surface-secondary);
-  border: none; border-radius: 6px; cursor: pointer;
-  transition: background 0.15s; outline: none; text-align: left;
+  width: 100%; padding: 0 12px; height: 34px;
+  font-size:var(--text-base); font-weight: 500; font-family: inherit;
+  color: var(--foreground); background: transparent;
+  border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  transition: background 0.12s; outline: none; text-align: left;
+ box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.05); 
 }
-.jv-sb-inline-btn:hover { background: var(--surface-secondary); }
+/* Was identical to the resting background, so an interactive field gave no
+   hover feedback at all. Law §6: hover = background tint. */
+.jv-sb-inline-btn:hover { background: var(--secondary-new) !important; }
 .jv-sb-inline-btn-content { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow: hidden; }
 .jv-sb-inline-btn-chevron { width: 13px; height: 13px; flex-shrink: 0; opacity: 0.35; color: var(--muted); transition: opacity 0.15s; }
 .jv-sb-inline-btn:hover .jv-sb-inline-btn-chevron { opacity: 0.7; }
 
-/* Static (non-interactive) display */
-.jv-sb-static { min-height: 34px; padding: 0 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.jv-sb-unset { color: var(--muted); font-size: 13px; }
+/* Read-only rows share the editable row's metrics exactly, so the rail reads
+   as one aligned list. Now that editable rows are transparent at rest too,
+   these need no fill to stop looking ragged — they simply never light up. */
+.jv-sb-static {
+  min-height: 32px; padding: 0 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  cursor: default;
+}
+.jv-sb-unset { color: var(--muted); font-size:var(--text-base); }
+
+/* Soft status chip — the ONE chip recipe for the rail (law §1: status colour
+   is a soft chip, never a full fill). Semantic ramp only, so it themes. */
+.jv-sb-chip {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: var(--text-sm); font-weight: 600;
+  background: var(--default); color: var(--muted);
+}
+.jv-sb-chip--warn { background: var(--warning-soft); color: var(--warning-soft-foreground); }
+.jv-sb-chip--ok   { background: var(--success-soft); color: var(--success-soft-foreground); }
+.jv-sb-chip--no   { background: var(--danger-soft);  color: var(--danger-soft-foreground); }
+.jv-sb-sub { font-size: var(--text-sm); color: var(--accent); }
+
+/* Row-level actions (Approve / Reject / Send / Cancel) — ghost by default
+   per law §4; only the affirmative action carries colour. */
+.jv-sb-actions { display: flex; align-items: center; gap: 4px; padding: 4px 8px 0; flex-wrap: wrap; }
+.jv-sb-action {
+  height: 26px; padding: 0 8px; border: none; border-radius: 6px;
+  background: transparent; color: var(--muted); cursor: pointer;
+  font-size: var(--text-sm); font-weight: 600; font-family: inherit;
+  transition: background .12s, color .12s;
+}
+.jv-sb-action:hover { background: var(--surface-hover); color: var(--foreground); }
+.jv-sb-action:disabled { opacity: .45; pointer-events: none; }
+.jv-sb-action--ok:hover { background: var(--success-soft); color: var(--success-soft-foreground); }
+.jv-sb-action--no:hover { background: var(--danger-soft);  color: var(--danger-soft-foreground); }
+
+/* Inputs in the rail share the interactive field's 34px height + radius so
+   an expanded row never changes the rail's vertical rhythm. */
+.jv-sb-input, .jv-sb-select {
+  width: 100%; height: 32px; padding: 0 8px;
+  font-size: var(--text-base); font-family: inherit; color: var(--foreground);
+  background: var(--surface); border: 1px solid var(--field-border);
+  border-radius: 6px; outline: none;
+}
+.jv-sb-input:focus, .jv-sb-select:focus { border-color: var(--accent); box-shadow: var(--shadow-focus); }
+
+/* .hui-field (DatePicker's trigger) is a BUTTON that opens a picker — same
+   category as the Status/Assignee/Priority rows above, so it gets the same
+   ghost-until-hover treatment those already use. Measured in the rail it
+   shipped at 36px/white/bordered against the 32px/transparent buttons
+   beside it — one more register in a column that already had three. */
+.jv-sidebar :deep(.hui-field) {
+  height: 32px; min-height: 32px; padding: 0 8px;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  transition: background .12s, border-color .12s;
+}
+.jv-sidebar :deep(.hui-field:hover) { background: var(--surface-hover); }
+.jv-sidebar :deep(.hui-field:focus-within) {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+/* .cf-input is a REAL field — a raw <input>/<select>/<textarea> you type or
+   pick a value directly into, not a button that opens something else. The
+   design law's Fields section is explicit that a field keeps its
+   `--field-border` at rest ("white bg + 1px --field-border, hover darkens,
+   focus = accent ring") — the ghost-button treatment above is for buttons,
+   and applying it here made an editable field visually indistinguishable
+   from empty space until you happened to hover it. Border stays visible
+   always; only the fill goes ambient-until-hover, closer to the datepicker
+   button beside it without erasing the one cue that says "type here". */
+.jv-sidebar :deep(.cf-input) {
+  height: 32px; min-height: 32px; padding: 0 8px;
+  background: transparent;
+  border-color: var(--field-border);
+  box-shadow: none;
+  transition: background .12s, border-color .12s;
+}
+.jv-sidebar :deep(.cf-input:hover) {
+  background: var(--surface-hover);
+  border-color: var(--field-border-hover);
+}
+.jv-sidebar :deep(.cf-input:focus) {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+/* The blanket `padding: 0 8px` above is a plain shorthand, which beats
+   CustomFieldInput.vue's own OWN type-specific padding at equal specificity
+   by simply being declared later in that component's stylesheet — reachable
+   here because .jv-sidebar's ancestor class makes every rule above it more
+   specific than CustomFieldInput's scoped-only selectors. That silently ate
+   the reserved space a select's chevron, a currency/percent field's ₹/%,
+   and a url/email/phone field's action icon all depend on, so those started
+   overlapping the value text — and a textarea's forced 32px/height clipped
+   to one line. Restoring each variant's own padding/height here, same
+   specificity tier, declared after so it wins the tie. */
+.jv-sidebar :deep(.cf-textarea)          { height: auto; min-height: 72px; padding: 8px; }
+.jv-sidebar :deep(.cf-select)            { padding-right: 28px; }
+.jv-sidebar :deep(.cf-input--with-unit)  { padding-left: 28px; }
+.jv-sidebar :deep(.cf-input--with-suffix){ padding-right: 28px; }
+.jv-sidebar :deep(.cf-url)               { padding-right: 32px; }
 
 /* Separator */
 .jv-sb-sep { height: 1px; background: var(--surface-secondary); margin: 4px 0; }
@@ -2097,51 +2381,55 @@ async function doDuplicate(){
 .jv-av-stack { display: flex; align-items: center; flex-shrink: 0; }
 .jv-av-stacked { border: 1.5px solid var(--surface-secondary); margin-left: -5px; }
 .jv-av-stacked:first-child { margin-left: 0; }
-.jv-av-trigger-label { font-size: 13px; color: var(--foreground); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.jv-av-extra { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+.jv-av-trigger-label { font-size:var(--text-base); color: var(--foreground); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jv-av-extra { font-size:var(--text-xs); color: var(--muted); font-weight: 400; margin-left: 2px; }
 
 /* Epic tag */
-.jv-epic-tag { display: inline-flex; align-items: center; padding: 2px 7px; border: 1px solid; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.jv-epic-tag { display: inline-flex; align-items: center; padding: 2px 7px; border: 1px solid; border-radius: 6px; font-size:var(--text-sm); font-weight: 600; }
 
 /* Overdue */
 .jv-overdue .jv-sb-label { color: var(--danger); }
 
 /* Footer timestamps */
-.jv-sb-footer { font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; margin-top: auto; border-top: 1px solid var(--surface-secondary); }
+.jv-sb-footer { font-size:var(--text-xs); color: var(--muted); display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; margin-top: auto; border-top: 1px solid var(--surface-secondary); }
 
 /* ERP link */
-.jv-erp-link { font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; }
+.jv-erp-link { font-size:var(--text-sm); font-weight: 600; color: var(--accent); cursor: pointer; }
 .jv-erp-link:hover { text-decoration: underline; }
 
 .jv-erp-create-po {
   display: inline-flex; align-items: center; gap: 6px;
   height: 30px; padding: 0 10px; border-radius: 7px;
-  font-size: 12.5px; font-weight: 600; color: var(--accent);
+  font-size:var(--text-sm); font-weight: 600; color: var(--accent);
   background: var(--surface-secondary); border: 1px solid var(--border-secondary);
   cursor: pointer; transition: background .1s;
 }
 .jv-erp-create-po:hover { background: var(--default-hover, var(--surface-secondary)); }
 
 /* Avatar variants */
-.jv-av { display: inline-flex; align-items: center; justify-content: center; color: var(--accent-foreground); font-weight: 700; border-radius: 50%; flex-shrink: 0; }
-.jv-av-xs { width: 14px; height: 14px; font-size: 5.5px; border: 1px solid var(--surface-secondary); margin-left: -3px; }
+.jv-av { display: inline-flex; align-items: center; justify-content: center; color: var(--accent-foreground); font-weight: 700; border-radius: 50%; flex-shrink: 0; overflow: hidden; }
+/* Real profile photo instead of hashed initials, when the user has one set
+   — no background needed underneath since the photo covers the full circle. */
+.jv-av-img { background: none; }
+.jv-av-photo { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.jv-av-xs { width: 14px; height: 14px; font-size:var(--text-micro); border: 1px solid var(--surface-secondary); margin-left: -3px; }
 .jv-presence-dot {
   position: absolute; bottom: -1px; right: -1px;
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--success); border: 1.5px solid var(--overlay);
 }
 .jv-av-xs:first-child { margin-left: 0; }
-.jv-av-sm { width: 22px; height: 22px; font-size: 8.5px; }
-.jv-av-comment { width: 24px; height: 24px; font-size: 9px; }
+.jv-av-sm { width: 22px; height: 22px; font-size:var(--text-micro); }
+.jv-av-comment { width: 24px; height: 24px; font-size:var(--text-micro); }
 .jv-av-empty { width: 18px; height: 18px; border-radius: 50%; border: 2px dashed var(--border); flex-shrink: 0; }
 
 /* Buttons */
 .jv-btn-save {
   display: inline-flex; align-items: center;
-  height: 28px; padding: 0 12px;
-  font-size: 12px; font-weight: 700; font-family: inherit;
-  background: var(--accent); color: var(--accent-foreground);
-  border: none; border-radius: 8px; cursor: pointer;
+  padding: 4px 6px;
+  font-size:var(--text-sm); font-weight: 700; font-family: inherit;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 4px; cursor: pointer;
   transition: background 0.1s;
 }
 .jv-btn-save:hover { background: var(--accent-hover); }
@@ -2149,27 +2437,27 @@ async function doDuplicate(){
 
 .jv-btn-cancel {
   display: inline-flex; align-items: center;
-  height: 28px; padding: 0 10px;
-  font-size: 12px; font-weight: 500; font-family: inherit;
+  padding: 4px 6px;
+  font-size:var(--text-sm); font-weight: 500; font-family: inherit;
   background: none; color: var(--foreground);
-  border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
   transition: background 0.1s;
 }
 .jv-btn-cancel:hover { background: var(--surface-secondary); }
 
 /* DD helpers */
 .jv-dd-search { padding: 8px 11px; border-bottom: 1px solid var(--border); }
-.jv-dd-input  { width: 100%; font-size: 12.5px; font-family: inherit; color: var(--foreground); background: transparent; border: none; outline: none; }
+.jv-dd-input  { width: 100%; font-size:var(--text-sm); font-family: inherit; color: var(--foreground); background: transparent; border: none; outline: none; }
 .jv-dd-input::placeholder { color: var(--muted); }
 .jv-dd-sep  { height: 1px; background: var(--border); margin: 3px 7px; }
-.jv-dd-empty { padding: 8px 11px; font-size: 12px; color: var(--muted); }
+.jv-dd-empty { padding: 8px 11px; font-size:var(--text-sm); color: var(--muted); }
 
 /* Labels */
 .jv-labels-wrap { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .jv-lbl-tag {
   display: inline-flex; align-items: center;
   padding: 2px 8px; border: 1px solid; border-radius: 6px;
-  font-size: 11.5px; font-weight: 600; cursor: pointer;
+  font-size:var(--text-sm); font-weight: 600; cursor: pointer;
   transition: opacity 0.1s;
 }
 .jv-lbl-tag:hover { opacity: 0.75; }
@@ -2177,7 +2465,7 @@ async function doDuplicate(){
 .jv-add-label-btn {
   display: inline-flex; align-items: center; gap: 4px;
   height: 22px; padding: 0 7px;
-  font-size: 11.5px; font-family: inherit; color: var(--muted);
+  font-size:var(--text-sm); font-family: inherit; color: var(--muted);
   background: var(--surface-secondary); border: 1px dashed var(--border);
   border-radius: 6px; cursor: pointer;
   transition: background 0.1s, border-color 0.1s;
@@ -2208,10 +2496,10 @@ async function doDuplicate(){
   80% { opacity: 1; }
   100%{ transform: translate(-50%,-50%) rotate(var(--angle)) translateY(calc(-1 * var(--dist))); opacity: 0; }
 }
-.jv-celebrate-icon { font-size: 28px; animation: jv-pop .4s cubic-bezier(0.34,1.56,0.64,1); }
+.jv-celebrate-icon { font-size:var(--text-metric); animation: jv-pop .4s cubic-bezier(0.34,1.56,0.64,1); }
 @keyframes jv-pop { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
 .jv-celebrate-msg {
-  font-size: 13px; font-weight: 700; color: var(--success);
+  font-size:var(--text-base); font-weight: 700; color: var(--success);
   animation: jv-pop .4s .15s cubic-bezier(0.34,1.56,0.64,1) both;
 }
 .jv-celebrate-enter-active { transition: opacity .2s; }
@@ -2221,10 +2509,10 @@ async function doDuplicate(){
 /* Linked issues empty */
 .jv-linked-empty {
   display: flex; align-items: center; gap: 8px;
-  padding: 4px 0; font-size: 12.5px; color: var(--muted);
+  padding: 4px 0; font-size:13px; font-weight:500; color: var(--muted);
 }
 .jv-add-link-btn {
-  font-size: 12px; font-weight: 600; color: var(--accent); background: none;
+  font-size:13px; font-weight: 600; color: var(--accent); background: none;
   border: none; cursor: pointer; padding: 0; font-family: inherit;
 }
 .jv-add-link-btn:hover { text-decoration: underline; }
@@ -2237,7 +2525,7 @@ async function doDuplicate(){
 }
 .jv-ic-input {
   width: 100%; height: 28px; padding: 0 8px;
-  font-size: 12.5px; font-family: inherit; color: var(--foreground);
+  font-size:var(--text-sm); font-family: inherit; color: var(--foreground);
   background: var(--surface-secondary); border: 1px solid var(--border);
   border-radius: 6px; outline: none;
   transition: border-color .1s, background .1s;
@@ -2254,13 +2542,13 @@ async function doDuplicate(){
 .jv-ic-row { display: flex; align-items: center; gap: 6px; }
 .jv-ic-select {
   flex: 1; height: 26px; padding: 0 6px;
-  font-size: 11.5px; font-family: inherit;
+  font-size:var(--text-sm); font-family: inherit;
   background: var(--surface-secondary); border: 1px solid var(--border);
   border-radius: 6px; outline: none; cursor: pointer;
 }
 .jv-ic-save {
   height: 26px; padding: 0 10px;
-  font-size: 12px; font-weight: 600; font-family: inherit;
+  font-size:var(--text-sm); font-weight: 600; font-family: inherit;
   color: var(--accent-foreground); background: var(--accent); border: none;
   border-radius: 6px; cursor: pointer;
   transition: background .1s;
@@ -2277,7 +2565,7 @@ async function doDuplicate(){
 .jv-ref-selects { display: flex; flex-direction: column; gap: 6px; }
 .jv-ref-select {
   height: 30px; padding: 0 8px;
-  font-size: 12.5px; font-family: inherit; color: var(--foreground);
+  font-size:var(--text-sm); font-family: inherit; color: var(--foreground);
   background: var(--surface-secondary); border: 1px solid var(--border);
   border-radius: 6px; outline: none; cursor: pointer;
   transition: border-color .1s;
@@ -2296,12 +2584,12 @@ async function doDuplicate(){
 }
 .jv-ref-result {
   display: flex; align-items: center; gap: 8px;
-  padding: 7px 10px; cursor: pointer; font-size: 12.5px;
+  padding: 7px 10px; cursor: pointer; font-size:var(--text-sm);
   transition: background .08s;
 }
 .jv-ref-result:hover { background: var(--surface-secondary); }
 .jv-ref-result-name { font-weight: 600; color: var(--foreground); }
-.jv-ref-result-label { color: var(--muted); font-size: 11.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-ref-result-label { color: var(--muted); font-size:var(--text-sm); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .jv-refs-list { display: flex; flex-direction: column; gap: 4px; padding: 0 0 4px; }
 .jv-ref-row {
@@ -2313,18 +2601,18 @@ async function doDuplicate(){
   width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;
   background: var(--accent-soft); color: var(--accent);
   display: flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 800; letter-spacing: 0.02em;
+  font-size:var(--text-micro); font-weight: 800; letter-spacing: 0.02em;
 }
 .jv-ref-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.jv-ref-doctype-label { font-size: 10.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.jv-ref-doctype-label { font-size:var(--text-xs); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .jv-ref-link {
   display: inline-flex; align-items: center; gap: 4px;
-  font-size: 12.5px; font-weight: 600; color: var(--accent);
+  font-size:var(--text-sm); font-weight: 600; color: var(--accent);
   text-decoration: none;
   background: none; border: none; padding: 0; margin: 0; cursor: pointer; font-family: inherit;
 }
 .jv-ref-link:hover { text-decoration: underline; }
-.jv-ref-sublabel { color: var(--muted); font-weight: 400; font-size: 12px; }
+.jv-ref-sublabel { color: var(--muted); font-weight: 400; font-size:var(--text-sm); }
 .jv-section-add-btn {
   display: flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; border: none; background: none;
@@ -2365,10 +2653,10 @@ async function doDuplicate(){
   80% { opacity: 1; }
   100%{ transform: translate(-50%,-50%) rotate(var(--angle)) translateY(calc(-1 * var(--dist))); opacity: 0; }
 }
-.jv-celebrate-icon { font-size: 28px; animation: jv-pop .4s cubic-bezier(0.34,1.56,0.64,1); }
+.jv-celebrate-icon { font-size:var(--text-metric); animation: jv-pop .4s cubic-bezier(0.34,1.56,0.64,1); }
 @keyframes jv-pop { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
 .jv-celebrate-msg {
-  font-size: 13px; font-weight: 700; color: var(--success);
+  font-size:var(--text-base); font-weight: 700; color: var(--success);
   animation: jv-pop .4s .15s cubic-bezier(0.34,1.56,0.64,1) both;
 }
 .jv-celebrate-enter-active { transition: opacity .2s; }
@@ -2378,10 +2666,10 @@ async function doDuplicate(){
 /* Linked issues empty */
 .jv-linked-empty {
   display: flex; align-items: center; gap: 8px;
-  padding: 4px 0; font-size: 12.5px; color: var(--muted);
+  padding: 4px 0; font-size:var(--text-sm); color: var(--muted);
 }
 .jv-add-link-btn {
-  font-size: 12px; font-weight: 600; color: var(--accent); background: none;
+  font-size:var(--text-sm); font-weight: 600; color: var(--accent); background: none;
   border: none; cursor: pointer; padding: 0; font-family: inherit;
 }
 .jv-add-link-btn:hover { text-decoration: underline; }

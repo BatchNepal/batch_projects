@@ -1197,6 +1197,19 @@ def get_task(issue):
         for a in doc.assignees
     ]
 
+    # Reporter / approver display names. `reporter` is a Link to Employee and
+    # `approver` a Link to User, so the stored values are an internal ID
+    # ("HR-EMP-00003") and a login email — neither is a person's name, and the
+    # detail rail was rendering them verbatim next to a properly-resolved
+    # Assignee. Resolved here, beside assignees, so every identity in the
+    # payload is a name by the time it reaches the UI.
+    data["reporter_name"] = (
+        frappe.db.get_value("Employee", doc.reporter, "employee_name") if doc.reporter else None
+    ) or doc.reporter
+    data["approver_name"] = (
+        frappe.db.get_value("User", doc.approver, "full_name") if doc.approver else None
+    ) or doc.approver
+
     # Linked issues — resolve key/title/status LIVE (the stored row is only a
     # snapshot from link-creation time and goes stale). One batched query.
     link_names = list({l.linked_task for l in (doc.links or []) if l.linked_task})
@@ -6688,8 +6701,20 @@ def get_task_watchers(task):
         "BP Task Watcher", filters={"task": task}, fields=["user"], order_by="creation asc"
     )
     users = [r["user"] for r in rows]
+    # Batched, not N+1 — same shape the header's real photo needs (see
+    # ColumnWidget's identity-image work): without user_image the header's
+    # avatar stack could only ever fall back to hashed initials.
+    info = {
+        u["name"]: u for u in frappe.get_all(
+            "User", filters={"name": ["in", users]}, fields=["name", "full_name", "user_image"]
+        )
+    } if users else {}
     watchers = [
-        {"user": u, "full_name": frappe.db.get_value("User", u, "full_name") or u}
+        {
+            "user": u,
+            "full_name": info.get(u, {}).get("full_name") or u,
+            "user_image": info.get(u, {}).get("user_image") or None,
+        }
         for u in users
     ]
     return {

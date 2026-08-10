@@ -184,11 +184,17 @@
       </a>
     </div>
 
-    <!-- ── CURRENCY / PERCENT (number variants with affix) ── -->
+    <!-- ── CURRENCY / PERCENT (number variants with affix) ──
+         Currency's ₹ is a PREFIX, percent's % is a SUFFIX — they need room
+         reserved on opposite sides. Both used to get the same
+         cf-input--with-unit (padding-LEFT only), so percent's "0" sat flush
+         against the input's left edge with nothing reserving room for the %
+         on the right — see cf-input--with-suffix below for the fix. -->
     <div v-else-if="field.type === 'currency' || field.type === 'percent'" class="cf-number-wrap">
       <span v-if="field.type === 'currency'" class="cf-unit">{{ field.unit || '₹' }}</span>
       <input
-        type="number" class="cf-input cf-input--with-unit"
+        type="number" class="cf-input"
+        :class="field.type === 'currency' ? 'cf-input--with-unit' : 'cf-input--with-suffix'"
         :value="modelValue" :placeholder="field.type === 'percent' ? '0' : '0.00'"
         :min="field.type === 'percent' ? 0 : undefined" :max="field.type === 'percent' ? 100 : undefined"
         :disabled="disabled"
@@ -475,7 +481,13 @@ function handleBlur() {
   font-family: var(--font-sans);
   color: var(--foreground);
   background: var(--surface-secondary);
-  border: var(--field-border);
+  /* Was `border: var(--field-border)` — --field-border is a COLOR only
+     (#abacb1), and the border shorthand resets any sub-property it doesn't
+     set to its initial value, which for border-style is `none`. So this
+     never actually drew a border, anywhere this component is used, not
+     just in the task detail rail — matching .hui-field's real recipe
+     (index.css) below. */
+  border: var(--field-border-width) solid var(--field-border);
   border-radius: var(--input-radius);
   outline: none;
   transition: border-color var(--transition-base), box-shadow var(--transition-base);
@@ -527,8 +539,21 @@ function handleBlur() {
   z-index: 1;
 }
 
+/* A suffix sits on the RIGHT, not left:10px like every prefix unit —
+   .cf-unit--suffix used to only adjust margin, never move to the other
+   side, so % rendered on top of whatever digit happened to be there. */
+.cf-unit--suffix {
+  left: auto;
+  right: 10px;
+}
+
 .cf-input--with-unit {
   padding-left: 28px;
+}
+
+/* Mirror of the above, for a suffix — reserves room on the right instead. */
+.cf-input--with-suffix {
+  padding-right: 28px;
 }
 
 /* ── Date ── */
@@ -735,7 +760,6 @@ function handleBlur() {
   font-size: var(--text-sm);
   color: var(--muted);
 }
-.cf-unit--suffix { margin-left: 4px; margin-right: 0; }
 .cf-rating { display: inline-flex; align-items: center; gap: 2px; }
 .cf-star { background: none; border: none; padding: 1px; cursor: pointer; line-height: 0; color: var(--warning); }
 .cf-star--off { color: var(--border-secondary); }
