@@ -1111,6 +1111,11 @@ def request_approval(issue, approver):
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
     invalidate_project(doc.project)
+    from batch_projects.events import emit, TASK_APPROVAL_REQUESTED
+    emit(TASK_APPROVAL_REQUESTED, {
+        "project": doc.project, "task": doc.name, "task_key": doc.task_key,
+        "approver": approver,
+    })
     return {"ok": True, "approval_status": "Pending", "approver": approver}
 
 
@@ -1133,6 +1138,11 @@ def approve_task(issue):
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
     invalidate_project(doc.project)
+    from batch_projects.events import emit, TASK_APPROVAL_DECIDED
+    emit(TASK_APPROVAL_DECIDED, {
+        "project": doc.project, "task": doc.name, "task_key": doc.task_key,
+        "decision": "Approved",
+    })
     return {"ok": True, "approval_status": "Approved"}
 
 
@@ -1169,6 +1179,11 @@ def reject_task(issue, reason=None):
               "activity": activity.name, "mentions": []})
     from batch_projects.cache import invalidate_project
     invalidate_project(doc.project)
+    from batch_projects.events import emit as _emit, TASK_APPROVAL_DECIDED
+    _emit(TASK_APPROVAL_DECIDED, {
+        "project": doc.project, "task": doc.name, "task_key": doc.task_key,
+        "decision": "Rejected", "reason": reason,
+    })
     return {"ok": True, "approval_status": "Rejected"}
 
 
@@ -1424,6 +1439,108 @@ def update_task(issue, fields, force=False):
 
 
 @frappe.whitelist()
+def bulk_update_tasks(issues, fields):
+    """Apply the same field changes to many tasks from one API call.
+
+    Existing bulk actions in ListView.vue fanned out N client-side
+    `update_task` calls under `Promise.allSettled` and then unconditionally
+    toasted success — a total failure (e.g. no permission) looked identical
+    to a total success. This endpoint does the fan-out server-side in one
+    round trip and returns per-task results so the caller can report the
+    real counts.
+
+    `assignees` is additive here (existing assignees are kept, new ones
+    appended) rather than replacing the child table like `update_task` does
+    — a bulk "assign to X" must not silently unassign everyone else already
+    on those tasks.
+    """
+    if isinstance(issues, str):
+        issues = json.loads(issues)
+    if isinstance(fields, str):
+        fields = json.loads(fields)
+
+    updated, failed = [], []
+    projects_touched = set()
+
+    for issue in issues:
+        try:
+            doc = frappe.get_doc("BP Task", issue)
+            _check_task_permission(issue, doc.project, "BP Member")
+
+            if "status" in fields:
+                blockers = _completing_into_blocked(doc, fields["status"], False)
+                if blockers:
+                    failed.append({"name": issue, "reason": "blocked_by_dependency"})
+                    continue
+
+            for k, v in fields.items():
+                if k in ("name", "task_key", "cmd", "doctype") or k.startswith("_"):
+                    continue
+
+                if k == "assignees":
+                    existing_users = {a.user for a in doc.assignees}
+                    for a in (v or []):
+                        user = a.get("user") if isinstance(a, dict) else a
+                        if not user or user in existing_users:
+                            continue
+                        full_name = frappe.db.get_value("User", user, "full_name") or user
+                        doc.append("assignees", {"user": user, "full_name": full_name})
+                        existing_users.add(user)
+
+                elif k == "labels":
+                    doc.labels = json.dumps(v if not isinstance(v, str) else json.loads(v))
+
+                elif hasattr(doc, k):
+                    setattr(doc, k, v)
+
+            doc.save(ignore_permissions=True)
+            updated.append(issue)
+            projects_touched.add(doc.project)
+        except frappe.PermissionError:
+            failed.append({"name": issue, "reason": "permission"})
+        except Exception as e:
+            frappe.log_error(title="bulk_update_tasks", message=frappe.get_traceback())
+            failed.append({"name": issue, "reason": str(e)[:200]})
+
+    from batch_projects.cache import invalidate_project
+    for p in projects_touched:
+        invalidate_project(p)
+
+    return {"updated": updated, "failed": failed}
+
+
+@frappe.whitelist()
+def bulk_delete_tasks(issues):
+    """Delete many tasks from one API call, returning per-task results
+    instead of the client fanning out N `delete_task` calls under
+    `Promise.allSettled` (see `bulk_update_tasks`)."""
+    if isinstance(issues, str):
+        issues = json.loads(issues)
+
+    deleted, failed = [], []
+    projects_touched = set()
+
+    for issue in issues:
+        try:
+            doc = frappe.get_doc("BP Task", issue)
+            _check_permission(doc.project, "BP Manager")
+            projects_touched.add(doc.project)
+            delete_task(issue)
+            deleted.append(issue)
+        except frappe.PermissionError:
+            failed.append({"name": issue, "reason": "permission"})
+        except Exception as e:
+            frappe.log_error(title="bulk_delete_tasks", message=frappe.get_traceback())
+            failed.append({"name": issue, "reason": str(e)[:200]})
+
+    from batch_projects.cache import invalidate_project
+    for p in projects_touched:
+        invalidate_project(p)
+
+    return {"deleted": deleted, "failed": failed}
+
+
+@frappe.whitelist()
 def delete_task(issue):
     doc = frappe.get_doc("BP Task", issue)
     _check_permission(doc.project, "BP Manager")
@@ -1436,6 +1553,13 @@ def delete_task(issue):
     if frappe.db.table_exists("BP Notification"):
         for notif in frappe.get_all("BP Notification", filters={"task": issue}, pluck="name"):
             frappe.delete_doc("BP Notification", notif, ignore_permissions=True, force=True)
+
+    # BP Task Watcher was missing here — any task with a watcher (created
+    # automatically on assignment/mention) failed to delete at all
+    # (LinkExistsError). Found live via bulk_delete_tasks correctly
+    # surfacing the failure instead of silently swallowing it.
+    for watcher in frappe.get_all("BP Task Watcher", filters={"task": issue}, pluck="name"):
+        frappe.delete_doc("BP Task Watcher", watcher, ignore_permissions=True, force=True)
 
     # Delete subtasks recursively
     for subtask in frappe.get_all("BP Task", filters={"parent_task": issue}, pluck="name"):
@@ -6398,8 +6522,24 @@ def get_people():
 
 
 
+def _comment_matching_task_names(query, project=None, projects_in=None, cap=200):
+    """Task names with a matching comment (BP Activity, action_type=Comment),
+    scoped the same way the caller scoped its task query. Folded into the
+    caller's own or_filters rather than merged as a separate result set, so
+    ordering/limit/offset stay a single, consistent query."""
+    filters = {"action_type": "Comment", "comment_text": ["like", f"%{query}%"]}
+    if project:
+        filters["project"] = project
+    elif projects_in is not None:
+        if not projects_in:
+            return []
+        filters["project"] = ["in", list(projects_in)]
+    return frappe.get_all("BP Activity", filters=filters, pluck="task",
+                           order_by="modified desc", limit=cap)
+
+
 @frappe.whitelist()
-def search_tasks(query, project=None, exclude=None):
+def search_tasks(query, project=None, exclude=None, limit=10, offset=0):
     _require_system_user()
     if project:
         _check_permission(project, "BP Viewer")
@@ -6408,15 +6548,23 @@ def search_tasks(query, project=None, exclude=None):
         filters["project"] = project
     if exclude:
         filters["name"] = ["!=", exclude]
+
+    or_filters = [
+        ["title",       "like", f"%{query}%"],
+        ["task_key",    "like", f"%{query}%"],
+        ["description", "like", f"%{query}%"],
+    ]
+    comment_tasks = _comment_matching_task_names(query, project=project)
+    if comment_tasks:
+        or_filters.append(["name", "in", comment_tasks])
+
     return frappe.get_all(
         "BP Task",
         filters=filters,
         fields=["name", "task_key", "title", "status", "priority"],
-        or_filters=[
-            ["title",     "like", f"%{query}%"],
-            ["task_key", "like", f"%{query}%"],
-        ],
-        limit=10,
+        or_filters=or_filters,
+        limit=frappe.utils.cint(limit) or 10,
+        start=frappe.utils.cint(offset) or 0,
         order_by="modified desc",
     )
 
@@ -6424,7 +6572,7 @@ def search_tasks(query, project=None, exclude=None):
 
 
 @frappe.whitelist()
-def search_tasks_global(query, exclude=None):
+def search_tasks_global(query, exclude=None, limit=12, offset=0):
     """Cross-project task search for the connector (linking tasks across boards).
 
     Searches every project the current user can view, returning the owning
@@ -6442,15 +6590,22 @@ def search_tasks_global(query, exclude=None):
     if exclude:
         filters["name"] = ["!=", exclude]
 
+    or_filters = [
+        ["title",       "like", f"%{query}%"],
+        ["task_key",    "like", f"%{query}%"],
+        ["description", "like", f"%{query}%"],
+    ]
+    comment_tasks = _comment_matching_task_names(query, projects_in=accessible)
+    if comment_tasks:
+        or_filters.append(["name", "in", comment_tasks])
+
     rows = frappe.get_all(
         "BP Task",
         filters=filters,
         fields=["name", "task_key", "title", "status", "priority", "project"],
-        or_filters=[
-            ["title",    "like", f"%{query}%"],
-            ["task_key", "like", f"%{query}%"],
-        ],
-        limit=12,
+        or_filters=or_filters,
+        limit=frappe.utils.cint(limit) or 12,
+        start=frappe.utils.cint(offset) or 0,
         order_by="modified desc",
     )
     proj_names = {r["project"] for r in rows if r.get("project")}

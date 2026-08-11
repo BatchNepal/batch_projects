@@ -48,6 +48,12 @@ _ACCENT = {
     "Sprint":        "#0E7090",
     "Summary":       "#0E7090",
     "Digest":        "#101828",
+    "Approval Requested": "#B54708",
+    "Approval Decided":   "#027A48",
+    "Role Changed":       "#175CD3",
+    "Automation":         "#5925DC",
+    "Automation Failed":  "#B42318",
+    "Timer Reminder":     "#B54708",
 }
 
 # Shared semantic pill palette: kind -> (background, foreground)
@@ -154,6 +160,19 @@ def notification_subject(ntype: str, actor_name: str, task_key: str, task_title:
         return f"{key}OVERDUE: {title}"
     if ntype == "Sprint":
         return f"Sprint update · {extras.get('project_name', 'Projects')}"
+    if ntype == "Approval Requested":
+        return f"{key}{actor} requested your approval"
+    if ntype == "Approval Decided":
+        decision = extras.get("to_status") or "decided"
+        return f"{key}{decision}: {title}"
+    if ntype == "Role Changed":
+        return f"{actor} gave you access to a project"
+    if ntype == "Automation":
+        return f"{key}Automation update on {title}"
+    if ntype == "Automation Failed":
+        return f"Automation failed — action needed"
+    if ntype == "Timer Reminder":
+        return f"{key}Timer still running on {title}"
     return f"{key}{title}"
 
 
@@ -514,6 +533,74 @@ def build_notification_email(
         )
         foot = _footer("You're a member of this project.", manage_url)
 
+    # ── Approval Requested ───────────────────────────────────────────────────
+    elif ntype == "Approval Requested":
+        body = (
+            _title(task_title)
+            + _actor(actor_name, f'<strong style="color:{accent};">requested your approval</strong> on this task')
+            + _cta((url, "Review & decide"), left=56, primary_bg=accent)
+        )
+        foot = _footer("You were named as the approver on this task.", manage_url)
+
+    # ── Approval Decided ─────────────────────────────────────────────────────
+    elif ntype == "Approval Decided":
+        if from_status and to_status:
+            body = (
+                _title(task_title)
+                + _actor(actor_name, "decided the approval")
+                + _transition(from_status, to_status)
+                + _cta((url, "View task"), left=56)
+            )
+        else:
+            body = (
+                _title(task_title)
+                + _actor(actor_name, "decided the approval")
+                + _cta((url, "View task"), left=56)
+            )
+        foot = _footer("You're watching this task.", manage_url)
+
+    # ── Role Changed (added to / re-roled on a project) ─────────────────────
+    elif ntype == "Role Changed":
+        role_line = (
+            _transition(from_status, to_status) if from_status
+            else _meta([("Role", to_status or "", accent)])
+        )
+        body = (
+            _lead(f'<strong style="color:{_INK};">{_e(actor_name)}</strong>&nbsp;gave you access to this project.')
+            + role_line
+            + _cta((url, "Open project"), left=24, primary_bg=accent)
+        )
+        foot = _footer("Your project access changed.", manage_url)
+
+    # ── Automation ────────────────────────────────────────────────────────────
+    elif ntype == "Automation":
+        if task_title:
+            body = (
+                _title(task_title)
+                + _lead(_e(message))
+                + _cta((url, "View task"), left=24, primary_bg=accent)
+            )
+        else:
+            body = _lead(_e(message)) + _cta((url, "View project"), left=24, primary_bg=accent)
+        foot = _footer("An automation rule in this project ran an action.", manage_url)
+
+    # ── Automation Failed ────────────────────────────────────────────────────
+    elif ntype == "Automation Failed":
+        body = (
+            _lead(f'<strong style="color:{accent};">{_e(message)}</strong>')
+            + _cta((url, "Check run history"), left=24, primary_bg=accent)
+        )
+        foot = _footer("You own this automation rule.", manage_url)
+
+    # ── Timer Reminder ───────────────────────────────────────────────────────
+    elif ntype == "Timer Reminder":
+        body = (
+            _title(task_title)
+            + _lead(_e(message))
+            + _cta((url, "Open task"), left=24, primary_bg=accent)
+        )
+        foot = _footer("You have a timer running on this task.", manage_url)
+
     # ── Generic fallback ──────────────────────────────────────────────────────
     else:
         body = _lead(_e(message)) + _cta((url, "Open task"), left=24)
@@ -537,6 +624,12 @@ _FOOTER_REASON = {
     "Due Soon":       "You're assigned to or watching this task.",
     "Overdue":        "You're assigned to or watching this task.",
     "Sprint":         "You're a member of this project.",
+    "Approval Requested": "You were named as the approver on this task.",
+    "Approval Decided":   "You're watching this task.",
+    "Role Changed":       "Your project access changed.",
+    "Automation":         "An automation rule in this project ran an action.",
+    "Automation Failed":  "You own this automation rule.",
+    "Timer Reminder":     "You have a timer running on this task.",
 }
 
 

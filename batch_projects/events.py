@@ -29,6 +29,8 @@ PROJECT_UPDATED     = "project.updated"
 PROJECT_ROLE_CHANGED = "project.role_changed"
 SPRINT_STARTED      = "sprint.started"
 SPRINT_COMPLETED    = "sprint.completed"
+TASK_APPROVAL_REQUESTED = "task.approval_requested"
+TASK_APPROVAL_DECIDED   = "task.approval_decided"
 ERP_INVOICE_SUBMITTED = "erp.invoice_submitted"
 ERP_PAYMENT_RECEIVED  = "erp.payment_received"
 ERP_SO_CONFIRMED      = "erp.so_confirmed"
@@ -432,6 +434,9 @@ def _queue_notifications(event_name: str, payload: dict):
     - task.assigned       → notify the newly assigned user
     - task.status_changed → notify reporter and assignees (not the actor)
     - task.created        → notify default_assignee if set (not the creator)
+    - task.approval_requested → notify the designated approver
+    - task.approval_decided   → notify assignees/reporter/watchers
+    - project.role_changed    → notify the user whose role changed
 
     Precedence: custom BP Notification Rules are evaluated FIRST, before the
     built-ins above — a mute rule needs to suppress the built-in entirely,
@@ -477,6 +482,12 @@ def _queue_notifications(event_name: str, payload: dict):
                 _notify_task_created(payload, actor, task_name, project)
             elif event_name in (SPRINT_STARTED, SPRINT_COMPLETED):
                 _notify_sprint(event_name, payload, actor, project)
+            elif event_name == TASK_APPROVAL_REQUESTED:
+                _notify_approval_requested(payload, actor, task_name, project)
+            elif event_name == TASK_APPROVAL_DECIDED:
+                _notify_approval_decided(payload, actor, task_name, project)
+            elif event_name == PROJECT_ROLE_CHANGED:
+                _notify_role_changed(payload, actor, project)
         except Exception:
             frappe.log_error(frappe.get_traceback(), "bp_notification queue failed")
 
@@ -706,6 +717,10 @@ _EMAIL_PREF_FIELD = {
     "Update":        "email_status_change", # field changes gate on same pref as status
     "Due Soon":      "email_due_reminder",
     "Overdue":       "email_due_reminder",
+    "Approval Requested": "email_assignment",  # a new responsibility, same channel as assignment
+    "Approval Decided":   "email_status_change",
+    "Role Changed":        "email_assignment",  # new access is an assignment-shaped event
+    "Timer Reminder":      "email_due_reminder", # same "nag" channel as Due Soon/Overdue
 }
 
 # Fields on a task whose change is worth notifying watchers about.
@@ -1145,6 +1160,67 @@ def _notify_task_unassigned(payload, actor, task_name, project):
     _push_notification_badge({removed_user}, project)
 
 
+def _notify_approval_requested(payload, actor, task_name, project):
+    """The designated approver was never told anything — request_approval()
+    just flipped a field and returned. Notify them (audit 01 §A1)."""
+    approver = payload.get("approver")
+    if not approver or not task_name:
+        return
+    actor_name = frappe.db.get_value("User", actor, "full_name") or actor
+    task_key   = frappe.db.get_value("BP Task", task_name, "task_key") or task_name
+    task_title = frappe.db.get_value("BP Task", task_name, "title") or task_name
+    message = f"{actor_name} requested your approval on {task_key}: {task_title}"
+    add_watcher(task_name, approver)  # so they see the eventual decision too
+    _create_notification(approver, "Approval Requested", task_name, project, actor, message)
+    _push_notification_badge({approver}, project)
+
+
+def _notify_approval_decided(payload, actor, task_name, project):
+    """approve_task/reject_task also notified no one — the requester never
+    learned the outcome. There's no persisted "who requested this", so
+    notify the same recipient set every other task event does (assignees +
+    reporter + watchers), which the requester is virtually always in
+    (request_approval only fires from someone already looking at the task)."""
+    if not task_name:
+        return
+    decision = payload.get("decision") or "decided"
+    actor_name = frappe.db.get_value("User", actor, "full_name") or actor
+    task_key   = frappe.db.get_value("BP Task", task_name, "task_key") or task_name
+    task_title = frappe.db.get_value("BP Task", task_name, "title") or task_name
+    message = f"{actor_name} {decision.lower()} {task_key}: {task_title}"
+
+    recipients = set(_get_task_recipients(task_name, actor))
+    for recipient in recipients:
+        _create_notification(
+            recipient, "Approval Decided", task_name, project, actor, message,
+            email_extras={"from_status": "Pending", "to_status": decision},
+        )
+    _push_notification_badge(recipients, project)
+
+
+def _notify_role_changed(payload, actor, project):
+    """project.role_changed reaches only ReBAC sync today — nobody added to
+    (or re-roled on) a project is ever told (audit 01 §B, the most damaging
+    gap: for a partner-led product, the first experience is an agency adding
+    a client user, and that user hears nothing)."""
+    user = payload.get("user")
+    if not user or not project:
+        return
+    old_role = payload.get("old_role")
+    new_role = payload.get("new_role")
+    actor_name   = frappe.db.get_value("User", actor, "full_name") or actor
+    project_name = frappe.db.get_value("BP Project", project, "project_name") or project
+    if old_role:
+        message = f"{actor_name} changed your role on {project_name} to {new_role}"
+    else:
+        message = f"{actor_name} added you to {project_name} as {new_role}"
+    _create_notification(
+        user, "Role Changed", None, project, actor, message,
+        email_extras={"from_status": old_role, "to_status": new_role},
+    )
+    _push_notification_badge({user}, project)
+
+
 def send_due_date_reminders():
     """Daily scheduled job: remind assignees + watchers about due-soon / overdue tasks.
 
@@ -1155,9 +1231,15 @@ def send_due_date_reminders():
     today = frappe.utils.getdate()
     soon_cutoff = frappe.utils.add_days(today, 2)
 
+    # Bounded in SQL: any task overdue (due_date < today, unbounded into the
+    # past) or due within the window is a candidate; NULL due_date fails the
+    # comparison and is excluded automatically. Previously this pulled every
+    # task that has EVER had a due_date set — including years-future ones —
+    # into memory nightly and filtered in Python; that degrades linearly with
+    # total task count forever.
     tasks = frappe.get_all(
         "BP Task",
-        filters={"due_date": ["is", "set"]},
+        filters={"due_date": ["<=", soon_cutoff]},
         fields=["name", "task_key", "title", "project", "status", "due_date"],
     )
     completed_cache = {}

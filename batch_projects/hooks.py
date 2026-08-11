@@ -192,6 +192,7 @@ doc_events = {
 scheduler_events = {
     "hourly": [
         "batch_projects.events.send_scheduled_reports",
+        "batch_projects.api.timers.send_timer_reminders",
     ],
     "daily": [
         "batch_projects.events.send_due_date_reminders",

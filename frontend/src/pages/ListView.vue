@@ -943,7 +943,7 @@ import { useRoute } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 import { PRIORITIES, PRIORITY_MAP, avatarColor, initials } from '@/utils/constants.js'
 import { toast } from 'vue-sonner'
-import { createTask, getMirrorSchema, getMirrorValues, getViewPrefs, saveViewPrefs, deleteTask, createEpic, updateProjectLabels, createSprint, ensureErpDocAccess } from '@/utils/api'
+import { createTask, getMirrorSchema, getMirrorValues, getViewPrefs, saveViewPrefs, createEpic, updateProjectLabels, createSprint, ensureErpDocAccess, bulkUpdateTasks, bulkDeleteTasks } from '@/utils/api'
 import CreatablePicker from '@/components/CreatablePicker.vue'
 import { formatMirrorValue } from '@/utils/mirrorFormat.js'
 import { resolveMarkerColor } from '@/utils/customFields.js'
@@ -1255,12 +1255,35 @@ function groupSomeSel(g){return g.issues.some(i=>selected.has(i.name))}
 function toggleGroupSel(g){const all=groupAllSel(g);g.issues.forEach(i=>all?selected.delete(i.name):selected.add(i.name))}
 function toggleSelect(n){selected.has(n)?selected.delete(n):selected.add(n)}
 function toggleAll(){if(allSel.value)flatIssues.value.forEach(i=>selected.delete(i.name));else flatIssues.value.forEach(i=>selected.add(i.name))}
-async function bulkStatus(status){const names=[...selected];await Promise.allSettled(names.map(n=>store.updateTaskField(n,'status',status)));toast.success(`${names.length} tasks → ${status}`);selected.clear()}
-async function bulkPriority(priority){const names=[...selected];await Promise.allSettled(names.map(n=>store.updateTaskField(n,'priority',priority)));toast.success(`${names.length} tasks → ${priority}`);selected.clear()}
-async function bulkAssign(user){const names=[...selected];await Promise.allSettled(names.map(n=>store.updateTaskField(n,'assignees',[{user}])));toast.success(`${names.length} tasks assigned`);selected.clear()}
-async function bulkMoveSprint(sprint){const names=[...selected];await Promise.allSettled(names.map(n=>store.updateTaskField(n,'sprint',sprint)));toast.success(`${names.length} tasks → ${sprint}`);selected.clear()}
-async function bulkMoveEpic(epic){const names=[...selected];await Promise.allSettled(names.map(n=>store.updateTaskField(n,'epic',epic)));toast.success(`${names.length} tasks → ${epic}`);selected.clear()}
-async function bulkDelete(){const names=[...selected];if(!await confirmDialog(`Delete ${names.length} tasks? This cannot be undone.`,{danger:true}))return;await Promise.allSettled(names.map(n=>deleteTask(n)));selected.clear();store.refreshBoard();toast.success(`${names.length} tasks deleted`)}
+// Reports the REAL per-task outcome from the server instead of assuming
+// success — a bulk write that fails for every task (permission, blocked
+// status, etc.) must not toast as if it succeeded.
+async function _bulkApply(fields, label){
+  const names=[...selected]
+  const res=await bulkUpdateTasks(names, fields)
+  const okCount=res?.updated?.length||0, failCount=res?.failed?.length||0
+  if(failCount===0) toast.success(`${okCount} tasks ${label}`)
+  else if(okCount===0) toast.error(`Failed to update ${failCount} tasks`)
+  else toast.warning(`${okCount} tasks ${label}, ${failCount} failed`)
+  selected.clear()
+  await store.refreshBoard()
+}
+async function bulkStatus(status){await _bulkApply({status},`→ ${status}`)}
+async function bulkPriority(priority){await _bulkApply({priority},`→ ${priority}`)}
+async function bulkAssign(user){await _bulkApply({assignees:[{user}]},'assigned')}
+async function bulkMoveSprint(sprint){await _bulkApply({sprint},`→ ${sprint}`)}
+async function bulkMoveEpic(epic){await _bulkApply({epic},`→ ${epic}`)}
+async function bulkDelete(){
+  const names=[...selected]
+  if(!await confirmDialog(`Delete ${names.length} tasks? This cannot be undone.`,{danger:true}))return
+  const res=await bulkDeleteTasks(names)
+  const okCount=res?.deleted?.length||0, failCount=res?.failed?.length||0
+  selected.clear()
+  await store.refreshBoard()
+  if(failCount===0) toast.success(`${okCount} tasks deleted`)
+  else if(okCount===0) toast.error(`Failed to delete ${failCount} tasks`)
+  else toast.warning(`${okCount} tasks deleted, ${failCount} failed`)
+}
 
 const ctxIssue=ref(null),ctxX=ref(0),ctxY=ref(0)
 function openCtx(e,issue){ctxIssue.value=issue;ctxX.value=e.clientX;ctxY.value=e.clientY}

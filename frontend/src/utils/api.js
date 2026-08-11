@@ -682,6 +682,16 @@ export const getActiveTimer = () => callTimers("get_active_timer");
 export const startTimer = (task) => callTimers("start_timer", { task });
 export const stopTimer = () => callTimers("stop_timer");
 
+// Manual correction — log time without a running timer, and fix/remove an
+// already-logged (unsubmitted) entry.
+export const logTime = (task, hours, date = null, description = null) =>
+  callTimers("log_time", { task, hours, date, description });
+export const listTimeEntries = (task) => callTimers("list_time_entries", { task });
+export const updateTimeEntry = (timeLogName, hours = null, description = null) =>
+  callTimers("update_time_entry", { time_log_name: timeLogName, hours, description });
+export const deleteTimeEntry = (timeLogName) =>
+  callTimers("delete_time_entry", { time_log_name: timeLogName });
+
 // ─── SAVED REPORTS (custom report builder, persisted in BP Report) ────────────
 
 export const getReportTasks = (params) => call("get_report_tasks", params);
@@ -813,6 +823,15 @@ export const updateTask = (task, fields, force = false) =>
   call("update_task", { issue: task, fields: JSON.stringify(fields), force });
 
 export const deleteTask = (task) => call("delete_task", { issue: task });
+
+// Bulk variants: one round trip, per-task results (`{updated:[], failed:[{name,reason}]}`
+// / `{deleted:[], failed:[...]}`) so callers can report real counts instead of
+// assuming success. `fields.assignees` is additive, not a replace.
+export const bulkUpdateTasks = (issues, fields) =>
+  call("bulk_update_tasks", { issues: JSON.stringify(issues), fields: JSON.stringify(fields) });
+
+export const bulkDeleteTasks = (issues) =>
+  call("bulk_delete_tasks", { issues: JSON.stringify(issues) });
 
 export const duplicateTask = (task) => call("duplicate_task", { issue: task });
 

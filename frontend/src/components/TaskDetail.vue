@@ -101,7 +101,7 @@
         </button>
       </div>
     </header>
-
+ 
     <!-- Loading -->
     <div v-if="!issue" class="jv-loading">
       <div class="jv-loader"/><span>Loading…</span>
@@ -914,6 +914,39 @@
               </div>
             </div>
           </div>
+          <div v-if="timerEnabled" class="jv-sb-field">
+            <div class="jv-sb-label" style="display:flex;align-items:center;justify-content:space-between">
+              <span>Time log{{ timeEntries.length ? ` (${timeEntries.length})` : '' }}</span>
+              <button class="jv-timelog-toggle" @click="timeLogOpen = !timeLogOpen">
+                {{ timeLogOpen ? 'Hide' : (timeEntries.length ? 'Show' : 'Log time') }}
+              </button>
+            </div>
+            <div v-if="timeLogOpen" class="jv-sb-val" style="display:block">
+              <div class="jv-timelog-add">
+                <input type="number" min="0" step="0.25" class="jv-hrs-input" v-model="newLogHours"
+                  placeholder="Hours" @keydown.enter="submitManualLog" />
+                <DatePicker v-model="newLogDate" placeholder="Today" style="width:120px" />
+                <button class="jv-timer-btn" :disabled="!newLogHours || timeLogBusy" @click="submitManualLog">
+                  <Plus class="size-3" /> Add
+                </button>
+              </div>
+              <div v-if="timeEntries.length" class="jv-timelog-list">
+                <div v-for="row in timeEntries" :key="row.name" class="jv-timelog-row">
+                  <span class="jv-timelog-date">{{ fmtDate(row.from_time) }}</span>
+                  <template v-if="editingLog === row.name">
+                    <input type="number" min="0" step="0.25" class="jv-hrs-input jv-timelog-edit"
+                      v-model="editingHours" @keydown.enter="saveEditLog(row)" @blur="saveEditLog(row)" autofocus />
+                  </template>
+                  <button v-else class="jv-timelog-hours" :disabled="!row.editable"
+                    :title="row.editable ? 'Click to edit' : 'Submitted — read only'"
+                    @click="row.editable && startEditLog(row)">{{ row.hours }}h</button>
+                  <button v-if="row.editable" class="jv-timelog-del" title="Delete entry" @click="removeTimeEntry(row)">
+                    <Trash2 class="size-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="jv-sb-field">
             <div class="jv-sb-label">Billable</div>
             <div class="jv-sb-val">
@@ -1029,7 +1062,7 @@ import { useProjectStore } from '@/stores/project'
 import { useTimerStore } from '@/stores/timer'
 import { useEntitlementsStore } from '@/stores/entitlements'
 import { usePresence } from '@/composables/usePresence'
-import { updateTask, addComment, editComment, deleteComment, createTask, addTaskLink, removeTaskLink, searchTasks, updateProjectWorkflow, updateProjectLabels, updateProjectIssueTypes, getAllowedDoctypes, searchErpDocuments, addReference, removeReference, getMutedItems, setMute, watchTask, unwatchTask, getTaskWatchers, duplicateTask, requestApproval, approveTask, rejectTask, getChecklist, addChecklistItem, updateChecklistItem, toggleChecklistItem, removeChecklistItem } from '@/utils/api'
+import { updateTask, addComment, editComment, deleteComment, createTask, addTaskLink, removeTaskLink, searchTasks, updateProjectWorkflow, updateProjectLabels, updateProjectIssueTypes, getAllowedDoctypes, searchErpDocuments, addReference, removeReference, getMutedItems, setMute, watchTask, unwatchTask, getTaskWatchers, duplicateTask, requestApproval, approveTask, rejectTask, getChecklist, addChecklistItem, updateChecklistItem, toggleChecklistItem, removeChecklistItem, logTime, listTimeEntries, updateTimeEntry, deleteTimeEntry } from '@/utils/api'
 import { getActiveFields, resolveMarkerColor } from '@/utils/customFields.js'
 import { PRIORITIES, avatarColor, initials } from '@/utils/constants.js'
 const RESOLUTIONS = ['Done', "Won't Do", 'Duplicate', 'Cannot Reproduce', 'Obsolete']
@@ -1111,6 +1144,84 @@ async function onStopTimer() {
     toast.error(e.message || 'Failed to stop timer')
   } finally {
     timerBusy.value = false
+  }
+}
+
+// ── Time log — manual entry + correction of already-logged rows ──────
+// There was previously no way to fix a mistaken/forgotten timer entry from
+// the app at all (audit 03 §C1); this panel is the fix.
+const timeEntries = ref([])
+const timeLogOpen = ref(false)
+const timeLogBusy = ref(false)
+const newLogHours = ref('')
+const newLogDate = ref(null)
+const editingLog = ref(null)   // name of the row currently being edited
+const editingHours = ref('')
+
+async function loadTimeEntries() {
+  if (!issue.value?.name) return
+  try {
+    timeEntries.value = await listTimeEntries(issue.value.name)
+  } catch (e) {
+    console.error('Failed to load time entries:', e)
+  }
+}
+watch(() => issue.value?.name, (n) => { timeEntries.value = []; timeLogOpen.value = false; if (n) loadTimeEntries() }, { immediate: true })
+
+async function submitManualLog() {
+  const hours = parseFloat(newLogHours.value)
+  if (!hours || hours <= 0 || timeLogBusy.value) return
+  timeLogBusy.value = true
+  try {
+    await logTime(issue.value.name, hours, newLogDate.value || null)
+    newLogHours.value = ''
+    newLogDate.value = null
+    toast.success(`Logged ${hours}h`)
+    await Promise.all([loadTimeEntries(), store.refreshTaskDetail?.()])
+  } catch (e) {
+    toast.error(e.message || 'Failed to log time')
+  } finally {
+    timeLogBusy.value = false
+  }
+}
+
+function startEditLog(row) {
+  editingLog.value = row.name
+  editingHours.value = row.hours
+}
+
+// Bound to both @keydown.enter and @blur on the same input — removing the
+// input on Enter (editingLog = null) fires a native blur, which would
+// otherwise re-invoke this and send two concurrent saves of the same edit
+// (observed live: the second lands mid-flight and the doc's `modified`
+// timestamp has already moved, throwing TimestampMismatchError). Guard
+// synchronously, before any await, so the second call is a no-op.
+let savingLog = null
+async function saveEditLog(row) {
+  if (savingLog === row.name) return
+  const hours = parseFloat(editingHours.value)
+  editingLog.value = null
+  if (!hours || hours <= 0 || hours === row.hours) return
+  savingLog = row.name
+  try {
+    await updateTimeEntry(row.name, hours)
+    toast.success('Time entry updated')
+    await Promise.all([loadTimeEntries(), store.refreshTaskDetail?.()])
+  } catch (e) {
+    toast.error(e.message || 'Failed to update time entry')
+  } finally {
+    savingLog = null
+  }
+}
+
+async function removeTimeEntry(row) {
+  if (!await confirmDialog(`Delete this ${row.hours}h entry?`, { danger: true })) return
+  try {
+    await deleteTimeEntry(row.name)
+    toast.success('Time entry deleted')
+    await Promise.all([loadTimeEntries(), store.refreshTaskDetail?.()])
+  } catch (e) {
+    toast.error(e.message || 'Failed to delete time entry')
   }
 }
 
@@ -2019,6 +2130,19 @@ async function doDuplicate(){
 .jv-timer-stop { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--danger); color: var(--accent-foreground); border: none; cursor: pointer; flex-shrink: 0; }
 .jv-timer-stop:disabled { opacity: 0.6; cursor: not-allowed; }
 .jv-timer-elapsed { font-size:var(--text-base); font-weight: 600; color: var(--foreground); font-variant-numeric: tabular-nums; }
+
+.jv-timelog-toggle { font-size: var(--text-xs); font-weight: 600; color: var(--accent); background: none; border: none; cursor: pointer; padding: 0; }
+.jv-timelog-toggle:hover { text-decoration: underline; }
+.jv-timelog-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.jv-timelog-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.jv-timelog-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.jv-timelog-date { font-size: var(--text-xs); color: var(--muted); flex: 1; }
+.jv-timelog-hours { font-size: var(--text-sm); font-weight: 600; color: var(--foreground); background: none; border: none; cursor: pointer; padding: 2px 4px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+.jv-timelog-hours:hover:not(:disabled) { background: var(--surface-secondary); }
+.jv-timelog-hours:disabled { cursor: default; color: var(--muted); }
+.jv-timelog-edit { width: 60px; height: 22px; }
+.jv-timelog-del { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--muted); cursor: pointer; border-radius: 4px; flex-shrink: 0; }
+.jv-timelog-del:hover { color: var(--danger); background: var(--surface-secondary); }
 
 /* Description */
 .jv-desc-wrap {
