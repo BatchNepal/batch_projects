@@ -488,6 +488,11 @@ def _queue_notifications(event_name: str, payload: dict):
                 _notify_approval_decided(payload, actor, task_name, project)
             elif event_name == PROJECT_ROLE_CHANGED:
                 _notify_role_changed(payload, actor, project)
+            elif event_name == TASK_DELETED:
+                _notify_task_deleted(payload, actor, task_name, project)
+            elif event_name in (ERP_INVOICE_SUBMITTED, ERP_PAYMENT_RECEIVED,
+                                ERP_SO_CONFIRMED):
+                _notify_erp_finance(event_name, payload, actor, project)
         except Exception:
             frappe.log_error(frappe.get_traceback(), "bp_notification queue failed")
 
@@ -632,12 +637,18 @@ def _create_rule_notification(recipient, rule, task_name, project, actor, messag
 
 
 def _create_notification(recipient, notification_type, task, project, actor, message,
-                         email_extras=None):
+                         email_extras=None, task_key=None, task_title=None):
     """Create a notification, honoring the recipient's mute + channel preferences.
 
     email_extras is an optional dict of extra keyword arguments forwarded to
     _send_notification_email (e.g. comment_text, changes, priority, due_date,
     from_status, to_status). It is ignored for the in-app record.
+
+    task_key/task_title are normally read off `task`. They can be passed
+    explicitly for notifications with no live task row to read them from:
+    Task Deleted (the row is gone by send time) and Finance (erp.* events
+    carry an invoice/sales order, never a task). Explicit values win; the
+    lookup is only used when they are omitted.
     """
     if recipient == actor:
         return
@@ -647,8 +658,10 @@ def _create_notification(recipient, notification_type, task, project, actor, mes
 
     pref = _get_pref(recipient)
     actor_name = frappe.db.get_value("User", actor, "full_name") or actor
-    task_key = frappe.db.get_value("BP Task", task, "task_key") if task else None
-    task_title = frappe.db.get_value("BP Task", task, "title") if task else None
+    if task_key is None:
+        task_key = frappe.db.get_value("BP Task", task, "task_key") if task else None
+    if task_title is None:
+        task_title = frappe.db.get_value("BP Task", task, "title") if task else None
 
     # In-app channel — created unless the user turned in-app off (default on)
     notif_name = None
@@ -715,6 +728,11 @@ _EMAIL_PREF_FIELD = {
     "Mention":       "email_mention",
     "Status Change": "email_status_change",
     "Unblocked":     "email_status_change", # produced by a status change on the blocker
+    "Task Deleted":  "email_status_change", # a lifecycle change on a task you follow
+    # "Finance" is deliberately absent: erp.* money events are already
+    # restricted to project leads/managers holding `view_money`, and there is
+    # no per-user "email me about money" preference to gate on. Falling
+    # through to email_enabled alone is the intended behaviour.
     "Update":        "email_status_change", # field changes gate on same pref as status
     "Due Soon":      "email_due_reminder",
     "Overdue":       "email_due_reminder",
@@ -1257,6 +1275,89 @@ def _notify_task_updated(payload, actor, task_name, project):
             email_extras={"changes": notable},
         )
     _push_notification_badge(recipients | mentioned, project)
+
+
+def _notify_task_deleted(payload, actor, task_name, project):
+    """Tell watchers/assignees/reporter a task they follow was removed.
+
+    `task.deleted` was emitted (BP Task.on_trash) but nothing consumed it, so
+    a task could vanish from someone's board with no trace. Recipients are
+    resolved BEFORE the row goes — on_trash fires while the doc still exists,
+    which is the only window where assignees/watchers are still readable.
+    """
+    if not task_name:
+        return
+    actor_name = frappe.db.get_value("User", actor, "full_name") or actor
+    task_key = payload.get("task_key") or task_name
+    title = payload.get("title") or task_key
+    message = f"{actor_name} deleted {task_key}: {title}"
+
+    recipients = set(_get_task_recipients(task_name, actor))
+    for recipient in recipients:
+        _create_notification(
+            recipient, "Task Deleted", None, project, actor, message,
+            task_key=task_key, task_title=title,
+        )
+    _push_notification_badge(recipients, project)
+
+
+# Money events carry amounts, so they follow the same rule the Money tab and
+# margin report do: only people the workspace's capability matrix grants
+# `view_money` on this project. Audience is the project lead plus Manager/
+# Admin members — an ordinary member doesn't need "an invoice was raised".
+_ERP_EVENT_COPY = {
+    ERP_INVOICE_SUBMITTED: ("Invoice raised", "invoice"),
+    ERP_PAYMENT_RECEIVED:  ("Payment received", "invoice"),
+    ERP_SO_CONFIRMED:      ("Sales order confirmed", "sales_order"),
+}
+
+
+def _notify_erp_finance(event_name, payload, actor, project):
+    """Surface erp.* money events to the people who own the project's numbers.
+
+    These reached the automation engine but never a human — the one class of
+    notification a generic PM tool structurally cannot send, dropped on the
+    floor. Fully-paid invoices are called out explicitly: the payload carries
+    post-payment `outstanding`, so "paid in full" is knowable here.
+    """
+    if not project:
+        return
+    from batch_projects import access
+
+    label, ref_field = _ERP_EVENT_COPY.get(event_name, ("Finance update", None))
+    ref = payload.get(ref_field) if ref_field else None
+    amount, currency = payload.get("amount"), payload.get("currency") or ""
+    customer = payload.get("customer") or ""
+
+    amount_str = f"{currency} {amount:,.2f}".strip() if isinstance(amount, (int, float)) else ""
+    bits = [b for b in (ref, customer, amount_str) if b]
+    message = f"{label}: " + " · ".join(bits) if bits else label
+    if event_name == ERP_PAYMENT_RECEIVED:
+        outstanding = payload.get("outstanding")
+        if isinstance(outstanding, (int, float)) and outstanding <= 0:
+            message += " — paid in full"
+
+    recipients = set()
+    lead = frappe.db.get_value("BP Project", project, "lead")
+    if lead:
+        recipients.add(lead)
+    for m in frappe.get_all(
+        "BP Project Member",
+        filters={"parent": project, "role": ["in", ["Admin", "Manager"]]},
+        pluck="user",
+    ):
+        recipients.add(m)
+    recipients.discard(actor)
+    recipients = {u for u in recipients if u and access.has_capability(project, "view_money", u)}
+    if not recipients:
+        return
+
+    for recipient in recipients:
+        _create_notification(
+            recipient, "Finance", None, project, actor, message,
+            task_key=ref or "", task_title=label,
+        )
+    _push_notification_badge(recipients, project)
 
 
 def _notify_task_unassigned(payload, actor, task_name, project):

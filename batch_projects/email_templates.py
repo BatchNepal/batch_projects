@@ -43,6 +43,8 @@ _ACCENT = {
     "Comment":       "#475467",
     "Status Change": "#027A48",
     "Unblocked":     "#027A48",
+    "Task Deleted":  "#667085",
+    "Finance":       "#027A48",
     "Update":        "#5925DC",
     "Due Soon":      "#B54708",
     "Overdue":       "#B42318",
@@ -163,6 +165,10 @@ def notification_subject(ntype: str, actor_name: str, task_key: str, task_title:
         return f"Sprint update · {extras.get('project_name', 'Projects')}"
     if ntype == "Unblocked":
         return f"{key}Unblocked: {title}"
+    if ntype == "Task Deleted":
+        return f"{key}Deleted: {title}"
+    if ntype == "Finance":
+        return f"{extras.get('project_name') or 'Project'} · {title}"
     if ntype == "Approval Requested":
         return f"{key}{actor} requested your approval"
     if ntype == "Approval Decided":
@@ -572,6 +578,25 @@ def build_notification_email(
         )
         foot = _footer("You're assigned to or watching this task.", manage_url)
 
+    # ── Task Deleted (a task you followed was removed) ──────────────────────
+    elif ntype == "Task Deleted":
+        body = (
+            _title(task_title)
+            + _lead(_e(message))
+            + _cta((url, "Open project"), left=24, primary_bg=accent)
+        )
+        foot = _footer("You were assigned to or watching this task.", manage_url)
+
+    # ── Finance (erp.* money events) ────────────────────────────────────────
+    elif ntype == "Finance":
+        body = (
+            _title(task_title)
+            + _lead(_e(message))
+            + (_pill(task_key, "green") if task_key else "")
+            + _cta((url, "Open project"), left=24, primary_bg=accent)
+        )
+        foot = _footer("You manage this project's money.", manage_url)
+
     # ── Role Changed (added to / re-roled on a project) ─────────────────────
     elif ntype == "Role Changed":
         role_line = (
@@ -638,6 +663,8 @@ _FOOTER_REASON = {
     "Overdue":        "You're assigned to or watching this task.",
     "Sprint":         "You're a member of this project.",
     "Unblocked":      "You're assigned to or watching this task.",
+    "Task Deleted":   "You were assigned to or watching this task.",
+    "Finance":        "You manage this project's money.",
     "Approval Requested": "You were named as the approver on this task.",
     "Approval Decided":   "You're watching this task.",
     "Role Changed":       "Your project access changed.",
