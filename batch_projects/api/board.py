@@ -48,7 +48,7 @@ def get_my_capabilities(project):
     }
 
 
-def _check_permission(project: str, required_role: str):
+def _check_permission(project: str, required_role: str, allow_archived: bool = False):
     """Enforce a minimum project role. Single gate for whitelisted endpoints —
     delegates to the unified model so the API layer, the has_permission hook
     and list/report filtering all agree. Non-members on a workspace project get
@@ -59,7 +59,7 @@ def _check_permission(project: str, required_role: str):
     verify_gateway_request()
 
     from batch_projects import access
-    access.require(project, required_role)
+    access.require(project, required_role, allow_archived=allow_archived)
 
 
 def _check_task_permission(task: str, project: str, required_role: str):
@@ -553,7 +553,20 @@ def update_project_general(project, project_name=None, key=None, description=Non
                             hourly_rate=None, budget_amount=None, retainer_hours=None,
                             default_view=None, pinned_views=None, enabled_views=None,
                             health_override=None):
-    _check_permission(project, "BP Manager")
+    # An archived project is read-only (access._assert_not_archived), which
+    # would make it permanently unrecoverable — the field that lifts the lock
+    # lives behind the lock. A status-only edit is therefore allowed through;
+    # anything else on an archived project is still refused, because the
+    # second check below runs without the exemption.
+    _check_permission(project, "BP Manager", allow_archived=True)
+    if status is None or len(
+        [v for v in (project_name, key, description, project_color, project_icon,
+                     theme, lead, default_assignee, company, project_type, client,
+                     currency, hourly_rate, budget_amount, retainer_hours,
+                     default_view, pinned_views, enabled_views, health_override)
+         if v is not None]
+    ):
+        _check_permission(project, "BP Manager")
 
     doc = frappe.get_doc("BP Project", project)
 
@@ -628,6 +641,11 @@ def update_project_general(project, project_name=None, key=None, description=Non
         # load until the cache TTL expires on its own.
         from batch_projects.cache import invalidate_project
         invalidate_project(project)
+        # Drop access.py's per-request archived memo — un-archiving and then
+        # writing in the same request must see Active, not the stale lock.
+        if "status" in changes:
+            from batch_projects import access
+            access.invalidate_archived_cache(project)
 
     return {
         "name":             doc.name,
@@ -652,6 +670,102 @@ def update_project_general(project, project_name=None, key=None, description=Non
         "enabled_views":    doc.get_enabled_views(),
         "pinned_views":     doc.get_pinned_views(),
     }
+
+
+@frappe.whitelist()
+def purge_project(project, confirm_key=None):
+    """Permanently delete an ARCHIVED project — the second half of
+    archive-then-purge. Archiving is the reversible act; this is not.
+
+    Refuses outright if the project has any financial footprint. A BP Project
+    resolves to an ERPNext Project, and the money layer keys off THAT
+    (get_project_money joins Timesheet Detail on tsd.project, invoicing on
+    tsd.custom_bp_task) — so purging a project whose work has been costed or
+    invoiced would orphan rows that margin reports and the GL still read, and
+    would break an audit trail that has to stay reconstructable.
+
+    Deliberately never offers a force flag. "Delete it anyway" on a document
+    with GL entries behind it is not a decision an API should make available.
+    """
+    _check_permission(project, "BP Admin", allow_archived=True)
+
+    from batch_projects import access
+    if not access.is_project_archived(project):
+        frappe.throw(
+            "Only an archived project can be purged. Archive it first — that "
+            "step is reversible, this one is not.",
+            frappe.ValidationError, title="Archive first",
+        )
+
+    blockers = _project_financial_blockers(project)
+    if blockers:
+        frappe.throw(
+            "This project can't be purged — it has financial records that must "
+            "stay auditable: " + ", ".join(blockers) +
+            ". It stays archived, which preserves the history.",
+            frappe.ValidationError, title="Financial records exist",
+        )
+
+    # Name must be typed back, same as any irreversible destructive action.
+    key = frappe.db.get_value("BP Project", project, "project_name") or project
+    if (confirm_key or "").strip() != key:
+        frappe.throw(
+            f'Type the project name ("{key}") to confirm permanent deletion.',
+            frappe.ValidationError, title="Confirmation required",
+        )
+
+    frappe.delete_doc("BP Project", project, force=True, ignore_permissions=True,
+                      delete_permanently=True)
+    frappe.db.commit()
+    access.invalidate_archived_cache(project)
+    return {"purged": project}
+
+
+def _project_financial_blockers(project) -> list:
+    """Human-readable list of financial footprints blocking a purge. Empty list
+    means the project is financially clean.
+
+    Checked against the ERPNext project, not the BP one: that is the key the
+    money layer actually joins on (see erp_link.get_project_money), so a BP
+    project with no direct links can still have costed time and posted GL
+    behind it.
+    """
+    from batch_projects.api.erp_link import _erp_project_for
+
+    blockers = []
+    try:
+        erp_project = _erp_project_for(project)
+    except Exception:
+        erp_project = None
+
+    task_names = frappe.get_all("BP Task", filters={"project": project}, pluck="name")
+    if task_names:
+        n = frappe.db.count("Timesheet Detail", {"custom_bp_task": ["in", task_names]})
+        if n:
+            blockers.append(f"{n} timesheet row(s) logged against its tasks")
+
+    if erp_project:
+        for doctype, label in (
+            # Distinct from the task-linked count above: a row can carry the
+            # ERPNext project without pointing at a BP Task, and vice versa.
+            # Both are real footprints, so both are reported rather than
+            # de-duplicated — overlap is better than a missed blocker.
+            ("Timesheet Detail", "timesheet row(s) on the linked ERPNext project"),
+            ("Sales Invoice", "sales invoice(s)"),
+            ("Purchase Invoice", "purchase invoice(s)"),
+            ("GL Entry", "general-ledger entry(ies)"),
+        ):
+            try:
+                n = frappe.db.count(doctype, {"project": erp_project})
+            except Exception:
+                # A doctype absent on this install (no accounts module) is not
+                # a blocker — but it must not silently pass as "clean" either,
+                # so only a real zero count clears it.
+                continue
+            if n:
+                blockers.append(f"{n} {label}")
+
+    return blockers
 
 
 @frappe.whitelist()

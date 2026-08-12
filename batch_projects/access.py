@@ -179,9 +179,58 @@ def has_at_least(project: str, min_role: str, user: str | None = None) -> bool:
     return rank(get_effective_role(project, user)) >= rank(min_role)
 
 
-def require(project: str, min_role: str, user: str | None = None) -> None:
+def is_project_archived(project: str) -> bool:
+    """True if the project is archived. Memoized per request — require() runs
+    on nearly every endpoint, and this must not add a query to each one."""
+    if not project:
+        return False
+    cache = getattr(frappe.local, "_bp_archived", None)
+    if cache is None:
+        cache = {}
+        frappe.local._bp_archived = cache
+    if project not in cache:
+        cache[project] = frappe.db.get_value("BP Project", project, "status") == "Archived"
+    return cache[project]
+
+
+def _assert_not_archived(project: str, min_role: str) -> None:
+    """Archived projects are read-only. Enforced HERE, inside the single
+    primitive every whitelisted endpoint already funnels through, rather than
+    annotated onto each write endpoint one at a time — this repo has produced
+    the "guard applied at most call sites" bug three separate times (the trash
+    filter, the report recipients, the field allowlist), and a new endpoint
+    added later inherits this automatically instead of being the next miss.
+
+    Reads are unaffected: only a Member-or-above floor (the write levels, per
+    _PTYPE_MIN_ROLE) is blocked, so archived projects stay fully browsable.
+
+    Applies to instance admins too — the lock is meaningless if the largest
+    account can write through it. The escape hatch is un-archiving, which
+    passes allow_archived=True, not a role bypass.
+    """
+    if rank(min_role) < rank("Member"):
+        return
+    if not is_project_archived(project):
+        return
+    frappe.throw(
+        "This project is archived and read-only. Restore it to Active before "
+        "making changes.",
+        frappe.ValidationError,
+        title="Project archived",
+    )
+
+
+def require(project: str, min_role: str, user: str | None = None,
+            allow_archived: bool = False) -> None:
     """Throw PermissionError unless `user` holds at least `min_role` on
-    `project`. The single enforcement primitive for whitelisted endpoints."""
+    `project`. The single enforcement primitive for whitelisted endpoints.
+
+    Also refuses writes to an archived project unless `allow_archived` — set
+    only by the un-archive path itself, which must be able to write the very
+    status field that lifts the lock."""
+    if not allow_archived:
+        _assert_not_archived(project, min_role)
+
     user = user or frappe.session.user
     if is_instance_admin(user):
         return
@@ -217,13 +266,30 @@ def is_task_assignee(task: str, user: str | None = None) -> bool:
     return bool(frappe.db.exists("BP Task Assignee", {"parent": task, "user": user}))
 
 
+def invalidate_archived_cache(project: str | None = None) -> None:
+    """Drop the per-request archived memo after a status write, so an
+    un-archive followed by a write in the same request sees the new state."""
+    cache = getattr(frappe.local, "_bp_archived", None)
+    if cache is None:
+        return
+    if project is None:
+        cache.clear()
+    else:
+        cache.pop(project, None)
+
+
 def require_task(task: str, project: str, min_role: str, user: str | None = None) -> None:
     """Task-scoped counterpart to require(): the normal project-role floor
     still applies and wins first. Failing that, an assignee on THIS task
     additionally clears any Member-or-below bar (view, edit, log time) on
     it alone — never Manager+ actions (submit/cancel/delete/share), and
     never anything project- or list-scoped. Being assigned one task never
-    grants the project, sibling tasks, or Manager-level actions on this one."""
+    grants the project, sibling tasks, or Manager-level actions on this one.
+
+    Archived projects are read-only here too — an assignee's task-scoped grant
+    must not be a way around the project lock."""
+    _assert_not_archived(project, min_role)
+
     user = user or frappe.session.user
     if is_instance_admin(user):
         return
