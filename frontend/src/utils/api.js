@@ -115,7 +115,7 @@ const GUEST_SAFE_METHODS = new Set([
   "batch_projects.api.forms.submit_intake_form",
 ]);
 
-async function callPath(fullMethod, params = {}) {
+export async function callPath(fullMethod, params = {}) {
   // Cross-origin: route through the bridge proxy.
   // The bridge proxies /api/method/* to Frappe with HMAC-signed headers.
   if (bridgeIsCrossOrigin() && !GUEST_SAFE_METHODS.has(fullMethod)) {

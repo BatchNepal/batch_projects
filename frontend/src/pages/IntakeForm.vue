@@ -121,7 +121,7 @@ onMounted(async () => {
   const token = route.params.token
   if (!token) { error.value = 'Invalid form link.'; loading.value = false; return }
   try {
-    const data = await api.call('batch_projects.api.forms.get_public_form', { form: token })
+    const data = await api.callPath('batch_projects.api.forms.get_public_form', { form: token })
     form.value = data
     values.value = data.fields.map(() => '')
   } catch (e) {
@@ -140,7 +140,7 @@ async function doSubmit() {
     form.value.fields.forEach((f, i) => {
       if (values.value[i]?.trim()) payload[f.label] = values.value[i].trim()
     })
-    await api.call('batch_projects.api.forms.submit_intake_form', {
+    await api.callPath('batch_projects.api.forms.submit_intake_form', {
       form: token,
       values: JSON.stringify(payload),
     })

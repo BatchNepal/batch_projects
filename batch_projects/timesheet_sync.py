@@ -34,11 +34,73 @@ def sync_task_actual_hours(task_name: str):
 
 
 def sync_project_actual_hours(bp_project: str):
-    """Bulk variant: resync every task in a BP Project. Not wired to an
-    automatic trigger — the doc_events hooks below cover the live path.
-    Available for a manual resync / backfill action in a later phase."""
+    """Bulk variant: resync every task in a BP Project. The live path is the
+    Timesheet submit/cancel doc_events below; this is the manual/backfill
+    entry point, and reconcile_actual_hours() is the scheduled safety net."""
     for task_name in frappe.get_all("BP Task", filters={"project": bp_project}, pluck="name"):
         sync_task_actual_hours(task_name)
+
+
+# Float tolerance: sync_task_actual_hours stores round(x, 2), so anything
+# smaller than half a cent of an hour is representation noise, not drift.
+_DRIFT_EPSILON = 0.005
+
+# Cap per run so one nightly job can't exceed the scheduler timeout on a big
+# site. Drift is rare; if a run hits the cap the next one picks up the rest.
+_RECONCILE_CAP = 500
+
+
+def reconcile_actual_hours():
+    """Daily safety net for BP Task.actual_hours.
+
+    The live rollup only fires on Timesheet submit/cancel. Anything that moves
+    hours outside that path — a failed hook, a patch, a data import, a direct
+    edit of a Timesheet Detail row — leaves actual_hours silently disagreeing
+    with the timesheets, and actual_hours feeds billing and margin. Nothing
+    repaired that: sync_project_actual_hours existed but was never wired to a
+    trigger (audit 03 §C4).
+
+    One query finds every task whose stored value disagrees with the truth,
+    in both directions (stale non-zero with no rows left, and missing hours),
+    rather than recomputing every task in the install.
+    """
+    rows = frappe.db.sql(
+        """
+        SELECT t.name AS task,
+               COALESCE(t.actual_hours, 0) AS stored,
+               COALESCE(x.h, 0)            AS truth
+        FROM `tabBP Task` t
+        LEFT JOIN (
+            SELECT tsd.custom_bp_task AS task, SUM(tsd.hours) AS h
+            FROM `tabTimesheet Detail` tsd
+            JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
+            WHERE tsd.custom_bp_task IS NOT NULL AND tsd.custom_bp_task != ''
+            GROUP BY tsd.custom_bp_task
+        ) x ON x.task = t.name
+        WHERE ABS(COALESCE(t.actual_hours, 0) - COALESCE(x.h, 0)) > %(eps)s
+        LIMIT %(cap)s
+        """,
+        {"eps": _DRIFT_EPSILON, "cap": _RECONCILE_CAP},
+        as_dict=True,
+    )
+    if not rows:
+        return 0
+
+    for r in rows:
+        # Same write the live path uses — a system recompute, so it must not
+        # bump `modified` or fire task events.
+        frappe.db.set_value(
+            "BP Task", r.task, "actual_hours", round(float(r.truth or 0), 2),
+            update_modified=False,
+        )
+    frappe.db.commit()
+
+    frappe.logger("bp_timesheet").warning(
+        f"reconcile_actual_hours corrected {len(rows)} task(s); "
+        f"worst drift {max(abs(r.stored - r.truth) for r in rows):.2f}h"
+        + (f" (capped at {_RECONCILE_CAP}, more may remain)" if len(rows) == _RECONCILE_CAP else "")
+    )
+    return len(rows)
 
 
 def task_has_timesheet_rows(task_name: str) -> bool:

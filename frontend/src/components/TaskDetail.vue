@@ -1738,7 +1738,9 @@ const attachments  = computed({
 
 const groupedLinks = computed(()=>{ const g={}; for(const lk of links.value){if(!g[lk.link_type])g[lk.link_type]=[]; g[lk.link_type].push(lk)} return g })
 const searchLink = debounce(async()=>{ if(!linkQ.value.trim()){linkResults.value=[];return} try{linkResults.value=await searchTasks(linkQ.value,store.currentProject?.name,issue.value?.name)}catch(e){} },300)
-async function confirmLink(r) { try{await addTaskLink(issue.value.name,r.name,newLinkType.value);showAddLink.value=false;linkQ.value='';linkResults.value=[];await store.refreshTaskDetail?.()}catch(e){} }
+// Keep the dialog open on failure — closing it and clearing the query reads as
+// success, so a swallowed error here looked exactly like a created link.
+async function confirmLink(r) { try{await addTaskLink(issue.value.name,r.name,newLinkType.value);showAddLink.value=false;linkQ.value='';linkResults.value=[];await store.refreshTaskDetail?.()}catch(e){toast.error(e.message||'Could not link that task')} }
 // ERPNext reference functions
 async function loadAllowedDoctypes() {
   if (allowedDoctypes.value.length) return
@@ -1774,7 +1776,7 @@ async function removeRef(ref) {
   } catch (e) { toast.error('Failed to remove reference') }
 }
 
-async function deleteLink(lk) { try{await removeTaskLink(issue.value.name,lk.linked_task,lk.link_type);await store.refreshTaskDetail?.()}catch(e){} }
+async function deleteLink(lk) { try{await removeTaskLink(issue.value.name,lk.linked_task,lk.link_type);await store.refreshTaskDetail?.()}catch(e){toast.error(e.message||'Could not remove that link')} }
 
 // Current user info
 const currentUser   = computed(() => window?.frappe?.session?.user || '')
@@ -1810,7 +1812,9 @@ const { moneyDrawerOpen: refDrawerOpen, moneyDrawerDoctype: refDrawerDoctype,
 // Comments
 async function postComment() {
   if(!newComment.value.trim()) return
-  try{await addComment(issue.value.name,newComment.value);newComment.value='';commentFocused.value=false;await store.refreshTaskDetail?.()}catch(e){}
+  // The draft is only cleared after a successful post, so an error here leaves
+  // the text in the box to retry — but the user still has to be told it failed.
+  try{await addComment(issue.value.name,newComment.value);newComment.value='';commentFocused.value=false;await store.refreshTaskDetail?.()}catch(e){toast.error(e.message||'Comment not posted')}
 }
 
 function startEditComment(c) {
@@ -1890,7 +1894,7 @@ function fmtRel(d){
 function fmtDate(d){return d?new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}
 async function handleDelete(){
   if(!await confirmDialog(`Move "${issue.value?.title}" to trash?`, { danger: true, confirmLabel: 'Move to trash' }))return
-  try{await store.deleteCurrentIssue(issue.value.name); toast.success('Moved to trash')}catch(e){}
+  try{await store.deleteCurrentIssue(issue.value.name); toast.success('Moved to trash')}catch(e){toast.error(e.message||'Could not move this to trash')}
 }
 async function doDuplicate(){
   if(!issue.value?.name)return

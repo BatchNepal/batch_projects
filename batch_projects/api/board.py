@@ -4385,12 +4385,18 @@ def delete_sprint(sprint):
     if doc.status == "Active":
         frappe.throw("Cannot delete an active sprint. Complete it first.")
 
-    # Move all issues in this sprint back to backlog
+    # Move all issues in this sprint back to backlog. Per-task ORM save, not
+    # a raw UPDATE — same reasoning as complete_sprint's carryover (see its
+    # comment): a raw SQL UPDATE skips on_update(), so no BP Activity
+    # history and no task.moved_sprint automation ever fires. Deliberately
+    # NOT filtered to is_deleted=0 — a trashed task must not come back on
+    # restore still pointing at a sprint that no longer exists.
     project = doc.project
-    frappe.db.sql(
-        "UPDATE `tabBP Task` SET sprint = NULL WHERE sprint = %s",
-        sprint,
-    )
+    task_names = frappe.get_all("BP Task", filters={"sprint": sprint}, fields=["name"])
+    for t in task_names:
+        task = frappe.get_doc("BP Task", t["name"])
+        task.sprint = None
+        task.save(ignore_permissions=True)
     frappe.delete_doc("BP Sprint", sprint)
     frappe.db.commit()
     _invalidate_sprint_cache(project)

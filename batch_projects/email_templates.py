@@ -42,6 +42,7 @@ _ACCENT = {
     "Mention":       "#B54708",
     "Comment":       "#475467",
     "Status Change": "#027A48",
+    "Unblocked":     "#027A48",
     "Update":        "#5925DC",
     "Due Soon":      "#B54708",
     "Overdue":       "#B42318",
@@ -160,6 +161,8 @@ def notification_subject(ntype: str, actor_name: str, task_key: str, task_title:
         return f"{key}OVERDUE: {title}"
     if ntype == "Sprint":
         return f"Sprint update · {extras.get('project_name', 'Projects')}"
+    if ntype == "Unblocked":
+        return f"{key}Unblocked: {title}"
     if ntype == "Approval Requested":
         return f"{key}{actor} requested your approval"
     if ntype == "Approval Decided":
@@ -559,6 +562,16 @@ def build_notification_email(
             )
         foot = _footer("You're watching this task.", manage_url)
 
+    # ── Unblocked (every blocker on this task is now done) ──────────────────
+    elif ntype == "Unblocked":
+        body = (
+            _title(task_title)
+            + _lead(_e(message))
+            + _pill("Ready to start", "green")
+            + _cta((url, "Open task"), left=24, primary_bg=accent)
+        )
+        foot = _footer("You're assigned to or watching this task.", manage_url)
+
     # ── Role Changed (added to / re-roled on a project) ─────────────────────
     elif ntype == "Role Changed":
         role_line = (
@@ -624,6 +637,7 @@ _FOOTER_REASON = {
     "Due Soon":       "You're assigned to or watching this task.",
     "Overdue":        "You're assigned to or watching this task.",
     "Sprint":         "You're a member of this project.",
+    "Unblocked":      "You're assigned to or watching this task.",
     "Approval Requested": "You were named as the approver on this task.",
     "Approval Decided":   "You're watching this task.",
     "Role Changed":       "Your project access changed.",

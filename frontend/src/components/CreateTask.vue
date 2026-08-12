@@ -697,18 +697,33 @@ async function submit() {
       })
     }
 
-    // Upload any queued attachments
-    if (queuedFiles.value.length) {
+    // Upload any queued attachments. Best-effort per file so one bad upload
+    // doesn't lose the others — but the failures MUST be reported: the task
+    // itself already exists by this point, so silently discarding these
+    // results told the user "created" while their files went nowhere.
+    // Counted up front, not read back after close() — queuedFiles is reset by
+    // the `open` watcher, so reading its length post-close is a trap waiting
+    // for someone to move the reset.
+    const queuedCount = queuedFiles.value.length
+    let failedUploads = 0
+    if (queuedCount) {
       const { uploadAttachment } = await import('@/utils/api.js')
-      await Promise.allSettled(
+      const results = await Promise.allSettled(
         queuedFiles.value.map(f => uploadAttachment(f, 'BP Task', issue.name))
       )
+      failedUploads = results.filter(r => r.status === 'rejected').length
     }
 
     await store.refreshBoard()
     emit('created', issue)
     close()
     toast.success(`${taskWord.value} created`, { description: issue.task_key })
+    if (failedUploads) {
+      toast.warning(
+        `${failedUploads} of ${queuedCount} attachments failed to upload`,
+        { description: 'The task was created — re-attach them from the task detail panel.' },
+      )
+    }
   } catch (e) {
     toast.error(e.message || 'Failed to create task')
   } finally {

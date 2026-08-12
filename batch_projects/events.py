@@ -714,6 +714,7 @@ _EMAIL_PREF_FIELD = {
     "Comment":       "email_comment",
     "Mention":       "email_mention",
     "Status Change": "email_status_change",
+    "Unblocked":     "email_status_change", # produced by a status change on the blocker
     "Update":        "email_status_change", # field changes gate on same pref as status
     "Due Soon":      "email_due_reminder",
     "Overdue":       "email_due_reminder",
@@ -969,6 +970,23 @@ def _send_notification_email(
 
 import re as _re
 _MENTION_TOKEN = _re.compile(r"@\[([^\]]+)\]\([^)]+\)")
+# Same token, capturing the user id instead of the display name. Mirrors
+# api/board.py's _MENTION_RE — kept as its own constant here rather than
+# imported, so events.py stays free of an api.board import at module scope.
+_MENTION_ID = _re.compile(r"@\[[^\]]+\]\(([^)]+)\)")
+
+
+def _parse_mention_ids(text) -> list:
+    """User ids mentioned in `text`, de-duplicated, order preserved."""
+    if not text:
+        return []
+    seen, out = set(), []
+    for uid in _MENTION_ID.findall(str(text)):
+        uid = uid.strip()
+        if uid and uid not in seen:
+            seen.add(uid)
+            out.append(uid)
+    return out
 
 
 def _strip_mentions(text: str) -> str:
@@ -976,6 +994,16 @@ def _strip_mentions(text: str) -> str:
     if not text:
         return ""
     return _MENTION_TOKEN.sub(lambda m: "@" + m.group(1), text)
+
+
+def _reporter_user(task_name: str) -> str | None:
+    """The User behind a task's reporter, or None. `BP Task.reporter` links to
+    Employee; Employee.user_id is the User. Returns None for an unlinked
+    employee record rather than leaking the employee id downstream."""
+    reporter = frappe.db.get_value("BP Task", task_name, "reporter")
+    if not reporter:
+        return None
+    return frappe.db.get_value("Employee", reporter, "user_id") or None
 
 
 def _get_task_recipients(task_name: str, exclude_user: str) -> list:
@@ -987,8 +1015,16 @@ def _get_task_recipients(task_name: str, exclude_user: str) -> list:
         if row != exclude_user:
             recipients.add(row)
 
-    # Reporter
-    reporter = frappe.db.get_value("BP Task", task_name, "reporter")
+    # Reporter — BP Task.reporter is a Link to *Employee*, not User, so the
+    # stored value is an internal id like "HR-EMP-00003". Adding it raw put a
+    # non-User into a recipient set that is otherwise User ids: the reporter
+    # never received comment/status/update/approval notifications, every one
+    # created an orphan BP Notification row addressed to nobody (invisible,
+    # since bp_notification_query_conditions scopes by `recipient`), and each
+    # send raised "Could not find Recipient: HR-EMP-…". Resolve to the linked
+    # User exactly the way bp_automation_rule.py:984 already does on its own
+    # notification path — this was the one recipient path that never did.
+    reporter = _reporter_user(task_name)
     if reporter and reporter != exclude_user:
         recipients.add(reporter)
 
@@ -1100,6 +1136,58 @@ def _notify_status_change(payload, actor, task_name, project):
         )
     _push_notification_badge(recipients, project)
 
+    # Completing a task can unblock others. The dependency data has always been
+    # there and is enforced on the way IN (_completing_into_blocked refuses to
+    # close a task with open blockers) — but nothing ever told the person
+    # waiting that their blocker cleared, so they had to poll. Jira's
+    # "blocking issue resolved" is the same loop.
+    if to_status and to_status in set(_completed_statuses(project)):
+        try:
+            _notify_blockers_cleared(task_name, task_key, project, actor)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "bp blocker-cleared notify failed")
+
+
+def _notify_blockers_cleared(task_name, task_key, project, actor):
+    """Notify assignees/watchers of every task this one was blocking, but only
+    once it is *fully* unblocked — a task with three open blockers should get
+    one notification when the last clears, not three as they trickle in."""
+    successors = frappe.get_all(
+        "BP Task Link",
+        filters={"parenttype": "BP Task", "parent": task_name, "link_type": "blocks"},
+        pluck="linked_task",
+    )
+    if not successors:
+        return
+
+    done = set(_completed_statuses(project))
+    for succ in set(successors):
+        if not frappe.db.exists("BP Task", succ):
+            continue
+        # Any OTHER blocker still open → stay quiet, this one isn't free yet.
+        others = frappe.get_all(
+            "BP Task Link",
+            filters={"parenttype": "BP Task", "parent": succ, "link_type": "is blocked by"},
+            pluck="linked_task",
+        )
+        still_blocked = False
+        for other in others:
+            if other == task_name:
+                continue
+            st = frappe.db.get_value("BP Task", other, ["status", "is_deleted"], as_dict=True)
+            if st and not st.get("is_deleted") and st.get("status") not in done:
+                still_blocked = True
+                break
+        if still_blocked:
+            continue
+
+        succ_key = frappe.db.get_value("BP Task", succ, "task_key") or succ
+        message = f"{task_key} is done — {succ_key} is no longer blocked"
+        for recipient in _get_task_recipients(succ, actor):
+            _create_notification(
+                recipient, "Unblocked", succ, project, actor, message,
+            )
+
 
 def _notify_task_created(payload, actor, task_name, project):
     if not task_name or not project:
@@ -1138,13 +1226,37 @@ def _notify_task_updated(payload, actor, task_name, project):
         )
         message = f"{actor_name} updated {labels} on {task_key}: {task_title}"
 
-    recipients = set(_get_task_recipients(task_name, actor))
+    # @mentions in the DESCRIPTION. Mention parsing used to run only on the
+    # comment paths (board.py add_comment/edit_comment), so writing
+    # "@[Ana](ana@x.com)" into a task description notified nobody — while the
+    # identical token in a comment did. Only NEWLY added mentions fire, so
+    # editing an unrelated line of a description doesn't re-ping everyone
+    # already named in it (same rule edit_comment's `mentions_only` applies).
+    mentioned = set()
+    for c in notable:
+        if c.get("field") != "description":
+            continue
+        before = set(_parse_mention_ids(c.get("from")))
+        after = set(_parse_mention_ids(c.get("to")))
+        mentioned |= (after - before)
+    mentioned.discard(actor)
+
+    for user in mentioned:
+        add_watcher(task_name, user)
+        _create_notification(
+            user, "Mention", task_name, project, actor,
+            f"{actor_name} mentioned you in the description of {task_key}: {task_title}",
+        )
+
+    # A mention is strictly better than the generic "updated description" note,
+    # so anyone who got one is excluded from the Update fan-out below.
+    recipients = set(_get_task_recipients(task_name, actor)) - mentioned
     for recipient in recipients:
         _create_notification(
             recipient, "Update", task_name, project, actor, message,
             email_extras={"changes": notable},
         )
-    _push_notification_badge(recipients, project)
+    _push_notification_badge(recipients | mentioned, project)
 
 
 def _notify_task_unassigned(payload, actor, task_name, project):

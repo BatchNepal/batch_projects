@@ -461,6 +461,20 @@ def update_shared_task(token, task, fields=None):
     _throttle_guest_comment(token)
 
     doc = frappe.get_doc("BP Task", link.task)
+
+    # Same dependency-blocker guard update_task applies (api/board.py's
+    # _completing_into_blocked). Without it a share-link guest could close a
+    # task whose blockers are still open — something no internal Member can
+    # do. A guest has no way to override, so `force` is never offered here.
+    if "status" in safe:
+        from batch_projects.api.board import _completing_into_blocked
+        blockers = _completing_into_blocked(doc, safe["status"], False)
+        if blockers:
+            frappe.throw(
+                _("This task is still blocked by {0} unfinished task(s).").format(len(blockers)),
+                frappe.ValidationError,
+            )
+
     doc.update(safe)
     doc.save(ignore_permissions=True)
     frappe.db.commit()

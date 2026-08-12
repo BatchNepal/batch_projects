@@ -32,7 +32,7 @@
       "reqd": 1,
       "in_list_view": 1,
       "in_standard_filter": 1,
-      "options": "Comment\nAssignment\nUnassigned\nMention\nStatus Change\nUpdate\nDue Soon\nOverdue\nSprint\nDigest\nSummary\nAutomation\nRule\nAutomation Failed\nApproval Requested\nApproval Decided\nRole Changed\nTimer Reminder"
+      "options": "Comment\nAssignment\nUnassigned\nMention\nStatus Change\nUnblocked\nUpdate\nDue Soon\nOverdue\nSprint\nDigest\nSummary\nAutomation\nRule\nAutomation Failed\nApproval Requested\nApproval Decided\nRole Changed\nTimer Reminder"
     },
     {
       "fieldname": "task",
