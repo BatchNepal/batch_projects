@@ -1545,7 +1545,6 @@ def send_scheduled_reports():
     """
     if not _has_outgoing_email():
         return
-    import re
 
     now = frappe.utils.now_datetime()
     cur_hour = now.hour
@@ -1570,7 +1569,16 @@ def send_scheduled_reports():
         if r.last_sent and (now - frappe.utils.get_datetime(r.last_sent)).total_seconds() < 20 * 3600:
             continue
 
-        recipients = [e.strip() for e in re.split(r"[,\n;]+", r.schedule_recipients or "") if "@" in e]
+        # Revalidate at send time, not just at save_report — a recipient who
+        # had access when the schedule was created but lost it since (left
+        # the project, was disabled) must not keep receiving it (audit 07 G1).
+        from batch_projects.api.board import resolve_report_recipients
+        recipients, dropped = resolve_report_recipients(r.schedule_recipients or "", r.project)
+        if dropped:
+            frappe.logger("bp_reports").warning(
+                f"Scheduled report {r.name} ({r.report_name}): dropped {len(dropped)} "
+                f"unauthorized/unresolvable recipient(s) at send time: {dropped}"
+            )
         if not recipients:
             continue
 
@@ -1589,6 +1597,12 @@ def send_scheduled_reports():
                 reference_name=r.name,
             )
             frappe.db.set_value("BP Report", r.name, "last_sent", now, update_modified=False)
+            # The only trace of a scheduled report send anywhere (audit 04
+            # §E5 — no export/report events reach BP Audit Log at all).
+            frappe.logger("bp_reports").info(
+                f"Scheduled report {r.name} ({r.report_name}) sent to "
+                f"{len(recipients)} recipient(s): {recipients}"
+            )
         except Exception:
             frappe.log_error(frappe.get_traceback(), f"BP scheduled report email failed: {r.name}")
     frappe.db.commit()

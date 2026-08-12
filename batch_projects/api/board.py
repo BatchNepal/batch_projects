@@ -1371,6 +1371,37 @@ def create_task(project, title, status=None, priority="Medium", task_type="Task"
     return doc.as_dict()
 
 
+# Fields a "BP Member" may set through the generic update path
+# (update_task / bulk_update_tasks). Allowlist, not denylist — the previous
+# denylist (name/task_key/cmd/doctype) let ANY other doc attribute through
+# `hasattr(doc, k)` + `setattr` with `ignore_permissions=True`, including:
+#   - approval_status/approver/approved_by/approved_on — let any Member
+#     self-approve any task, bypassing approve_task's designated-approver
+#     guard entirely.
+#   - actual_hours — schema read_only, computed from timesheets
+#     (timesheet_sync.py); freely settable here let anyone fabricate
+#     billed hours with no timer/timesheet behind them.
+#   - board_rank/started_on/completed_on — schema read_only, controller-
+#     managed (bp_task.py) side effects of status transitions / board
+#     ordering.
+#   - project — has its own dedicated, validated path (moveTaskToProject);
+#     naive reassignment here would leave task_key/permissions stale.
+#   - reporter, sales_order, timesheet_detail, parent_task, recurrence_source,
+#     submitted_via_intake, bridge_job_id — not touched by any current
+#     caller of this path; no reason for a bare Member to set them directly.
+# Extend THIS set, not the exclusion list, when a new field needs to be
+# editable through update_task/bulk_update_tasks.
+_MEMBER_WRITABLE_FIELDS = frozenset({
+    "title", "description", "status", "priority", "task_type",
+    "epic", "sprint", "milestone", "team", "due_date", "start_date",
+    "story_points", "estimated_hours", "billable", "is_unplanned",
+    "needs_triage", "is_recurring", "recurrence_frequency", "recurrence_end_date",
+    "resolution",
+    # Handled by dedicated branches below, not the generic setattr:
+    "custom_field_values", "labels", "assignees",
+})
+
+
 @frappe.whitelist()
 def update_task(issue, fields, force=False):
     if isinstance(fields, str):
@@ -1385,8 +1416,10 @@ def update_task(issue, fields, force=False):
         if blockers:
             return {"blocked": True, "status": fields["status"], "blockers": blockers}
 
+    ignored_fields = sorted(k for k in fields if k not in _MEMBER_WRITABLE_FIELDS)
+
     for k, v in fields.items():
-        if k in ("name", "task_key", "cmd", "doctype") or k.startswith("_"):
+        if k not in _MEMBER_WRITABLE_FIELDS:
             continue
 
         if k == "custom_field_values":
@@ -1435,7 +1468,13 @@ def update_task(issue, fields, force=False):
     from batch_projects.cache import invalidate_project
     invalidate_project(doc.project)
 
-    return doc.as_dict()
+    result = doc.as_dict()
+    if ignored_fields:
+        # Was a silent no-op — a future caller sending an unwritable field
+        # (a new integration, the ERPNext "Update ERPNext Document" reverse
+        # path) would get no error and no signal at all otherwise.
+        result["_ignored_fields"] = ignored_fields
+    return result
 
 
 @frappe.whitelist()
@@ -1461,6 +1500,10 @@ def bulk_update_tasks(issues, fields):
 
     updated, failed = [], []
     projects_touched = set()
+    # Same field-set for every task in the batch, so this only needs
+    # computing once — surfaces a silently-dropped field instead of a
+    # future caller finding out the hard way (see update_task).
+    ignored_fields = sorted(k for k in fields if k not in _MEMBER_WRITABLE_FIELDS)
 
     for issue in issues:
         try:
@@ -1474,7 +1517,7 @@ def bulk_update_tasks(issues, fields):
                     continue
 
             for k, v in fields.items():
-                if k in ("name", "task_key", "cmd", "doctype") or k.startswith("_"):
+                if k not in _MEMBER_WRITABLE_FIELDS:
                     continue
 
                 if k == "assignees":
@@ -1506,7 +1549,10 @@ def bulk_update_tasks(issues, fields):
     for p in projects_touched:
         invalidate_project(p)
 
-    return {"updated": updated, "failed": failed}
+    result = {"updated": updated, "failed": failed}
+    if ignored_fields:
+        result["_ignored_fields"] = ignored_fields
+    return result
 
 
 @frappe.whitelist()
@@ -2604,6 +2650,61 @@ def get_saved_report(report):
 
 @frappe.whitelist()
 
+def resolve_report_recipients(recipients_str, project):
+    """Split a `schedule_recipients` string into (allowed, dropped) email
+    addresses. `allowed` = resolves to an enabled User with at least Viewer
+    access to `project` (or, for an unscoped/"all" report, to at least one
+    project at all). Everything else — free-text external addresses, or
+    internal users with no access — is `dropped`.
+
+    Shared by the write-time gate below and the send-time revalidation in
+    events.send_scheduled_reports, so a membership change after a schedule
+    was created can't leave a stale recipient still receiving mail.
+    """
+    import re
+    from batch_projects import access
+    from batch_projects.permissions import get_accessible_projects
+
+    candidates = [e.strip() for e in re.split(r"[,\n;]+", recipients_str or "") if "@" in e]
+    allowed, dropped = [], []
+    for addr in candidates:
+        user = frappe.db.get_value("User", {"email": addr, "enabled": 1}, "name")
+        if not user:
+            dropped.append(addr)
+            continue
+        if project:
+            ok = access.has_at_least(project, "Viewer", user)
+        else:
+            accessible = get_accessible_projects(user)
+            ok = accessible is None or len(accessible) > 0
+        (allowed if ok else dropped).append(addr)
+    return allowed, dropped
+
+
+def _assert_recipients_authorized(recipients_str, project, caller):
+    """Write-time gate for schedule_recipients (audit 07 G1): a plain
+    Member may only schedule a report to users who already have access to
+    it. Pointing it at an unresolvable/external address, or an internal
+    user with no access, requires Manager+ on the project (or instance
+    admin) — an explicit, privileged decision, not a default any Member
+    can make silently."""
+    if not recipients_str:
+        return
+    from batch_projects import access
+    _, dropped = resolve_report_recipients(recipients_str, project)
+    if not dropped:
+        return
+    is_privileged = access.is_instance_admin(caller) or (
+        project and access.has_at_least(project, "Manager", caller)
+    )
+    if is_privileged:
+        return
+    frappe.throw(
+        "These recipients don't have access to this report and can't be "
+        f"added: {', '.join(dropped)}. A project Manager can add them explicitly."
+    )
+
+
 @frappe.whitelist()
 def save_report(report_name=None, project=None, milestone=None, period="last_30_days",
                 icon="BarChart3", color=None, layout=None, report=None,
@@ -2631,11 +2732,15 @@ def save_report(report_name=None, project=None, milestone=None, period="last_30_
         if schedule_frequency is not None: doc.schedule_frequency = schedule_frequency
         if schedule_day is not None: doc.schedule_day = schedule_day
         if schedule_hour is not None: doc.schedule_hour = frappe.utils.cint(schedule_hour)
-        if schedule_recipients is not None: doc.schedule_recipients = schedule_recipients
+        if schedule_recipients is not None:
+            _assert_recipients_authorized(schedule_recipients, doc.project, frappe.session.user)
+            doc.schedule_recipients = schedule_recipients
         if layout is not None:
             doc.layout = layout if isinstance(layout, str) else json.dumps(layout)
         doc.save(ignore_permissions=True)
     else:
+        if schedule_recipients:
+            _assert_recipients_authorized(schedule_recipients, project, frappe.session.user)
         doc = frappe.get_doc({
             "doctype": "BP Report",
             "report_name": report_name or "Untitled report",
@@ -3651,15 +3756,18 @@ def complete_sprint(sprint, move_incomplete_to=None):
             target_proj = frappe.db.get_value("BP Sprint", target, "project")
             if target_proj != doc.project:
                 frappe.throw("Target sprint does not belong to the same project.")
-            frappe.db.sql(
-                f"UPDATE `tabBP Task` SET sprint = %s WHERE name IN ({','.join(['%s']*len(names))})",
-                [target] + names,
-            )
-        else:
-            frappe.db.sql(
-                f"UPDATE `tabBP Task` SET sprint = NULL WHERE name IN ({','.join(['%s']*len(names))})",
-                names,
-            )
+        # Per-task ORM save, not a raw UPDATE — carryover is the single
+        # operation `task.moved_sprint` automations exist to catch (it's a
+        # refinement of task.updated, resolved from the diffed `changes`
+        # list BP Task.on_update() builds — see bp_automation_rule.py). A
+        # raw SQL UPDATE skips on_update() entirely: no BP Activity history,
+        # no TASK_UPDATED emit, so every such automation silently never
+        # fires on a sprint close, and nothing more than the sprint field
+        # itself records that the move happened.
+        for name in names:
+            t = frappe.get_doc("BP Task", name)
+            t.sprint = target
+            t.save(ignore_permissions=True)
 
     doc.status = "Completed"
     doc.save(ignore_permissions=True)
