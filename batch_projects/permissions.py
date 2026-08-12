@@ -201,8 +201,22 @@ def bp_task_query_conditions(user=None):
     _rebac_scope), its resolved lists are used DIRECTLY instead of
     recomputing from BP Project Member/BP Task Assignee here — the gateway
     is the authority once it's in the loop, this just turns its answer
-    into SQL."""
+    into SQL.
+
+    Also excludes trashed tasks (is_deleted=1) unconditionally — trash is
+    recoverable, not gone, and the app's own get_all()-based endpoints
+    exclude it too (see api/board.py's _task_filters). This hook is the
+    ONLY thing standing between a trashed task and the generic REST API
+    (/api/resource/BP Task), Desk list views, and Report Builder — every
+    frappe.get_all() call in this codebase runs with ignore_permissions=True,
+    which skips permission_query_conditions entirely (confirmed in
+    frappe/model/db_query.py), so this hook covers a DIFFERENT set of call
+    sites than api/board.py's explicit filters, not a superset or subset of
+    them. Applied even for admins: the dedicated trash view
+    (list_deleted_tasks) is the intended way to see it, not a raw list/
+    report escaping trash by accident."""
     user = user or frappe.session.user
+    not_deleted = "`tabBP Task`.`is_deleted` = 0"
 
     scope = _rebac_scope(user)
     if scope is not None:
@@ -214,17 +228,18 @@ def bp_task_query_conditions(user=None):
         if allowed_tasks:
             vals = ", ".join(frappe.db.escape(t) for t in allowed_tasks)
             parts.append(f"`tabBP Task`.`name` in ({vals})")
-        return " or ".join(parts) if parts else "1=0"
+        scope_clause = " or ".join(parts) if parts else "1=0"
+        return f"({scope_clause}) and {not_deleted}"
 
     base = _project_in_clause("`tabBP Task`.`project`", user)
     if base == "":
-        return ""  # admin — no restriction
+        return not_deleted  # admin — no project restriction, still hide trash
     assigned = f"""`tabBP Task`.`name` in (
         select parent from `tabBP Task Assignee` where user = {frappe.db.escape(user)}
     )"""
     if base == "1=0":
-        return assigned
-    return f"({base}) or ({assigned})"
+        return f"({assigned}) and {not_deleted}"
+    return f"(({base}) or ({assigned})) and {not_deleted}"
 
 
 def bp_sprint_query_conditions(user=None):

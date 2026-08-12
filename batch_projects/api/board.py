@@ -205,6 +205,27 @@ def get_session_info():
     }
 
 
+# ─── TRASH FILTER ────────────────────────────────────────────────────────────
+# audit 07 follow-up: get_board/query_tasks excluded trashed tasks but
+# get_gantt/get_backlog/get_my_tasks/get_triage_queue/get_epics and others
+# didn't — a trashed task looked gone on the board but was still fully live
+# everywhere else. frappe.get_all() ALWAYS runs with ignore_permissions=True
+# (confirmed in frappe/model/db_query.py), which skips permission_query_
+# conditions entirely — so the doctype hook in permissions.py covers only the
+# REST/desk/report (get_list-based) layer, never these get_all call sites.
+# Every one of them needs this explicitly; there is no single choke point.
+
+def _task_filters(base=None, include_deleted=False):
+    """Merge `base` with the default is_deleted=0 exclusion every BP Task
+    list/count query needs. Pass include_deleted=True only for the trash
+    view itself (list_deleted_tasks) and the purge job — everything else
+    should be invisible to trashed tasks by default."""
+    filters = dict(base or {})
+    if not include_deleted and "is_deleted" not in filters:
+        filters["is_deleted"] = 0
+    return filters
+
+
 @frappe.whitelist()
 def query_tasks(project, filters=None, group_by=None, sort_by="creation",
                  sort_order="asc", limit=None, offset=0):
@@ -471,7 +492,7 @@ def get_projects():
             """
             SELECT project, status, COUNT(*) AS cnt
             FROM `tabBP Task`
-            WHERE project IN %(projects)s
+            WHERE project IN %(projects)s AND is_deleted = 0
             GROUP BY project, status
             """,
             {"projects": [p["name"] for p in projects]},
@@ -772,7 +793,7 @@ def get_gantt(project):
 
     tasks = frappe.get_all(
         "BP Task",
-        filters={"project": project},
+        filters=_task_filters({"project": project}),
         fields=[
             "name", "task_key", "title", "status", "priority", "task_type",
             "start_date", "due_date", "epic", "parent_task", "sprint",
@@ -2261,7 +2282,7 @@ def get_backlog(project):
 
     issues = frappe.get_all(
         "BP Task",
-        filters={"project": project, "parent_task": ["in", ["", None]]},
+        filters=_task_filters({"project": project, "parent_task": ["in", ["", None]]}),
         fields=[
             "name", "task_key", "title", "status", "priority", "task_type",
             "sprint", "epic", "story_points", "actual_points", "is_unplanned",
@@ -2594,8 +2615,8 @@ def get_epics(project):
     )
     completed = _get_completed_statuses_by_project(project)
     for epic in epics:
-        total = frappe.db.count("BP Task", {"epic": epic["name"]})
-        done  = frappe.db.count("BP Task", {"epic": epic["name"], "status": ["in", completed]})
+        total = frappe.db.count("BP Task", _task_filters({"epic": epic["name"]}))
+        done  = frappe.db.count("BP Task", _task_filters({"epic": epic["name"], "status": ["in", completed]}))
         epic["total_issues"] = total
         epic["done_issues"]  = done
         epic["progress"]     = round((done / total * 100) if total > 0 else 0, 1)
@@ -2935,7 +2956,7 @@ def get_project_budget_summary(project):
     proj = frappe.get_doc("BP Project", project)
 
     act_hours = frappe.db.sql(
-        """SELECT SUM(actual_hours) FROM `tabBP Task` WHERE project = %s""",
+        """SELECT SUM(actual_hours) FROM `tabBP Task` WHERE project = %s AND is_deleted = 0""",
         (project,),
     )[0][0] or 0
 
@@ -3056,6 +3077,7 @@ def get_sprints(project):
         FROM `tabBP Task`
         WHERE sprint IN ({','.join(['%s'] * len(sprint_names))})
           AND project = %s
+          AND is_deleted = 0
         GROUP BY sprint
         """,
         sprint_names + [project],
@@ -3071,6 +3093,7 @@ def get_sprints(project):
         FROM `tabBP Task`
         WHERE sprint IN ({','.join(['%s'] * len(sprint_names))})
           AND project = %s
+          AND is_deleted = 0
         GROUP BY sprint
         """,
         sprint_names + [project],
@@ -3091,6 +3114,7 @@ def get_sprints(project):
             FROM `tabBP Task`
             WHERE sprint IN ({','.join(['%s'] * len(sprint_names))})
               AND project = %s
+              AND is_deleted = 0
               AND status IN ({','.join(['%s'] * len(done_statuses))})
             GROUP BY sprint
             """,
@@ -3111,6 +3135,7 @@ def get_sprints(project):
             FROM `tabBP Task`
             WHERE sprint IN ({','.join(['%s'] * len(sprint_names))})
               AND project = %s
+              AND is_deleted = 0
               AND status IN ({','.join(['%s'] * len(completed_only))})
             GROUP BY sprint
             """,
@@ -3433,6 +3458,7 @@ def _get_personal_stats(user, days=14):
 			WHERE name IN %(names)s
 			  AND status IN %(statuses)s
 			  AND modified >= %(cutoff)s
+			  AND is_deleted = 0
 			GROUP BY DATE(modified)
 			ORDER BY day ASC
 			""",
@@ -4970,7 +4996,7 @@ def get_project_tree():
             """
             SELECT project, status, COUNT(*) AS cnt
             FROM `tabBP Task`
-            WHERE project IN %(projects)s
+            WHERE project IN %(projects)s AND is_deleted = 0
             GROUP BY project, status
             """,
             {"projects": [p["name"] for p in projects]},
@@ -5051,7 +5077,7 @@ def get_triage_queue(project=None):
             filters["project"] = ["in", list(acc)]
 
     tasks = frappe.get_all("BP Task",
-        filters=filters,
+        filters=_task_filters(filters),
         fields=["name", "task_key", "title", "status", "priority", "project",
                 "creation", "task_type"],
         order_by="creation desc",
@@ -5323,10 +5349,10 @@ def get_team(team):
         order_by="project_name asc",
     )
     for p in data["projects"]:
-        p["open_count"] = frappe.db.count("BP Task", {
+        p["open_count"] = frappe.db.count("BP Task", _task_filters({
             "project": p["name"],
             "status": ["not in", _get_completed_statuses(p)],
-        })
+        }))
 
     # Active team sprint
     data["active_sprint"] = frappe.db.get_value(
@@ -5475,7 +5501,7 @@ def get_my_tasks(
 
     tasks = frappe.get_all(
         "BP Task",
-        filters=filters,
+        filters=_task_filters(filters),
         fields=[
             "name", "task_key", "title", "status", "priority", "task_type",
             "project", "due_date", "start_date", "story_points", "epic",
@@ -5796,6 +5822,7 @@ def get_workload(weeks=4, team=None):
             JOIN `tabBP Task` t
                 ON t.name = ta.parent
                 AND t.docstatus < 2
+                AND t.is_deleted = 0
                 AND t.status NOT IN ('Done', 'Cancelled', 'Closed')
             LEFT JOIN `tabBP Project` p
                 ON p.name = t.project
@@ -6056,7 +6083,7 @@ def get_workspace_summary():
             """
             SELECT project, status, due_date
             FROM `tabBP Task`
-            WHERE project IN %(projects)s
+            WHERE project IN %(projects)s AND is_deleted = 0
             """,
             {"projects": accessible_names}, as_dict=True,
         ):
@@ -6140,7 +6167,7 @@ def get_workspace_summary():
         # Billable hours from tasks
         try:
             res = frappe.db.sql(
-                "SELECT COALESCE(SUM(actual_hours), 0) AS h FROM `tabBP Task` WHERE project = %(proj)s AND billable = 1",
+                "SELECT COALESCE(SUM(actual_hours), 0) AS h FROM `tabBP Task` WHERE project = %(proj)s AND billable = 1 AND is_deleted = 0",
                 {"proj": p["name"]}, as_dict=True,
             )
             billable_h = float(res[0].h or 0) if res else 0.0
@@ -6164,7 +6191,7 @@ def get_workspace_summary():
         # Unbilled = total billable estimated value minus billed
         try:
             res2 = frappe.db.sql(
-                "SELECT COALESCE(SUM(estimated_hours), 0) AS h FROM `tabBP Task` WHERE project = %(proj)s AND billable = 1",
+                "SELECT COALESCE(SUM(estimated_hours), 0) AS h FROM `tabBP Task` WHERE project = %(proj)s AND billable = 1 AND is_deleted = 0",
                 {"proj": p["name"]}, as_dict=True,
             )
             estimated_h = float(res2[0].h or 0) if res2 else 0.0
@@ -6210,7 +6237,7 @@ def get_workspace_summary():
                 """
                 SELECT COALESCE(SUM(actual_hours), 0) AS h
                 FROM `tabBP Task`
-                WHERE project = %(proj)s AND billable = 1
+                WHERE project = %(proj)s AND billable = 1 AND is_deleted = 0
                   AND status IN %(sts)s
                 """,
                 {"proj": p["name"], "sts": completed_sts},
@@ -6314,6 +6341,7 @@ def get_workspace_summary():
             FROM `tabBP Task` t
             LEFT JOIN `tabBP Project` p ON p.name = t.project
             WHERE t.modified >= %(cutoff)s
+              AND t.is_deleted = 0
               AND (%(unrestricted)s OR t.project IN %(names)s)
               AND t.status IN (
                   SELECT DISTINCT s.status
@@ -6365,10 +6393,10 @@ def get_workspace_summary():
         for m in ms_rows:
             p_info = proj_map.get(m["project"], {})
             # tasks_left: count open tasks in project (rough)
-            open_t = frappe.db.count("BP Task", {
+            open_t = frappe.db.count("BP Task", _task_filters({
                 "project": m["project"],
                 "status": ["not in", _get_completed_statuses_by_project(m["project"]) or ["Done"]],
-            })
+            }))
             due = m.get("due_date")
             milestones.append({
                 "name":          m["name"],
@@ -6497,8 +6525,8 @@ def get_dashboard():
     )
     for p in projects:
         completed = _get_completed_statuses(p)
-        p["open_count"]  = frappe.db.count("BP Task", {"project": p["name"], "status": ["not in", completed or ["Done"]]})
-        p["total_count"] = frappe.db.count("BP Task", {"project": p["name"]})
+        p["open_count"]  = frappe.db.count("BP Task", _task_filters({"project": p["name"], "status": ["not in", completed or ["Done"]]}))
+        p["total_count"] = frappe.db.count("BP Task", _task_filters({"project": p["name"]}))
         # Real members
         members = frappe.get_all(
             "BP Project Member",
@@ -6531,7 +6559,7 @@ def get_dashboard():
             SELECT DISTINCT a.task, t.title, t.project, t.task_key,
                 MAX(a.creation) AS last_activity
             FROM `tabBP Activity` a
-            JOIN `tabBP Task` t ON t.name = a.task
+            JOIN `tabBP Task` t ON t.name = a.task AND t.is_deleted = 0
             WHERE a.user = %(user)s
               AND a.creation >= %(cutoff)s
             GROUP BY a.task
@@ -6657,6 +6685,7 @@ def get_people():
           AND a.user IN %(users)s
           AND t.status NOT IN ('Done', 'Cancelled', 'Closed')
           AND t.docstatus < 2
+          AND t.is_deleted = 0
         GROUP BY a.user
         """,
         {"today": today.isoformat(), "week_end": week_end.isoformat(), "users": member_users},
@@ -6991,7 +7020,7 @@ def start_sprint(sprint):
         "project": doc.project,
         "sprint": doc.name,
         "sprint_name": doc.sprint_name,
-        "total_issues": frappe.db.count("BP Task", {"sprint": doc.name}),
+        "total_issues": frappe.db.count("BP Task", _task_filters({"sprint": doc.name})),
     })
     return doc.as_dict()
 
@@ -7322,7 +7351,7 @@ def get_report_tasks(scope="all", status_filter="open", priority=None, search=No
         except Exception:
             pass
 
-    db_filters = dict(filters)
+    db_filters = _task_filters(filters)
     if priority:
         db_filters["priority"] = priority
     if status_filter == "open" and completed:
@@ -7345,7 +7374,10 @@ def get_report_tasks(scope="all", status_filter="open", priority=None, search=No
               "project", "due_date", "start_date", "story_points", "epic",
               "sprint", "reporter", "estimated_hours", "actual_hours", "creation", "modified"]
 
-    # Total filtered count (names only — cheap; respects permission_query_conditions).
+    # Total filtered count (names only — cheap). NOTE: frappe.get_all() always
+    # runs with ignore_permissions=True, which skips permission_query_conditions
+    # entirely (confirmed in frappe/model/db_query.py) — this is scoped by the
+    # explicit _resolve_scope()/get_accessible_projects() above, not by that hook.
     total = len(frappe.get_all("BP Task", filters=db_filters, or_filters=or_filters, pluck="name"))
 
     tasks = frappe.get_all(
@@ -8062,10 +8094,10 @@ def get_team_dashboard(team):
     owned_names    = {p["name"] for p in owned_projects}
     team_user_set  = set(member_users)
     for p in owned_projects:
-        p["open_count"]        = frappe.db.count("BP Task", {
+        p["open_count"]        = frappe.db.count("BP Task", _task_filters({
             "project": p["name"],
             "status":  ["not in", _get_completed_statuses_by_project(p["name"])],
-        })
+        }))
         proj_mbrs              = frappe.get_all("BP Project Member", filters={"parent": p["name"]}, fields=["user"])
         p["team_member_count"] = sum(1 for pm in proj_mbrs if pm.user in team_user_set)
 
@@ -8100,10 +8132,10 @@ def get_team_dashboard(team):
             as_dict=True,
         )
         for p in contrib_rows:
-            p["open_count"]        = frappe.db.count("BP Task", {
+            p["open_count"]        = frappe.db.count("BP Task", _task_filters({
                 "project": p["name"],
                 "status":  ["not in", _get_completed_statuses_by_project(p["name"])],
-            })
+            }))
             proj_mbrs              = frappe.get_all("BP Project Member", filters={"parent": p["name"]}, fields=["user"])
             p["team_member_count"] = sum(1 for pm in proj_mbrs if pm.user in team_user_set)
     else:
@@ -8128,6 +8160,7 @@ def get_team_dashboard(team):
                     WHERE ta.user IN %(users)s
                 )
                   AND t.docstatus < 2
+                  AND t.is_deleted = 0
                   AND t.status NOT IN ('Done','Cancelled','Closed')
                   AND t.due_date >= %(ws)s
                   AND t.due_date <= %(we)s
@@ -8228,6 +8261,7 @@ def get_team_capacity_heatmap(team=None):
             FROM `tabBP Task Assignee` ta
             JOIN `tabBP Task` t ON t.name = ta.parent
               AND t.docstatus < 2
+              AND t.is_deleted = 0
               AND t.status NOT IN ('Done', 'Cancelled', 'Closed')
               AND t.due_date IS NOT NULL
               AND t.due_date <= %(end)s
@@ -8575,7 +8609,7 @@ def get_portfolio():
     # Get all tasks for these projects
     pnames = [p["name"] for p in projects]
     tasks = frappe.get_all("BP Task",
-        filters={"project": ["in", pnames]},
+        filters=_task_filters({"project": ["in", pnames]}),
         fields=["project", "status", "due_date"])
 
     today = date.today()
