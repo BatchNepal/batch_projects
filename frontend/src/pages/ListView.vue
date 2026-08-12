@@ -1275,14 +1275,14 @@ async function bulkMoveSprint(sprint){await _bulkApply({sprint},`→ ${sprint}`)
 async function bulkMoveEpic(epic){await _bulkApply({epic},`→ ${epic}`)}
 async function bulkDelete(){
   const names=[...selected]
-  if(!await confirmDialog(`Delete ${names.length} tasks? This cannot be undone.`,{danger:true}))return
+  if(!await confirmDialog(`Move ${names.length} tasks to trash?`,{danger:true,confirmLabel:'Move to trash'}))return
   const res=await bulkDeleteTasks(names)
   const okCount=res?.deleted?.length||0, failCount=res?.failed?.length||0
   selected.clear()
   await store.refreshBoard()
-  if(failCount===0) toast.success(`${okCount} tasks deleted`)
+  if(failCount===0) toast.success(`${okCount} tasks moved to trash`)
   else if(okCount===0) toast.error(`Failed to delete ${failCount} tasks`)
-  else toast.warning(`${okCount} tasks deleted, ${failCount} failed`)
+  else toast.warning(`${okCount} tasks moved to trash, ${failCount} failed`)
 }
 
 const ctxIssue=ref(null),ctxX=ref(0),ctxY=ref(0)

@@ -301,11 +301,11 @@ function openCreateForStatus(columnTitle) {
 
 async function handleContextAction({ action, issue }) {
   if (action === 'delete') {
-    if (!await confirmDialog(`Delete "${issue.title}"?`, { danger: true })) return
+    if (!await confirmDialog(`Move "${issue.title}" to trash?`, { danger: true, confirmLabel: 'Move to trash' })) return
     try {
       await api.deleteTask(issue.name)
       await store.refreshBoard()
-      toast.success(`${getTaskWord(store.currentProject?.template_used)} deleted`)
+      toast.success(`${getTaskWord(store.currentProject?.template_used)} moved to trash`)
     } catch (e) { toast.error('Failed to delete') }
   } else if (action === 'assign') {
     const sessionUser = window.frappe?.session?.user

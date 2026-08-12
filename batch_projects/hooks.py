@@ -199,6 +199,7 @@ scheduler_events = {
         "batch_projects.events.run_due_soon_automations",
         "batch_projects.events.run_overdue_automations",
         "batch_projects.api.erp_link.reconcile_erpnext_sync",
+        "batch_projects.events.purge_expired_trash",
     ],
     "daily_long": [
         "batch_projects.events.send_daily_digest",

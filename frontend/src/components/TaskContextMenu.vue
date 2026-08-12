@@ -340,21 +340,29 @@ async function act(action) {
     store.showCreateTask = true
     emit('close')
   } else if (action === 'delete') {
+    // Capture what we need BEFORE emit('close') — the parent's @close
+    // handler nulls out the ref bound to `issue` (Board.vue: `ctxIssue =
+    // null`), and since that's reactive, `props.issue` reads null by the
+    // time an await resumes, not just visually but as actual state. Every
+    // branch here with an await between emit('close') and a props.issue
+    // read had this bug; confirmed live — delete silently never called the
+    // API at all, just threw to the console after the dialog closed.
+    const name = props.issue.name, title = props.issue.title
     // Close the (tiny, floating) context menu BEFORE awaiting the confirm
     // dialog — otherwise it stays open behind the centered modal for as
     // long as the user takes to decide, since this branch is no longer
     // synchronous like window.confirm() was.
     emit('close')
-    if (!await confirmDialog(`Delete "${props.issue.title}"?`, { danger: true })) return
-    const name = props.issue.name
+    if (!await confirmDialog(`Move "${title}" to trash?`, { danger: true, confirmLabel: 'Move to trash' })) return
     api.deleteTask(name)
-      .then(() => { store.refreshBoard(); store.issueCreatedCount++ ; toast.success('Deleted'); emit('deleted', name) })
+      .then(() => { store.refreshBoard(); store.issueCreatedCount++ ; toast.success('Moved to trash'); emit('deleted', name) })
       .catch(() => toast.error('Failed to delete'))
   } else if (action === 'save-template') {
+    const name = props.issue.name, title = props.issue.title
     emit('close')
-    const name = await promptDialog({ title: 'Template name', inputLabel: 'Name', defaultValue: props.issue.title })
-    if (!name || !name.trim()) return
-    api.saveTaskAsTemplate(props.issue.name, name.trim())
+    const tplName = await promptDialog({ title: 'Template name', inputLabel: 'Name', defaultValue: title })
+    if (!tplName || !tplName.trim()) return
+    api.saveTaskAsTemplate(name, tplName.trim())
       .then(() => toast.success('Saved as template'))
       .catch(handleErr)
   } else if (action === 'duplicate') {

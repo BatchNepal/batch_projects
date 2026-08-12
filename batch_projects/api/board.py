@@ -214,7 +214,11 @@ def query_tasks(project, filters=None, group_by=None, sort_by="creation",
         filters = json.loads(filters)
     filters = filters or {}
 
-    db_filters = {"project": project}
+    # Trashed tasks (audit 02 §B3 / 07 §G3) are recoverable, not gone — but
+    # must not clutter the normal board/list/backlog/sprint view they're
+    # fetched through. list_deleted_tasks is the one place that deliberately
+    # asks for is_deleted=1.
+    db_filters = {"project": project, "is_deleted": 0}
 
     if filters.get("status"):
         db_filters["status"] = ["in", filters["status"]]
@@ -301,7 +305,7 @@ def query_tasks(project, filters=None, group_by=None, sort_by="creation",
     # ── Post-fetch: sub_tasks (single batch query, not N+1) ──────────────────
     subtasks_raw = frappe.get_all(
         "BP Task",
-        filters={"parent_task": ["in", issue_names]},
+        filters={"parent_task": ["in", issue_names], "is_deleted": 0},
         fields=["name", "task_key", "title", "status", "priority",
                 "task_type", "due_date", "parent_task"],
         order_by="creation asc",
@@ -1557,9 +1561,10 @@ def bulk_update_tasks(issues, fields):
 
 @frappe.whitelist()
 def bulk_delete_tasks(issues):
-    """Delete many tasks from one API call, returning per-task results
-    instead of the client fanning out N `delete_task` calls under
-    `Promise.allSettled` (see `bulk_update_tasks`)."""
+    """Move many tasks to trash from one API call (delete_task is now a
+    soft-delete — see there), returning per-task results instead of the
+    client fanning out N calls under `Promise.allSettled` (see
+    `bulk_update_tasks`)."""
     if isinstance(issues, str):
         issues = json.loads(issues)
 
@@ -1586,13 +1591,16 @@ def bulk_delete_tasks(issues):
     return {"deleted": deleted, "failed": failed}
 
 
-@frappe.whitelist()
-def delete_task(issue):
-    doc = frappe.get_doc("BP Task", issue)
-    _check_permission(doc.project, "BP Manager")
-    project = doc.project
+TRASH_RETENTION_DAYS = 30
 
-    # Delete child records first to avoid LinkExistsError
+
+def _hard_delete_task(doc_or_name):
+    """Actually destroy a task row — the only path that does. Used by
+    permanently_delete_task and the daily purge job. delete_task itself no
+    longer calls this directly; it soft-deletes (see below)."""
+    doc = doc_or_name if hasattr(doc_or_name, "delete") else frappe.get_doc("BP Task", doc_or_name)
+    issue = doc.name
+
     for activity in frappe.get_all("BP Activity", filters={"task": issue}, pluck="name"):
         frappe.delete_doc("BP Activity", activity, ignore_permissions=True, force=True)
 
@@ -1600,18 +1608,97 @@ def delete_task(issue):
         for notif in frappe.get_all("BP Notification", filters={"task": issue}, pluck="name"):
             frappe.delete_doc("BP Notification", notif, ignore_permissions=True, force=True)
 
-    # BP Task Watcher was missing here — any task with a watcher (created
-    # automatically on assignment/mention) failed to delete at all
-    # (LinkExistsError). Found live via bulk_delete_tasks correctly
-    # surfacing the failure instead of silently swallowing it.
     for watcher in frappe.get_all("BP Task Watcher", filters={"task": issue}, pluck="name"):
         frappe.delete_doc("BP Task Watcher", watcher, ignore_permissions=True, force=True)
 
-    # Delete subtasks recursively
     for subtask in frappe.get_all("BP Task", filters={"parent_task": issue}, pluck="name"):
-        delete_task(subtask)
+        _hard_delete_task(subtask)
 
     doc.delete(ignore_permissions=True)
+
+
+@frappe.whitelist()
+def delete_task(issue):
+    """Move a task to trash — recoverable via restore_task for
+    TRASH_RETENTION_DAYS, after which purge_expired_trash removes it for
+    good. Used to hard-delete immediately with no recovery path at all
+    (audit 02 §B3 / 07 §G3): a mis-click on a 200-task bulk selection was
+    permanent and became a support escalation with no way back.
+    """
+    doc = frappe.get_doc("BP Task", issue)
+    _check_permission(doc.project, "BP Manager")
+    project = doc.project
+
+    if doc.is_deleted:
+        return {"ok": True, "trashed": True}
+
+    for subtask in frappe.get_all("BP Task", filters={"parent_task": issue, "is_deleted": 0}, pluck="name"):
+        delete_task(subtask)
+
+    # frappe.db.set_value, not doc.save() — this is a system flag flip, not
+    # a semantic edit. Going through save() would run full validate() (the
+    # completed-status blocker guard, irrelevant here) and — via
+    # BP Task.on_update()'s diff — emit a spurious "field changed"
+    # notification to every watcher for what the user experiences as a
+    # delete, not an edit. Same reasoning timesheet_sync.py documents for
+    # actual_hours.
+    frappe.db.set_value("BP Task", issue, {
+        "is_deleted": 1,
+        "deleted_on": frappe.utils.now_datetime(),
+        "deleted_by": frappe.session.user,
+    }, update_modified=False)
+    frappe.db.commit()
+    from batch_projects.cache import invalidate_project
+    invalidate_project(project)
+    return {"ok": True, "trashed": True}
+
+
+@frappe.whitelist()
+def restore_task(issue):
+    """Undo delete_task. Recursively restores subtasks trashed alongside it."""
+    doc = frappe.get_doc("BP Task", issue)
+    _check_permission(doc.project, "BP Manager")
+
+    if not doc.is_deleted:
+        return {"ok": True, "restored": True}
+
+    frappe.db.set_value("BP Task", issue, {
+        "is_deleted": 0, "deleted_on": None, "deleted_by": None,
+    }, update_modified=False)
+
+    for subtask in frappe.get_all("BP Task", filters={"parent_task": issue, "is_deleted": 1}, pluck="name"):
+        restore_task(subtask)
+
+    frappe.db.commit()
+    from batch_projects.cache import invalidate_project
+    invalidate_project(doc.project)
+    return {"ok": True, "restored": True}
+
+
+@frappe.whitelist()
+def list_deleted_tasks(project):
+    """Trash view for a project — Manager+ only, matching delete_task's own bar."""
+    _check_permission(project, "BP Manager")
+    return frappe.get_all(
+        "BP Task",
+        filters={"project": project, "is_deleted": 1},
+        fields=["name", "task_key", "title", "status", "priority",
+                "parent_task", "deleted_on", "deleted_by"],
+        order_by="deleted_on desc",
+    )
+
+
+@frappe.whitelist()
+def permanently_delete_task(issue):
+    """The only path that actually destroys a task. Requires it to already
+    be in trash — no skipping straight past the recoverable step."""
+    doc = frappe.get_doc("BP Task", issue)
+    _check_permission(doc.project, "BP Manager")
+    if not doc.is_deleted:
+        frappe.throw("Move this task to trash first.")
+    project = doc.project
+    _hard_delete_task(doc)
+    frappe.db.commit()
     from batch_projects.cache import invalidate_project
     invalidate_project(project)
     return {"ok": True}
@@ -6651,7 +6738,7 @@ def search_tasks(query, project=None, exclude=None, limit=10, offset=0):
     _require_system_user()
     if project:
         _check_permission(project, "BP Viewer")
-    filters = {}
+    filters = {"is_deleted": 0}
     if project:
         filters["project"] = project
     if exclude:
@@ -6690,7 +6777,7 @@ def search_tasks_global(query, exclude=None, limit=12, offset=0):
     from batch_projects.permissions import get_accessible_projects
     accessible = get_accessible_projects()  # None = admin (all projects)
 
-    filters = {}
+    filters = {"is_deleted": 0}
     if accessible is not None:
         if not accessible:
             return []

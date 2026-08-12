@@ -822,7 +822,12 @@ export const createTask = (params) => {
 export const updateTask = (task, fields, force = false) =>
   call("update_task", { issue: task, fields: JSON.stringify(fields), force });
 
+// delete_task moves a task to trash (recoverable for 30 days), not a hard
+// delete — see restoreTask / listDeletedTasks / permanentlyDeleteTask.
 export const deleteTask = (task) => call("delete_task", { issue: task });
+export const restoreTask = (task) => call("restore_task", { issue: task });
+export const listDeletedTasks = (project) => call("list_deleted_tasks", { project });
+export const permanentlyDeleteTask = (task) => call("permanently_delete_task", { issue: task });
 
 // Bulk variants: one round trip, per-task results (`{updated:[], failed:[{name,reason}]}`
 // / `{deleted:[], failed:[...]}`) so callers can report real counts instead of

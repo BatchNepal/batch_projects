@@ -1221,6 +1221,27 @@ def _notify_role_changed(payload, actor, project):
     _push_notification_badge({user}, project)
 
 
+def purge_expired_trash():
+    """Daily scheduled job: permanently remove tasks that have sat in trash
+    past TRASH_RETENTION_DAYS. Soft-delete without an eventual purge just
+    moves the "permanent furniture" problem sideways (audit 02 §B3 / 07 §G3)
+    — this is what actually bounds it.
+    """
+    from batch_projects.api.board import _hard_delete_task, TRASH_RETENTION_DAYS
+
+    cutoff = frappe.utils.add_days(frappe.utils.now_datetime(), -TRASH_RETENTION_DAYS)
+    expired = frappe.get_all(
+        "BP Task", filters={"is_deleted": 1, "deleted_on": ["<", cutoff]}, pluck="name"
+    )
+    for name in expired:
+        try:
+            _hard_delete_task(name)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), f"BP trash purge failed: {name}")
+    if expired:
+        frappe.db.commit()
+
+
 def send_due_date_reminders():
     """Daily scheduled job: remind assignees + watchers about due-soon / overdue tasks.
 

@@ -1889,8 +1889,8 @@ function fmtRel(d){
 }
 function fmtDate(d){return d?new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}
 async function handleDelete(){
-  if(!await confirmDialog(`Delete "${issue.value?.title}"? This cannot be undone.`, { danger: true }))return
-  try{await store.deleteCurrentIssue(issue.value.name)}catch(e){}
+  if(!await confirmDialog(`Move "${issue.value?.title}" to trash?`, { danger: true, confirmLabel: 'Move to trash' }))return
+  try{await store.deleteCurrentIssue(issue.value.name); toast.success('Moved to trash')}catch(e){}
 }
 async function doDuplicate(){
   if(!issue.value?.name)return

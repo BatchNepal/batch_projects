@@ -1068,6 +1068,41 @@
             </div>
           </template>
 
+          <template v-else-if="activeTab === 'trash'">
+            <div class="mb-4">
+              <h1 class="text-xl font-semibold text-foreground tracking-[-0.01em]">Trash</h1>
+              <p class="text-base text-muted mt-1">
+                Deleted tasks stay here for 30 days before they're removed for good.
+              </p>
+            </div>
+
+            <div v-if="trashLoading" class="flex justify-center py-16">
+              <Spinner size="md" />
+            </div>
+            <EmptyState v-else-if="!trashedTasks.length" title="Trash is empty"
+                        description="Tasks you delete from the board, list, or backlog show up here first."
+                        class="bp-set-card mb-4" />
+
+            <div v-else class="divide-y divide-[var(--border-secondary)] rounded-md border border-border overflow-hidden">
+              <div v-for="t in trashedTasks" :key="t.name" class="flex items-center gap-3 px-4 py-3 bg-overlay">
+                <div class="min-w-0 flex-1">
+                  <p class="text-base font-medium text-foreground truncate">
+                    <span class="text-muted font-normal">{{ t.task_key }}</span> {{ t.title }}
+                  </p>
+                  <p class="text-sm text-muted truncate">
+                    Trashed {{ fmtRelative(t.deleted_on) }}<span v-if="t.deleted_by"> by {{ t.deleted_by }}</span>
+                  </p>
+                </div>
+                <Button size="sm" variant="bordered" :disabled="restoringTask === t.name" @click="restoreTrashedTask(t)">
+                  Restore
+                </Button>
+                <IconButton size="sm" variant="light" color="danger" @click="askPurgeTask(t)" aria-label="Delete forever">
+                  <Icon :icon="Trash2" class="size-3.5" />
+                </IconButton>
+              </div>
+            </div>
+          </template>
+
         </div>
       </div>
     </div>
@@ -1151,6 +1186,7 @@ import {
   inviteMember, listInvitations, revokeInvitation, resendInvitation,
   listTaskTemplates, updateTaskTemplate, deleteTaskTemplate,
   getEpics, createEpic, updateEpic, deleteEpic,
+  listDeletedTasks, restoreTask, permanentlyDeleteTask,
   getProjectFields, listAttachableFields, attachFieldToProject, detachFieldFromProject,
   updateProjectCustomFieldValues, deleteLibraryField,
   saveProjectAsTemplate,
@@ -1264,7 +1300,54 @@ async function loadTaskTemplates() {
 watch([activeTab, () => store.currentProject?.name], ([tab]) => {
   if (tab === 'templates') loadTaskTemplates()
   if (tab === 'epics') loadEpics()
+  if (tab === 'trash') loadTrash()
 }, { immediate: true })
+
+// ── Trash ──────────────────────────────────────────────────────────────────
+const trashedTasks = ref([])
+const trashLoading = ref(false)
+const restoringTask = ref(null)
+
+async function loadTrash() {
+  if (!store.currentProject?.name) return
+  trashLoading.value = true
+  try { trashedTasks.value = await listDeletedTasks(store.currentProject.name) }
+  catch { trashedTasks.value = [] }
+  finally { trashLoading.value = false }
+}
+
+function fmtRelative(d) {
+  if (!d) return ''
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+async function restoreTrashedTask(t) {
+  restoringTask.value = t.name
+  try {
+    await restoreTask(t.name)
+    trashedTasks.value = trashedTasks.value.filter(x => x.name !== t.name)
+    showToast(`"${t.title}" restored`)
+    store.refreshBoard?.()
+  } catch (e) {
+    showToast(e.message || 'Failed to restore', 'error')
+  } finally {
+    restoringTask.value = null
+  }
+}
+
+function askPurgeTask(t) {
+  triggerConfirm({
+    title: 'Delete forever',
+    message: `Permanently delete "${t.title}"? This cannot be undone.`,
+    confirmText: 'Delete forever',
+    confirmColor: 'danger',
+    action: async () => {
+      await permanentlyDeleteTask(t.name)
+      trashedTasks.value = trashedTasks.value.filter(x => x.name !== t.name)
+      showToast('Deleted forever')
+    },
+  })
+}
 
 async function renameTemplate(t) {
   const name = await promptDialog({ title: 'Template name', inputLabel: 'Name', defaultValue: t.template_name })
@@ -1447,6 +1530,7 @@ const TABS = [
   { id: 'fields',   label: 'Custom fields', icon: SlidersHorizontal },
   { id: 'automations', label: 'Automations', icon: Zap },
   { id: 'templates', label: 'Task templates', icon: FileText },
+  { id: 'trash', label: 'Trash', icon: Trash2 },
 ]
 
 const ROLES = ['Admin', 'Manager', 'Member', 'Viewer']
