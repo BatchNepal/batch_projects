@@ -1195,8 +1195,14 @@ export const getTimesheets = (period = "last_30_days", team = null) =>
 
 // ─── MARGIN REPORT ────────────────────────────────────────────────────────────
 
+// Served by the GATEWAY, not Frappe: the margin arithmetic lives in the Go
+// binary (bp-gateway internal/insights), which is why this is a bridgeCall
+// rather than a call(). Frappe only supplies the raw permission-filtered rows
+// the gateway computes from. Response shape is unchanged, and bridgeCall maps
+// the gateway's 402 to the same UpgradeRequiredError a Frappe-side gate throws,
+// so callers need no changes.
 export const getMarginReport = (period = "last_30_days") =>
-  call("get_margin_report", { period });
+  bridgeCall(`insights/margin?period=${encodeURIComponent(period)}`);
 
 // Per-project delivery analytics: status breakdown, throughput, cycle time, velocity.
 // Pass from_date/to_date (ISO strings) to override the period enum with a custom range.
@@ -1207,8 +1213,11 @@ export const getReports = (project, period = "last_30_days", fromDate = null, to
 export const getSprintReport = (project, sprintName) =>
   call("get_sprint_report", { project, sprint_name: sprintName });
 
-// Cross-project delivery rollup for the Portfolio view.
-export const getPortfolio = () => call("get_portfolio");
+// Cross-project delivery rollup for the Portfolio view. Served by the GATEWAY
+// (bp-gateway internal/insights/portfolio.go) — see getMarginReport above for
+// why the computation lives there rather than in Frappe. Response shape is
+// unchanged.
+export const getPortfolio = () => bridgeCall("insights/portfolio");
 
 // Dashboard widget engine: group a metric by a dimension, scoped to a project or all.
 export const getWidgetData = (config) => call("get_widget_data", { config: JSON.stringify(config) });

@@ -150,7 +150,8 @@ def get_project_money(project, period="last_30_days"):
     erp_project = doc.erpnext_project
     rate = float(doc.hourly_rate or 0)
 
-    # Currency doctrine (same as get_margin_report): everything summed on
+    # Currency doctrine (same as the margin report, now internal/insights/
+    # margin.go): everything summed on
     # this tab is a base_* / company-currency amount — timesheet rates are
     # written in company currency at timer-stop, and revenue/materials below
     # read base_grand_total. Label accordingly; BP Project.currency is
@@ -217,7 +218,8 @@ def get_project_money(project, period="last_30_days"):
 
     labour_hours = round(sum(float(r.hours or 0) for r in ts_rows), 2)
     # Per-row costing fallback — see batch_projects/costing.py:labour_cost,
-    # the single shared implementation get_margin_report also calls. A row
+    # the single shared implementation. (The margin report applies the same
+    # rule in Go — see costing.py's header.) A row
     # with costing_amount 0 (no employee cost configured when it was
     # logged) is estimated at the project rate; rows with real costing
     # keep it.
@@ -286,7 +288,8 @@ def get_project_money(project, period="last_30_days"):
     material_total = round(sum(float(r.grand_total or 0) for r in material_rows), 2)
 
     # ── Expenses: submitted Expense Claims in period ─────────────────────────
-    # Must stay in sync with get_margin_report, which also counts expenses
+    # Must stay in sync with the margin report (internal/insights/margin.go),
+    # which also counts expenses
     # into cost — the same "two screens, two different costs" class of bug
     # already closed once for labour; see costing.py.
     expense_rows = []
@@ -405,7 +408,7 @@ def get_project_money(project, period="last_30_days"):
     # stock consumption — Stock Entry/Stock Ledger Entry carry the same
     # bp_task dimension but nothing reads it (zero live usage) and no SPA
     # path creates a Stock Entry. Deliberately left unbuilt — see board.py's
-    # get_margin_report for the full reasoning.
+    # the margin report (internal/insights/margin.go) for the full reasoning.
     task_material_rows = []
     try:
         task_material_rows = frappe.db.sql(
@@ -525,7 +528,7 @@ def get_project_money(project, period="last_30_days"):
 
     # ── Budget (same by-type logic as the workspace profitability panel) ─────
     # expense_total must be included — omitting expenses from cost here
-    # while get_margin_report counts them is the same "two screens, two
+    # while the margin report counts them is the same "two screens, two
     # different costs" class of bug already closed once for labour.
     cost = labour_cost + material_total + expense_total
     ptype = doc.project_type or "tm"

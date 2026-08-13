@@ -1037,7 +1037,7 @@ def get_board(project, show_child_issues=False):
     board = {col["key"]: col["issues"] for col in result.get("groups", [])}
 
     # Resolved health (manual override, else derived from overdue/completion —
-    # same formula get_portfolio uses, via the shared _project_health_label).
+    # same formula the gateway portfolio rollup uses, via _project_health_label).
     from datetime import date
     today_str = date.today().isoformat()
     completed_names = {s["name"] for s in states if s.get("category") in ("completed", "cancelled")}
@@ -3061,9 +3061,10 @@ def get_project_budget_summary(project):
     gauge — same estimated-cost formula as get_milestone_report
     (actual_hours x hourly_rate vs budget_amount), just rolled up across
     the whole project instead of one milestone. Deliberately NOT the
-    heavier get_margin_report calculation (real Sales Invoice/Timesheet/
+    heavier margin-report calculation (real Sales Invoice/Timesheet/
     Purchase Invoice/Expense Claim joins, gated behind the paid
-    "profitability" entitlement) — a summary gauge shouldn't require an
+    "profitability" entitlement, and now computed in the gateway — see
+    api/insights_data.py) — a summary gauge shouldn't require an
     erpnext_project link or a premium tier to render a rough estimate."""
     project = _resolve_project(project)
     _check_permission(project, "BP Viewer")
@@ -4281,8 +4282,9 @@ def _get_completed_statuses_by_project(project_name: str) -> list:
 
 def _project_health_label(health_override, total, done, overdue):
     """Derive project health from overdue percentage and completion rate.
-    Falls back to health_override if set manually. Shared by get_portfolio
-    and get_board so both resolve health the same way."""
+    Falls back to health_override if set manually. Shared by the gateway portfolio rollup
+    (internal/insights/portfolio.go projectHealth) and get_board, so all resolve
+    health identically. Keep the two implementations in step."""
     if health_override:
         return health_override
     if total == 0:
@@ -7755,246 +7757,20 @@ def get_erpnext_departments():
 
 
 
-@frappe.whitelist()
-def get_margin_report(period="last_30_days"):
-    """
-    Per-project margin: Revenue (Sales Invoices) – Cost (labour, from
-    Timesheet Detail rows — real ERPNext costing_amount when present, the
-    project's flat hourly_rate as an estimate otherwise; see
-    batch_projects/costing.py:labour_cost — plus materials/expenses below).
-    period: last_7_days | last_30_days | last_90_days | month:YYYY-MM
-    """
-    from datetime import date, timedelta
-    _require_system_user()
-    from batch_projects.entitlements import require_feature
-    require_feature("profitability")
-
-    today = date.today()
-    period_days = {"last_7_days": 7, "last_30_days": 30, "last_90_days": 90}
-
-    if period in period_days:
-        from_date = today - timedelta(days=period_days[period])
-        to_date   = today
-    elif period.startswith("month:"):
-        import calendar
-        ym        = period.split(":")[1]
-        year, mon = int(ym.split("-")[0]), int(ym.split("-")[1])
-        from_date = date(year, mon, 1)
-        to_date   = date(year, mon, calendar.monthrange(year, mon)[1])
-    else:
-        from_date = today - timedelta(days=30)
-        to_date   = today
-
-    from_dt = f"{from_date.isoformat()} 00:00:00"
-    to_dt   = f"{to_date.isoformat()} 23:59:59"
-
-    # ── 1. All active BP Projects (joined through erpnext_project, not name) ─
-    # Access filter — every field this report returns is financial,
-    # so on top of the ordinary project-visibility filter, each project is
-    # further dropped unless the caller specifically holds `view_money` on
-    # it (same reasoning as the portfolio view's money filter — `profitability` is a
-    # tier gate, not a per-project role check, and this endpoint has no
-    # non-money fields worth showing with the numbers stripped, unlike
-    # the portfolio view).
-    from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
-    from batch_projects import access
-    proj_filters = accessible_project_filter({"status": "Active"})
-    projects = [] if proj_filters is NO_ACCESSIBLE_PROJECTS else frappe.get_all(
-        "BP Project",
-        filters=proj_filters,
-        fields=["name", "project_name", "key", "project_color", "theme", "project_type",
-                "hourly_rate", "budget_amount", "retainer_hours", "currency",
-                "client", "start_date", "target_end_date", "erpnext_project"],
-    )
-    projects = [p for p in projects if access.has_capability(p["name"], "view_money")]
-    # Reverse map: erpnext_project → BP project doc. Skip unlinked projects
-    # (they were never bridged, correctly contribute zero).
-    erpnext_to_bp = {}
-    for p in projects:
-        ep = p.get("erpnext_project")
-        if ep:
-            erpnext_to_bp[ep] = p
-    erpnext_project_names = list(erpnext_to_bp.keys()) or ["__none__"]
-
-    # ── 2. Revenue from submitted Sales Invoices ─────────────────────────────
-    revenue_map = {}
-    try:
-        if frappe.db.table_exists("Sales Invoice"):
-            inv_rows = frappe.db.sql(
-                """
-                SELECT project, SUM(base_grand_total) AS revenue
-                FROM `tabSales Invoice`
-                WHERE docstatus = 1
-                  AND project IN %(projects)s
-                  AND posting_date >= %(from_date)s
-                  AND posting_date <= %(to_date)s
-                GROUP BY project
-                """,
-                {"projects": erpnext_project_names, "from_date": from_date, "to_date": to_date},
-                as_dict=True,
-            )
-            for r in inv_rows:
-                ep = r["project"]
-                if ep in erpnext_to_bp:
-                    revenue_map[ep] = float(r["revenue"] or 0)
-    except Exception as exc:
-        frappe.log_error(f"get_margin_report revenue query: {exc}")
-
-    # ── 3. Labour cost from submitted Timesheets ─────────────────────────────
-    # Per-row fetch (not pre-aggregated in SQL) so the same per-row costing
-    # fallback the Money tab uses can apply here too — see
-    # batch_projects/costing.py:labour_cost.
-    # SUM(hours) x flat rate used to silently discard any row's real
-    # ERPNext costing_amount, disagreeing with the Money tab on the same
-    # project/period by exactly the costed rows' value.
-    from batch_projects.costing import labour_cost as _labour_cost
-    hours_map = {}
-    labor_map = {}
-    try:
-        if frappe.db.table_exists("Timesheet Detail"):
-            ts_rows = frappe.db.sql(
-                """
-                SELECT tsd.project, tsd.hours, tsd.costing_amount
-                FROM `tabTimesheet Detail` tsd
-                JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
-                WHERE tsd.project IN %(projects)s
-                  AND tsd.from_time >= %(from_dt)s
-                  AND tsd.from_time <= %(to_dt)s
-                """,
-                {"projects": erpnext_project_names, "from_dt": from_dt, "to_dt": to_dt},
-                as_dict=True,
-            )
-            rows_by_project = {}
-            for r in ts_rows:
-                if r["project"] in erpnext_to_bp:
-                    rows_by_project.setdefault(r["project"], []).append(r)
-            for ep, rows in rows_by_project.items():
-                rate = float(erpnext_to_bp[ep].get("hourly_rate") or 0)
-                hours_map[ep] = round(sum(float(r["hours"] or 0) for r in rows), 2)
-                labor_map[ep] = _labour_cost(rows, rate)
-    except Exception as exc:
-        frappe.log_error(f"get_margin_report timesheet query: {exc}")
-
-    # ── 3b. Material cost from submitted Purchase Invoices (per project) ──────
-    # Deliberate scope: "materials" here means procurement spend (what was
-    # bought), not physical stock consumption (what was actually used from
-    # inventory). BP Task IS registered as a real ERPNext Accounting
-    # Dimension (install.py's ensure_bp_task_accounting_dimension) reaching
-    # Stock Entry/Stock Ledger Entry too, but nothing reads it there and no
-    # SPA path exists to create a Stock Entry — zero live usage. Left
-    # unbuilt on purpose: no current template/customer
-    # signal for materials-consumption costing (manufacturing/construction-
-    # materials job-costing), and it's a large feature for that thin a signal.
-    # Don't assume Stock Entry data feeds this report — it doesn't.
-    material_map = {}
-    try:
-        if frappe.db.table_exists("Purchase Invoice Item"):
-            pi_rows = frappe.db.sql(
-                """
-                SELECT pii.project, SUM(pii.base_net_amount) AS amt
-                FROM `tabPurchase Invoice Item` pii
-                JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent AND pi.docstatus = 1
-                WHERE pii.project IN %(projects)s
-                  AND pi.posting_date >= %(from_date)s
-                  AND pi.posting_date <= %(to_date)s
-                GROUP BY pii.project
-                """,
-                {"projects": erpnext_project_names, "from_date": from_date, "to_date": to_date},
-                as_dict=True,
-            )
-            for r in pi_rows:
-                ep = r["project"]
-                if ep in erpnext_to_bp:
-                    material_map[ep] = float(r["amt"] or 0)
-    except Exception as exc:
-        frappe.log_error(f"get_margin_report purchase invoice query: {exc}")
-
-    # ── 3c. Expense cost from submitted Expense Claims (per project) ──────────
-    expense_map = {}
-    try:
-        if frappe.db.table_exists("Expense Claim"):
-            ec_rows = frappe.db.sql(
-                """
-                SELECT project, SUM(total_sanctioned_amount) AS amt
-                FROM `tabExpense Claim`
-                WHERE docstatus = 1
-                  AND project IN %(projects)s
-                  AND posting_date >= %(from_date)s
-                  AND posting_date <= %(to_date)s
-                GROUP BY project
-                """,
-                {"projects": erpnext_project_names, "from_date": from_date, "to_date": to_date},
-                as_dict=True,
-            )
-            for r in ec_rows:
-                ep = r["project"]
-                if ep in erpnext_to_bp:
-                    expense_map[ep] = float(r["amt"] or 0)
-    except Exception as exc:
-        frappe.log_error(f"get_margin_report expense claim query: {exc}")
-
-    # ── 4. Build report rows (keyed by erpnext_project for the maps above) ───
-    report = []
-    for p in projects:
-        ep = p.get("erpnext_project")
-        if ep:
-            revenue   = revenue_map.get(ep, 0.0)
-            labor     = labor_map.get(ep, 0.0)
-            material  = material_map.get(ep, 0.0)
-            expense   = expense_map.get(ep, 0.0)
-            hours     = hours_map.get(ep, 0.0)
-        else:
-            revenue = labor = material = expense = hours = 0.0
-        cost      = labor + material + expense
-        margin    = revenue - cost
-        margin_pct = round((margin / revenue * 100) if revenue > 0 else 0.0, 1)
-        budget    = float(p.get("budget_amount") or 0)
-        report.append({
-            "project":       p["name"],
-            "project_name":  p["project_name"],
-            "key":           p["key"],
-            "project_color": p["project_color"] or "#94a3b8",
-            "theme":         p.get("theme"),
-            "project_type":  p["project_type"] or "internal",
-            "client":        p.get("client") or "",
-            "currency":      p.get("currency") or "USD",
-            "budget":        budget,
-            "budget_used_pct": round((cost / budget * 100), 1) if budget > 0 else 0.0,
-            "revenue":       round(revenue, 2),
-            "cost":          round(cost, 2),
-            "cost_breakdown": {"labor": round(labor, 2), "materials": round(material, 2), "expenses": round(expense, 2)},
-            "hours":         round(hours, 1),
-            "hourly_rate":   float(p.get("hourly_rate") or 0),
-            "margin":        round(margin, 2),
-            "margin_pct":    margin_pct,
-        })
-
-    report.sort(key=lambda x: x["margin"], reverse=True)
-
-    total_revenue = round(sum(r["revenue"] for r in report), 2)
-    total_cost    = round(sum(r["cost"] for r in report), 2)
-    total_margin  = round(total_revenue - total_cost, 2)
-    total_hours   = round(sum(r["hours"] for r in report), 1)
-    total_budget  = round(sum(r["budget"] for r in report), 2)
-    cost_labor    = round(sum(r["cost_breakdown"]["labor"] for r in report), 2)
-    cost_material = round(sum(r["cost_breakdown"]["materials"] for r in report), 2)
-    cost_expense  = round(sum(r["cost_breakdown"]["expenses"] for r in report), 2)
-
-    return {
-        "period":    period,
-        "from_date": from_date.isoformat(),
-        "to_date":   to_date.isoformat(),
-        "summary": {
-            "total_revenue":  total_revenue,
-            "total_cost":     total_cost,
-            "total_margin":   total_margin,
-            "total_hours":    total_hours,
-            "total_budget":   total_budget,
-            "cost_breakdown": {"labor": cost_labor, "materials": cost_material, "expenses": cost_expense},
-            "margin_pct":     round((total_margin / total_revenue * 100) if total_revenue > 0 else 0.0, 1),
-        },
-        "projects": report,
-    }
+# get_margin_report was REMOVED here — the margin/profitability arithmetic
+# now lives in bp-gateway's internal/insights package (margin.go), served at
+# GET /v1/insights/margin.
+#
+# It was not moved for performance. batch_projects is the open half of an
+# open-core product, so keeping the formula here meant shipping the thing
+# customers pay for in a public repo behind a require_feature() line anyone
+# self-hosting can delete. Frappe's remaining job is the part it should own:
+# batch_projects/api/insights_data.py::get_margin_inputs returns the raw,
+# permission-filtered rows (project visibility + per-project view_money) and
+# performs no arithmetic at all.
+#
+# Consequence, deliberately accepted: an install with no gateway has no
+# margin report. That is the community/paid line, not a regression.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -8665,193 +8441,22 @@ def update_automation_rule(rule, rule_name=None, trigger_event=None, action_type
 
 
 
-@frappe.whitelist()
-def get_portfolio():
-    """Cross-project delivery rollup for the Portfolio view.
+# get_portfolio was REMOVED here — the cross-project rollup (task
+# categorisation, overdue counting, health verdict, completion %, per-project
+# money masking, ordering and summary) now lives in bp-gateway's
+# internal/insights/portfolio.go, served at GET /v1/insights/portfolio.
+#
+# Same reasoning as the margin report above: the analysis is the paid product,
+# and this repo is public. Frappe keeps what it should own —
+# api/insights_data.py::get_portfolio_inputs returns raw rows plus the two
+# genuine permission decisions (which projects are visible, and per-project
+# view_money) and computes nothing.
+#
+# _project_health_label() below deliberately STAYS: get_board (free) labels
+# health too, so that rule cannot depend on a paid gateway. portfolio.go's
+# projectHealth is its counterpart and the two must be changed together.
 
-    Returns per-project task health (done/in-progress/todo, overdue, % complete,
-    health status) + milestones + budget info + summary aggregates.
-    The frontend Portfolio.vue renders this into a full Gantt-style timeline.
-    """
-    from batch_projects.entitlements import require_feature
-    require_feature("portfolio")
-    from datetime import date, datetime
-    from batch_projects import access
-    from batch_projects.gateway_guard import verify_gateway_request
-    verify_gateway_request()
 
-    _require_system_user()
-
-    # Get all active projects, scoped to what this user can see —
-    # frappe.get_all ignores permission_query_conditions, so `visibility`
-    # would otherwise be silently ignored on this cross-project rollup.
-    from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
-    proj_filters = accessible_project_filter({"status": "Active"})
-    if proj_filters is NO_ACCESSIBLE_PROJECTS:
-        return {
-            "projects": [],
-            "summary": {"projects": 0, "tasks": 0, "done_pct": 0, "overdue": 0, "at_risk": 0, "off_track": 0},
-            "can_view_money": False,
-        }
-
-    projects = frappe.get_all(
-        "BP Project",
-        filters=proj_filters,
-        fields=["name", "project_name", "key", "project_color", "theme", "health_override",
-                "client", "lead", "start_date", "target_end_date", "budget_amount",
-                "currency", "workflow_states", "company"],
-        order_by="creation asc",
-    )
-
-    if not projects:
-        return {
-            "projects": [],
-            "summary": {"projects": 0, "tasks": 0, "done_pct": 0, "overdue": 0, "at_risk": 0, "off_track": 0},
-            "can_view_money": False,
-        }
-
-    # Build workflow category maps per project
-    cat = {}
-    for p in projects:
-        states = _parse_json(p.get("workflow_states"), [])
-        cat[p["name"]] = {
-            "completed": {s.get("name") for s in states if s.get("category") == "completed"},
-            "started":   {s.get("name") for s in states if s.get("category") == "started"},
-        }
-
-    # Resolve lead names
-    leads = list({p["lead"] for p in projects if p.get("lead")})
-    lead_names = {}
-    if leads:
-        for u in frappe.get_all("User", filters={"name": ["in", leads]}, fields=["name", "full_name"]):
-            lead_names[u["name"]] = u["full_name"] or u["name"]
-
-    # Get all tasks for these projects
-    pnames = [p["name"] for p in projects]
-    tasks = frappe.get_all("BP Task",
-        filters=_task_filters({"project": ["in", pnames]}),
-        fields=["project", "status", "due_date"])
-
-    today = date.today()
-
-    # Compute rollups per project
-    roll = {}
-    for p in projects:
-        roll[p["name"]] = {"total": 0, "done": 0, "started": 0, "todo": 0, "overdue": 0}
-
-    for t in tasks:
-        r = roll.get(t["project"])
-        if not r:
-            continue
-        r["total"] += 1
-        c = cat[t["project"]]
-        is_done = t["status"] in c["completed"]
-        if is_done:
-            r["done"] += 1
-        elif t["status"] in c["started"]:
-            r["started"] += 1
-        else:
-            r["todo"] += 1
-        dd = t.get("due_date")
-        if dd and not is_done:
-            try:
-                d = dd if isinstance(dd, date) else datetime.strptime(str(dd)[:10], "%Y-%m-%d").date()
-            except Exception:
-                d = None
-            if d and d < today:
-                r["overdue"] += 1
-
-    # Money permission is per-project — view_money
-    # is modeled per-project in access.py's capability matrix (a workspace
-    # admin can grant/revoke it per role per project), so collapsing this to
-    # one global `any()` let a user with money access on ONE project see
-    # budget/client for EVERY project in the portfolio. `can_view_money` at
-    # the top level is kept as a UI-affordance flag (whether to render the
-    # money column/section at all); the actual masking below is per-row.
-    money_visible = {p["name"]: access.has_capability(p["name"], "view_money") for p in projects}
-    can_view_money = any(money_visible.values())
-
-    # Get milestones per project
-    milestones_raw = frappe.get_all("BP Milestone",
-        filters={"project": ["in", pnames]},
-        fields=["name", "title", "status", "due_date", "project"])
-    milestones_by_project = {}
-    for m in milestones_raw:
-        milestones_by_project.setdefault(m["project"], []).append({
-            "name": m["name"],
-            "title": m["title"],
-            "status": m["status"],
-            "due_date": str(m["due_date"]) if m.get("due_date") else None,
-        })
-
-    def _compute_health(p, r):
-        return _project_health_label(p.get("health_override"), r["total"], r["done"], r["overdue"])
-
-    rows = []
-    at_risk_count = 0
-    off_track_count = 0
-
-    for p in projects:
-        r = roll[p["name"]]
-        health = _compute_health(p, r)
-        if health == "At risk":
-            at_risk_count += 1
-        elif health == "Off track":
-            off_track_count += 1
-
-        ms = milestones_by_project.get(p["name"], [])
-
-        # Mask per-project — a viewer who can't see money on THIS
-        # project must get null, even if they can see it on others in the
-        # same portfolio response.
-        can_see_this_money = money_visible.get(p["name"], False)
-        raw_budget = float(p.get("budget_amount") or 0)
-        # Budget usage: simple heuristic — % tasks done as proxy. Computed
-        # from the real (unmasked) figure so the percentage stays correct
-        # internally; only the two fields returned to the client are masked.
-        budget_used_pct = round((r["done"] / r["total"]) * 100, 1) if raw_budget > 0 and r["total"] > 0 else 0.0
-
-        rows.append({
-            "name": p["name"],
-            "project_name": p["project_name"],
-            "key": p["key"],
-            "color": p["project_color"] or "#94a3b8",
-            "client": (p.get("client") or "") if can_see_this_money else "",
-            "lead": lead_names.get(p.get("lead"), ""),
-            "health": health,
-            "start_date": str(p["start_date"]) if p.get("start_date") else None,
-            "target_end_date": str(p["target_end_date"]) if p.get("target_end_date") else None,
-            "budget": raw_budget if can_see_this_money else None,
-            "budget_used_pct": budget_used_pct,
-            "currency": p.get("currency") or "",
-            "total": r["total"],
-            "done": r["done"],
-            "started": r["started"],
-            "todo": r["todo"],
-            "done_pct": round((r["done"] / r["total"] * 100)) if r["total"] else 0,
-            "overdue": r["overdue"],
-            "milestone_count": len(ms),
-            "milestones": ms,
-        })
-
-    rows.sort(key=lambda x: (x["health"] != "On track", -x["done_pct"]))
-
-    total_tasks = sum(r["total"] for r in rows)
-    total_done = sum(r["done"] for r in rows)
-    total_overdue = sum(r["overdue"] for r in rows)
-
-    return {
-        "projects": rows,
-        "summary": {
-            "projects": len(rows),
-            "tasks": total_tasks,
-            "done_pct": round((total_done / total_tasks * 100)) if total_tasks else 0,
-            "overdue": total_overdue,
-            "at_risk": at_risk_count,
-            "off_track": off_track_count,
-        },
-        "can_view_money": can_view_money,
-    }
 
 
 def _company_currency(company=None):
