@@ -15,7 +15,13 @@ from . import __version__ as app_version
 # the gateway itself at boot (via get_session_info) to refuse starting
 # against an incompatible batch_projects, and by the gateway installer to
 # resolve which gateway version to install/update to.
-gateway_min_version = "1.0.20"
+#
+# 1.0.23 is the first release carrying the /v1/insights/* plane. This app no
+# longer computes the margin report, the portfolio rollup or the Money tab —
+# it asks the gateway to. Against 1.0.22 or older those three pages get a 404
+# from a gateway that has no such routes, so the floor has to move with them:
+# a version mismatch must fail loudly at boot, not as three broken pages.
+gateway_min_version = "1.0.23"
 
 add_to_apps_screen = [
     {
