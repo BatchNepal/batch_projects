@@ -36,3 +36,8 @@ batch_projects.patches.rescale_dashboard_layout_columns
 # access hooks never ran for anyone without an unrelated ERPNext role — see
 # access.ensure_member_role() and this patch's own docstring.
 batch_projects.patches.grant_bp_member_baseline_docperm
+# Deleting a User leaves its BP Project Member rows behind, and Frappe
+# link-validates the whole doc on save — so one orphan makes the entire
+# BP Project unsavable (LinkValidationError), including edits that never
+# touch the members table. See the patch docstring.
+batch_projects.patches.clean_orphaned_project_members
