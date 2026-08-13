@@ -263,15 +263,21 @@ def _evaluate_automations(event_name: str, payload: dict):
     """
     Run every active BP Automation Rule whose trigger matches this event.
 
-    Dispatched to whichever engine site_config `bp_automation_engine` selects:
-    "python" (default) evaluates + executes rules in-process as before;
-    "gateway" publishes the event to the bp-gateway automation engine instead
-    and returns immediately — Go decides what fires and calls back into
-    api/automation.py::apply_action. Never both. Failures are isolated here
-    and never propagate to the mutation that triggered the event.
+    Dispatched to whichever engine entitlements.automation_engine() resolves:
+    "gateway" publishes the event to the bp-gateway automation engine and
+    returns immediately — Go decides what fires and calls back into
+    api/automation.py::apply_action; "python" evaluates in-process, but only
+    for surfaces the open engine is still allowed to run (run_for_event
+    refuses the paid matcher outright — see its own gate). Never both.
+    Failures are isolated here and never propagate to the mutation that
+    triggered the event.
+
+    The engine default is DERIVED from whether this site is gateway-fronted,
+    not hardcoded — see entitlements.automation_engine() for why.
     """
     try:
-        engine = (frappe.conf.get("bp_automation_engine") or "python").lower()
+        from batch_projects.entitlements import automation_engine
+        engine = automation_engine()
         if engine == "gateway":
             from batch_projects import bridge
             bridge.publish_event(_event_envelope(event_name, payload))
@@ -317,8 +323,12 @@ def _event_envelope(event_name: str, payload: dict) -> dict:
         # resolves the same way through the Go gateway as it already does
         # through the Python engine. Previously this whole dict was silently
         # dropped before reaching Go — any Team-tier workspace on
-        # bp_automation_engine="gateway" (the default) had these fields
-        # unconditionally unresolvable (WORKPLAN-PHASE25 B2 finding).
+        # bp_automation_engine="gateway" had these fields unconditionally
+        # unresolvable (WORKPLAN-PHASE25 B2 finding). Which engine a site runs
+        # is resolved in ONE place — entitlements.automation_engine() — and
+        # "gateway" is now the derived default for any gateway-fronted site,
+        # so this path is the live one on every licensed install, not just
+        # those that set site_config by hand.
         "payload": payload,
         # external.webhook's third-party JSON body — a SEPARATE, explicit key
         # (not just riding inside "payload") because it gets its own dotted

@@ -244,7 +244,8 @@ def _validate_action(action: dict):
     elif a_type == "Update ERPNext Document":
         # Only meaningful when the Go gateway decides *when* to fire — the
         # open Python engine must never be a path to this action.
-        engine = (frappe.conf.get("bp_automation_engine") or "python").lower()
+        from batch_projects.entitlements import automation_engine
+        engine = automation_engine()
         if engine != "gateway":
             frappe.throw("Update ERPNext Document requires the gateway automation engine.")
         if cfg.get("doctype") not in _ERPNEXT_DOCTYPE_WHITELIST:
@@ -292,8 +293,33 @@ def run_for_event(event_name: str, payload: dict):
 
     # Monetization gate: automations run only on Team tier and above. One
     # flag for the whole surface — workspace scope rides the same gate.
-    from batch_projects.entitlements import is_feature_enabled
+    from batch_projects.entitlements import automation_engine, is_feature_enabled
     if not is_feature_enabled("automations"):
+        return
+
+    # Second gate, and the load-bearing one: the matcher below is the paid
+    # automation surface, and this file is open source. The check above is a
+    # two-line `if` guarding ~1000 lines of engine that ship in the same
+    # public repo, so it cannot be the boundary: an editable gate sitting in
+    # editable source enforces nothing on its own.
+    # So the paid matcher runs on the GATEWAY engine only, where evaluation
+    # happens in the compiled binary instead (internal/automation/evaluator.go
+    # implements every operator this file does: eq/ne/in/nin/gt/gte/lt/lte/
+    # contains/changed/is_set/is_not_set, plus both compiled triggers).
+    #
+    # Not a behaviour change for correctly-deployed installs:
+    # automation_engine() derives "gateway" for any site with a gateway
+    # shared secret, and a site without one can only resolve to `starter`,
+    # where is_feature_enabled() above has already returned. This branch is
+    # reachable only when someone has explicitly pinned
+    # bp_automation_engine="python" on a licensed site.
+    #
+    # Deliberately silent, matching the entitlement return above: this fires
+    # per event, so logging here would flood the Error Log rather than inform
+    # anyone. Action EXECUTION (_apply_*, below) is untouched and still runs
+    # in-process — the gateway engine calls back into it via
+    # api/automation.py::apply_action, so it must stay reachable.
+    if automation_engine() != "gateway":
         return
 
     depth = frappe.flags.get("bp_automation_depth", 0)
@@ -362,9 +388,16 @@ def run_scheduled(rule_name: str, payload: dict):
     scanning for whichever tasks currently qualify — see
     _run_relative_schedule.
     """
-    from batch_projects.entitlements import is_feature_enabled
+    from batch_projects.entitlements import automation_engine, is_feature_enabled
     if not is_feature_enabled("automations"):
         return "Skipped", "automations not enabled for this tenant"
+    # Same paid-matcher gate as run_for_event: this path re-evaluates the
+    # rule's own conditions through _match() below, so it is the same open
+    # matcher and gets the same boundary. No legitimate caller is affected —
+    # the only caller is api/automation.py::run_scheduled_event, which is the
+    # gateway scheduler's callback and therefore always in gateway mode.
+    if automation_engine() != "gateway":
+        return "Skipped", "automation matcher requires the gateway engine"
     if not frappe.db.exists("BP Automation Rule", rule_name):
         return "Skipped", f"rule {rule_name} not found"
 

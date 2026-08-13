@@ -220,6 +220,41 @@ def current_packs() -> list[str]:
     return []
 
 
+def automation_engine() -> str:
+    """Which engine evaluates automation rules: "gateway" (Go) or "python".
+
+    An explicit site_config `bp_automation_engine` always wins. With nothing
+    set the default is DERIVED from whether this site is gateway-fronted at
+    all, rather than being hardcoded to "python":
+
+        bp_gateway_shared_secret configured  → "gateway"
+        no shared secret                     → "python"
+
+    Why derived: automations are a paid feature, and a tier above `starter`
+    can only ever arrive on a gateway-signed X-BP-Tier header (see
+    current_tier()). So a site entitled to run automations at all is, by
+    construction, already fronted by a gateway — and its rules belong on the
+    Go engine, which is the enforcement boundary. A site with no shared
+    secret resolves to `starter`, where is_feature_enabled("automations") is
+    False and neither engine runs anything.
+
+    The old hardcoded "python" default meant an entitled, gateway-fronted
+    tenant silently evaluated its rules in-process unless someone hand-edited
+    site_config — nothing in the installer or bp-license bootstrap has ever
+    set this flag. That put the whole paid matcher on the open, patchable
+    path by default; deriving it closes that without requiring any existing
+    install to be reconfigured.
+
+    Single source of truth for the flag — events.py, bp_automation_rule.py
+    and api/workflows.py all resolve through here so the default can never
+    drift between them again.
+    """
+    explicit = (frappe.conf.get("bp_automation_engine") or "").strip().lower()
+    if explicit:
+        return explicit
+    return "gateway" if frappe.conf.get("bp_gateway_shared_secret") else "python"
+
+
 # ─── FEATURE CHECKS ──────────────────────────────────────────────────────────
 
 def is_feature_enabled(feature: str) -> bool:

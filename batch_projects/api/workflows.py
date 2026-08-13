@@ -209,7 +209,8 @@ def test_workflow(name, task=None):
     doc = frappe.get_doc("BP Workflow", name)
     _require_workflow_admin(doc.scope, doc.project)
 
-    if (frappe.conf.get("bp_automation_engine") or "python").lower() != "gateway":
+    from batch_projects.entitlements import automation_engine
+    if automation_engine() != "gateway":
         frappe.throw(_("Test workflow requires the gateway engine."))
     if not doc.is_active:
         # Not just a courtesy: list_active_workflows filters is_active=1, so
