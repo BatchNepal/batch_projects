@@ -53,6 +53,24 @@ def _assert_service_caller():
     frappe.throw("Not permitted", frappe.PermissionError)
 
 
+def _query(table_exists, sql, params):
+    """Run one ERP-source query, degrading to "contributes nothing" instead of
+    failing the whole report.
+
+    Each source is optional: a bench without ERPNext, or with a module
+    uninstalled, has no such table, and a report that 500s because a customer
+    never installed HR is worse than one that shows no expenses. Mirrors the
+    per-source try/except the previous in-Frappe implementations used.
+    """
+    if not frappe.db.table_exists(table_exists):
+        return []
+    try:
+        return frappe.db.sql(sql, params, as_dict=True)
+    except Exception as exc:
+        frappe.log_error(f"insights_data {table_exists}: {exc}")
+        return []
+
+
 def _visible_money_projects(user: str) -> list[dict]:
     """Active projects `user` may see AND holds `view_money` on.
 
@@ -93,8 +111,9 @@ def get_margin_inputs(from_date, to_date, user):
     labour-cost rule is per row (a row's real ERPNext costing_amount when it
     has one, the project's flat rate as an estimate otherwise). Summing here
     would force the rule into Python and silently discard real costing — the
-    exact bug batch_projects/costing.py was written to end. The gateway
-    applies that rule now; Frappe just hands over hours + costing_amount.
+    exact bug that once had the margin report and the Money tab quoting two
+    different costs for one project. The gateway applies that rule to both
+    surfaces now; Frappe just hands over hours + costing_amount.
 
     Purchase invoices and expense claims are pre-grouped by project because
     their contribution genuinely IS a plain SUM with no per-row rule — there
@@ -112,19 +131,6 @@ def get_margin_inputs(from_date, to_date, user):
 
     from_dt = f"{from_date} 00:00:00"
     to_dt = f"{to_date} 23:59:59"
-
-    def _query(table_exists, sql, params):
-        """Each ERP source is optional — a bench without ERPNext, or with a
-        module uninstalled, must degrade to "contributes nothing" rather than
-        failing the whole report. Mirrors the per-source try/except the
-        previous in-Frappe implementation used."""
-        if not frappe.db.table_exists(table_exists):
-            return []
-        try:
-            return frappe.db.sql(sql, params, as_dict=True)
-        except Exception as exc:
-            frappe.log_error(f"get_margin_inputs {table_exists}: {exc}")
-            return []
 
     invoices = _query("Sales Invoice", """
         SELECT project, SUM(base_grand_total) AS revenue
@@ -165,6 +171,236 @@ def get_margin_inputs(from_date, to_date, user):
         "timesheets": timesheets,
         "purchases": purchases,
         "expenses": expenses,
+    }
+
+
+@frappe.whitelist()
+def get_money_inputs(project, from_date, to_date, user):
+    """Every row the Money tab is built from, for ONE project, scoped to
+    `user`. Raw values only — bp-gateway's internal/insights/money.go turns
+    these into the tab.
+
+    Three gates, all of them Frappe's to answer because none is a tier
+    question:
+      - the project role (BP Viewer) `user` holds,
+      - the per-project `view_money` capability, and
+      - the workspace's own `money_tab` switch, which a workspace admin can
+        turn off for everyone regardless of plan.
+    The `profitability` tier gate is NOT here: that one is the gateway's, and
+    re-checking it in this repo would rebuild the patchable gate this module
+    exists to stop relying on.
+
+    Two row sets are deliberately returned unaggregated even though the old
+    in-Frappe version summed them in SQL, because in both cases the SUM
+    carried a rule rather than just adding numbers:
+      - `task_labour`, which applied the costing_amount-or-flat-rate fallback
+        inside a CASE expression, and
+      - `task_committed`, which applied ERPNext's non-billed formula
+        (base_amount − billed × rate − returns) inside the SELECT.
+    Both rules now live in money.go with the rest of the arithmetic. The
+    genuinely rule-free sums (materials and expenses per task) stay grouped in
+    SQL, where they only save bytes.
+    """
+    _assert_service_caller()
+
+    from batch_projects import access
+    from batch_projects.entitlements import require_workspace_feature
+
+    access.require(project, "BP Viewer", user=user)
+    access.require_capability(project, "view_money", user=user)
+    require_workspace_feature("money_tab")
+
+    doc = frappe.get_doc("BP Project", project)
+    if not doc.erpnext_project:
+        return {"linked": False, "project": project}
+
+    erp = doc.erpnext_project
+    from_dt = f"{from_date} 00:00:00"
+    to_dt = f"{to_date} 23:59:59"
+    window = {"proj": erp, "from_date": from_date, "to_date": to_date,
+              "from_dt": from_dt, "to_dt": to_dt}
+
+    # Currency is a lookup, not a calculation: the company's default currency,
+    # falling back to the project's cosmetic one. Every amount below is a
+    # base_* / company-currency figure (timesheet rates are written in company
+    # currency at timer-stop), so this is the label they all carry.
+    from batch_projects.api.board import _company_currency
+    currency = _company_currency(doc.company) or doc.currency or "USD"
+
+    revenue = _query("Sales Invoice", """
+        SELECT name, posting_date AS date, base_grand_total AS grand_total,
+               status, outstanding_amount, conversion_rate
+        FROM `tabSales Invoice`
+        WHERE project = %(proj)s AND docstatus = 1
+          AND posting_date >= %(from_date)s AND posting_date <= %(to_date)s
+        ORDER BY posting_date DESC
+    """, window)
+
+    timesheets = _query("Timesheet Detail", """
+        SELECT tsd.hours, tsd.costing_amount
+        FROM `tabTimesheet Detail` tsd
+        JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
+        WHERE tsd.project = %(proj)s
+          AND tsd.from_time >= %(from_dt)s AND tsd.from_time <= %(to_dt)s
+    """, window)
+
+    # Unbilled and draft are all-time, not period-scoped: both answer "what is
+    # outstanding right now", which a date window would silently truncate.
+    unbilled = _query("Timesheet Detail", """
+        SELECT tsd.hours, tsd.billing_rate
+        FROM `tabTimesheet Detail` tsd
+        JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
+        WHERE tsd.project = %(proj)s AND tsd.is_billable = 1
+          AND (tsd.sales_invoice IS NULL OR tsd.sales_invoice = '')
+    """, {"proj": erp})
+
+    # One row per draft Timesheet so the UI can deep-link to it. Hours logged
+    # by the task timer are invisible to every submitted-only figure above
+    # until submission — without this the tab reads "I just tracked 41 minutes
+    # and it shows zeros".
+    drafts = _query("Timesheet Detail", """
+        SELECT tsd.parent AS timesheet, ts.owner,
+               SUM(tsd.hours) AS hours, MAX(tsd.to_time) AS last_logged
+        FROM `tabTimesheet Detail` tsd
+        JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 0
+        WHERE tsd.project = %(proj)s
+        GROUP BY tsd.parent, ts.owner
+        ORDER BY last_logged DESC
+    """, {"proj": erp})
+
+    materials = _query("Purchase Invoice", """
+        SELECT name, posting_date AS date, base_grand_total AS grand_total, status
+        FROM `tabPurchase Invoice`
+        WHERE project = %(proj)s AND docstatus = 1
+          AND posting_date >= %(from_date)s AND posting_date <= %(to_date)s
+        ORDER BY posting_date DESC
+    """, window)
+
+    expenses = _query("Expense Claim", """
+        SELECT name, posting_date AS date,
+               total_sanctioned_amount AS amount, status
+        FROM `tabExpense Claim`
+        WHERE project = %(proj)s AND docstatus = 1
+          AND posting_date >= %(from_date)s AND posting_date <= %(to_date)s
+        ORDER BY posting_date DESC
+    """, window)
+
+    # Unbilled expenses: all-time, and a real invoiced-tracker rather than a
+    # visibility-only sum — custom_sales_invoice gives Expense Claim Detail the
+    # equivalent of Timesheet Detail's sales_invoice. The reinvoice policy and
+    # markup travel as-is; applying them is money.go's job, and it must apply
+    # them the same way generate_expense_invoice does, or this number stops
+    # being what that button will actually invoice.
+    unbilled_expenses = _query("Expense Claim Detail", """
+        SELECT ecd.sanctioned_amount,
+               IFNULL(ect.custom_reinvoice_policy, 'At Cost') AS policy,
+               ect.custom_markup_percent AS markup_percent
+        FROM `tabExpense Claim Detail` ecd
+        JOIN `tabExpense Claim` ec ON ec.name = ecd.parent AND ec.docstatus = 1
+        LEFT JOIN `tabExpense Claim Type` ect ON ect.name = ecd.expense_type
+        WHERE ec.project = %(proj)s
+          AND ecd.custom_is_billable = 1
+          AND IFNULL(ect.custom_reinvoice_policy, 'At Cost') != 'Not Billable'
+          AND (ecd.custom_sales_invoice IS NULL OR ecd.custom_sales_invoice = ''
+               OR NOT EXISTS (
+                   SELECT 1 FROM `tabSales Invoice` si2
+                   WHERE si2.name = ecd.custom_sales_invoice AND si2.docstatus < 2
+               ))
+    """, {"proj": erp})
+
+    sales_orders = _query("Sales Order", """
+        SELECT name, base_grand_total AS grand_total, per_billed, status
+        FROM `tabSales Order`
+        WHERE project = %(proj)s AND docstatus = 1
+          AND transaction_date >= %(from_date)s AND transaction_date <= %(to_date)s
+        ORDER BY transaction_date DESC
+    """, window)
+
+    # ── Per-task attribution ─────────────────────────────────────────────────
+    # The bp_task accounting dimension, left raw: rows with no task keep an
+    # empty value here and money.go folds them into its own untasked bucket,
+    # rather than this module inventing a sentinel the gateway has to know.
+    task_labour = _query("Timesheet Detail", """
+        SELECT tsd.custom_bp_task AS task, tsd.hours, tsd.costing_amount
+        FROM `tabTimesheet Detail` tsd
+        JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
+        WHERE tsd.project = %(proj)s
+          AND tsd.from_time >= %(from_dt)s AND tsd.from_time <= %(to_dt)s
+    """, window)
+
+    task_materials = _query("Purchase Invoice Item", """
+        SELECT pii.bp_task AS task, SUM(pii.base_net_amount) AS amount
+        FROM `tabPurchase Invoice Item` pii
+        JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent AND pi.docstatus = 1
+        WHERE COALESCE(NULLIF(pii.project, ''), pi.project) = %(proj)s
+          AND pi.posting_date >= %(from_date)s AND pi.posting_date <= %(to_date)s
+        GROUP BY 1
+    """, window)
+
+    task_expenses = _query("Expense Claim Detail", """
+        SELECT ecd.bp_task AS task, SUM(ecd.sanctioned_amount) AS amount
+        FROM `tabExpense Claim Detail` ecd
+        JOIN `tabExpense Claim` ec ON ec.name = ecd.parent AND ec.docstatus = 1
+        WHERE COALESCE(NULLIF(ecd.project, ''), ec.project) = %(proj)s
+          AND ec.posting_date >= %(from_date)s AND ec.posting_date <= %(to_date)s
+        GROUP BY 1
+    """, window)
+
+    # Committed spend: open Purchase Order lines, all-time. Per line, not
+    # per (task, PO) as before, because the sum being taken is ERPNext's
+    # non-billed formula — see the docstring.
+    task_committed = _query("Purchase Order Item", """
+        SELECT poi.bp_task AS task, poi.parent AS purchase_order, po.status,
+               poi.base_amount, poi.billed_amt, poi.base_rate,
+               IFNULL(poi.returned_qty, 0) AS returned_qty,
+               IFNULL(po.conversion_rate, 1) AS conversion_rate
+        FROM `tabPurchase Order Item` poi
+        JOIN `tabPurchase Order` po ON po.name = poi.parent AND po.docstatus = 1
+        WHERE COALESCE(NULLIF(poi.project, ''), po.project) = %(proj)s
+          AND po.status NOT IN ('Closed', 'Cancelled')
+    """, {"proj": erp})
+
+    # Task display names for whatever the ERP rows referenced. A plain join,
+    # and deliberately not an inner one: an ERP row may name a task belonging
+    # to another project or one since deleted, and those still have to render
+    # (by name) rather than vanish from a financial total.
+    referenced = {
+        r["task"] for r in (task_labour + task_materials + task_expenses + task_committed)
+        if r.get("task")
+    }
+    tasks = frappe.get_all(
+        "BP Task", filters={"name": ["in", list(referenced)]},
+        fields=["name", "task_key", "title"],
+    ) if referenced else []
+
+    for r in drafts:
+        r["last_logged"] = str(r["last_logged"]) if r.get("last_logged") else None
+    for rows in (revenue, materials, expenses):
+        for r in rows:
+            r["date"] = str(r["date"]) if r.get("date") else None
+
+    return {
+        "linked": True,
+        "project": project,
+        "erpnext_project": erp,
+        "currency": currency,
+        "project_type": doc.project_type or "tm",
+        "hourly_rate": float(doc.hourly_rate or 0),
+        "budget_amount": float(doc.budget_amount or 0),
+        "retainer_hours": float(doc.retainer_hours or 0),
+        "revenue": revenue,
+        "timesheets": timesheets,
+        "unbilled": unbilled,
+        "drafts": drafts,
+        "materials": materials,
+        "expenses": expenses,
+        "unbilled_expenses": unbilled_expenses,
+        "sales_orders": sales_orders,
+        "task_labour": task_labour,
+        "task_materials": task_materials,
+        "task_expenses": task_expenses,
+        "task_committed": task_committed,
+        "tasks": tasks,
     }
 
 

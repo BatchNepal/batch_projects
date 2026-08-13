@@ -679,7 +679,7 @@ def purge_project(project, confirm_key=None):
 
     Refuses outright if the project has any financial footprint. A BP Project
     resolves to an ERPNext Project, and the money layer keys off THAT
-    (get_project_money joins Timesheet Detail on tsd.project, invoicing on
+    (the Money tab joins Timesheet Detail on tsd.project, invoicing on
     tsd.custom_bp_task) — so purging a project whose work has been costed or
     invoiced would orphan rows that margin reports and the GL still read, and
     would break an audit trail that has to stay reconstructable.
@@ -726,7 +726,8 @@ def _project_financial_blockers(project) -> list:
     means the project is financially clean.
 
     Checked against the ERPNext project, not the BP one: that is the key the
-    money layer actually joins on (see erp_link.get_project_money), so a BP
+    money layer actually joins on (see api/insights_data.get_money_inputs),
+    so a BP
     project with no direct links can still have costed time and posted GL
     behind it.
     """

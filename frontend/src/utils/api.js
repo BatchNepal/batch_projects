@@ -571,7 +571,8 @@ export const deleteProjectTemplate = (template) => callProjectTemplates("delete_
 export const createProjectFromTemplate = (params) => callProjectTemplates("create_project_from_template", params);
 
 // ─── ERP MONEY SPINE ──────────────────────────────────────────────
-// Linking is free-tier plumbing; get_project_money is gated (Business tier).
+// Linking is free-tier plumbing; the Money tab itself is gated and is served
+// by the GATEWAY (see getProjectMoney below).
 
 const ERP_LINK_BASE = "batch_projects.api.erp_link";
 const callErpLink = (method, params = {}) => callPath(`${ERP_LINK_BASE}.${method}`, params);
@@ -584,8 +585,14 @@ export const unlinkErpnextProject = (project) =>
   callErpLink("unlink_erpnext_project", { project });
 export const searchErpnextProjects = (txt) =>
   callErpLink("search_erpnext_projects", { txt });
-export const getProjectMoney = (project, period) =>
-  callErpLink("get_project_money", { project, period });
+// Served by the GATEWAY: the Money tab's arithmetic lives in the Go binary
+// (bp-gateway internal/insights/money.go) for the same reason the margin
+// report's does — see getMarginReport. Frappe still owns the permission
+// decisions behind it (project role, view_money, the workspace money_tab
+// switch) and its refusals come back with their own message intact. Response
+// shape is unchanged.
+export const getProjectMoney = (project, period = "last_30_days") =>
+  bridgeCall(`insights/money?project=${encodeURIComponent(project)}&period=${encodeURIComponent(period)}`);
 // `project` is one BP Project name, or an array for the batch path (N
 // projects -> one invoice, each line tagged to its own project).
 // currency/conversion_rate/amount drive the payment-first flow: the money

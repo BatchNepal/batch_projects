@@ -307,7 +307,7 @@ const money   = ref(null)
 // direct navigation or a page refresh straight to /workspace/:key/money,
 // since (unlike Board) this page never itself loads the project. BP
 // Project is autonamed field:project_name, so that fallback is never a
-// valid docname and get_project_money 404s. Mirrors ProjectSettings.vue's
+// valid docname and the money lookup 404s. Mirrors ProjectSettings.vue's
 // same bootstrap-on-mount fix.
 async function ensureProjectLoaded() {
   if (store.currentProject?.key === projectKey.value) return

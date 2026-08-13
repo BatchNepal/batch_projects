@@ -191,8 +191,9 @@ def _append_time_log(task, user, from_time, to_time, hours, description=None):
     # lookup its native Timesheet UI uses) checks Activity Cost
     # (employee + activity type) first, then Activity Type's own default
     # rate. Only when NEITHER is configured do we fall back to the
-    # project's flat rate as an estimate — same fallback costing.py's
-    # labour_cost() already documents for the Money tab/margin report.
+    # project's flat rate as an estimate — the write-side counterpart of the
+    # same fallback the reports apply when reading these rows back
+    # (bp-gateway internal/insights/money.go's labourCost).
     activity_cost = get_activity_cost(employee, TIMER_ACTIVITY_TYPE) if employee else {}
     real_costing_rate = activity_cost.get("costing_rate")
     costing_rate = flt(real_costing_rate) if real_costing_rate is not None else rate
