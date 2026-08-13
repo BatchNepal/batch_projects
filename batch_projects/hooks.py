@@ -4,7 +4,12 @@ app_publisher = "BatchNepal Consultancy"
 app_description = "Enterprise Grade Project Management for ERPNext"
 app_email = "info@batchnepal.com"
 app_license = "AGPL-3.0"
-app_version = "1.0.0"
+# Single source of truth is __init__.py's __version__ — the same thing
+# pyproject.toml resolves (dynamic = ["version"], flit reads it) and the same
+# thing frappe.utils.get_app_version() returns. Hardcoding the number a second
+# time here is what let the two drift silently; frappe's own hooks.py imports
+# it exactly this way for the same reason.
+from . import __version__ as app_version
 
 # Minimum bp-gateway release this batch_projects version requires. Read by
 # the gateway itself at boot (via get_session_info) to refuse starting
