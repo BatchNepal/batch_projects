@@ -99,7 +99,7 @@
       "fieldname": "invoice_status",
       "fieldtype": "Select",
       "label": "Invoice Status",
-      "options": "Not Invoiced\nInvoiced",
+      "options": "Not Invoiced\nDraft\nInvoiced",
       "default": "Not Invoiced",
       "read_only": 1
     },

@@ -169,7 +169,14 @@ doc_events = {
         # P0 billing reservation: native ERPNext draft creation/editing must
         # obey the same Timesheet Detail exclusivity as BatchProjects.
         "validate": "batch_projects.billing_reservation.validate_sales_invoice_sources",
-        "on_submit": "batch_projects.erp_triggers.on_sales_invoice_submit",
+
+        # Milestone billing lifecycle. on_submit also delegates to the existing
+        # erp.invoice_submitted automation emitter so there remains exactly one
+        # specific Sales Invoice submit hook.
+        "after_insert": "batch_projects.milestone_billing.on_sales_invoice_after_insert",
+        "on_submit": "batch_projects.milestone_billing.on_sales_invoice_submit",
+        "on_cancel": "batch_projects.milestone_billing.on_sales_invoice_cancel",
+        "on_trash": "batch_projects.milestone_billing.on_sales_invoice_trash",
     },
     "Sales Order": {
         "on_submit": "batch_projects.erp_triggers.on_sales_order_submit",
