@@ -459,7 +459,20 @@ def _validate_payment_first_final_total(doc):
     This hook still runs BEFORE Document.insert() reaches db_insert(), so a
     mismatch cannot create even a transient committed Draft Sales Invoice.
     """
-    expected = doc.flags.get(
+    # A normal ERPNext Sales Invoice has no BatchProjects payment-first
+    # contract. Be defensive here because this is a site-wide validate hook:
+    # lightweight test doubles/custom callers may not expose a flags mapping
+    # at all. No contract means an immediate no-op.
+    flags = getattr(
+        doc,
+        "flags",
+        None,
+    )
+
+    if not flags:
+        return
+
+    expected = flags.get(
         "bp_expected_received_amount"
     )
 
@@ -481,7 +494,7 @@ def _validate_payment_first_final_total(doc):
         )
 
     expected_currency = (
-        doc.flags.get(
+        flags.get(
             "bp_expected_received_currency"
         )
         or ""

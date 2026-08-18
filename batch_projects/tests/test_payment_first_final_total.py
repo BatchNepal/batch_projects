@@ -58,6 +58,21 @@ class _FinalTotalDoc:
 
 
 class TestPaymentFirstFinalTotal(unittest.TestCase):
+    def test_native_invoice_without_flags_mapping_is_untouched(self):
+        # validate_sales_invoice_sources is a site-wide Sales Invoice hook.
+        # Absence of BatchProjects transient state must therefore be a cheap
+        # no-op even for lightweight/custom document-like objects.
+        doc = frappe._dict({
+            "name": "SINV-NATIVE",
+        })
+
+        self.assertIsNone(
+            billing_reservation
+            ._validate_payment_first_final_total(
+                doc
+            )
+        )
+
     def test_native_invoice_without_transient_contract_is_untouched(self):
         doc = _FinalTotalDoc(
             grand_total=999,
