@@ -38,21 +38,22 @@
             </p>
           </div>
           <div class="bi-card-actions">
-            <span class="bi-total tnum">{{ fmtMoney(selectedAmount(c), currencyOf(c)) }}</span>
+            <span v-if="!mixedSelected(c)" class="bi-total tnum">
+              {{ fmtMoney(selectedAmount(c), currencyOf(c)) }}
+            </span>
+            <span v-else class="bi-total">Multiple currencies</span>
             <Button
               size="sm" color="primary"
-              :isDisabled="!selectedCount(c) || busy === batchKey(c) || mixedSelected(c)"
+              :isDisabled="!selectedCount(c) || busy === batchKey(c)"
               :isLoading="busy === batchKey(c)"
               @click="openConfirm(c)"
             >Create invoice</Button>
           </div>
         </div>
 
-        <!-- A batch must be one currency; warn before they select a mix
-             rather than letting the backend refuse after the fact. -->
         <p v-if="mixedSelected(c)" class="bi-warn">
-          Selected projects are priced in different currencies ({{ selectedCurrencies(c).join(', ') }}).
-          One invoice can only be in one currency — narrow the selection.
+          Selected projects span {{ selectedCurrencies(c).join(', ') }}.
+          Choose one invoice currency in the confirmation before creating the draft.
         </p>
 
         <table class="bi-table">
@@ -99,13 +100,36 @@
           <strong>{{ confirm.client }}</strong>
           · {{ confirm.company }} —
           {{ confirm.projects.length }} project{{ confirm.projects.length === 1 ? '' : 's' }},
-          <span class="tnum">{{ fmtMoney(confirm.amount, confirm.currency) }}</span>
+          <span v-if="!confirm.mixed" class="tnum">
+            {{ fmtMoney(confirm.amount, confirm.currency) }}
+          </span>
+          <span v-else>multiple source currencies</span>
         </p>
         <ul class="bi-confirm-list">
           <li v-for="p in confirm.projects" :key="p.bp_project">
             {{ p.project_name }}<span class="tnum">{{ fmtMoney(p.amount, p.currency) }}</span>
           </li>
         </ul>
+
+        <ul v-if="confirm.mixed" class="bi-confirm-list bi-source-totals">
+          <li v-for="t in confirm.currencyTotals" :key="t.currency">
+            Source total · {{ t.currency }}
+            <span class="tnum">{{ fmtMoney(t.amount, t.currency) }}</span>
+          </li>
+        </ul>
+
+        <div v-if="confirm.mixed" class="bi-target">
+          <Input
+            v-model="confirm.overrideCurrency"
+            label="Invoice currency"
+            placeholder="Required, e.g. USD"
+          />
+          <p class="bi-target-help">
+            Required for mixed-currency batches. Every typed source rate is
+            converted into this one invoice currency. ERPNext FX is used unless
+            you provide a conversion rate below.
+          </p>
+        </div>
 
         <details class="bi-adv">
           <summary>Payment already received?</summary>
@@ -116,7 +140,12 @@
           </p>
           <div class="bi-adv-grid">
             <Input v-model="confirm.overrideAmount" label="Exact amount" placeholder="Optional" />
-            <Input v-model="confirm.overrideCurrency" label="Currency" :placeholder="confirm.currency || 'Optional'" />
+            <Input
+              v-if="!confirm.mixed"
+              v-model="confirm.overrideCurrency"
+              label="Currency"
+              :placeholder="confirm.currency || 'Optional'"
+            />
             <Input v-model="confirm.overrideRate" label="Conversion rate" placeholder="Optional" />
           </div>
         </details>
@@ -125,7 +154,12 @@
       </ModalBody>
       <ModalFooter>
         <Button variant="bordered" @click="confirm.open = false">Cancel</Button>
-        <Button color="primary" :isLoading="confirm.busy" @click="doCreate">Create draft invoice</Button>
+        <Button
+          color="primary"
+          :isLoading="confirm.busy"
+          :isDisabled="confirm.mixed && !confirm.overrideCurrency.trim()"
+          @click="doCreate"
+        >Create draft invoice</Button>
       </ModalFooter>
     </Modal>
   </div>
@@ -173,12 +207,45 @@ function selectedOf(c) { return c.projects.filter(isSelected) }
 function selectedCount(c) { return selectedOf(c).length }
 function allSelected(c) { return c.projects.length > 0 && selectedCount(c) === c.projects.length }
 function toggleAll(c, v) { for (const p of c.projects) picked[p.bp_project] = !!v }
-function selectedAmount(c) { return round2(selectedOf(c).reduce((s, p) => s + p.amount, 0)) }
-function selectedCurrencies(c) {
-  return [...new Set(selectedOf(c).map(p => p.currency).filter(Boolean))].sort()
+function selectedCurrencyTotals(c) {
+  const totals = new Map()
+
+  for (const p of selectedOf(c)) {
+    if (!p.currency) continue
+
+    totals.set(
+      p.currency,
+      round2(
+        (totals.get(p.currency) || 0)
+        + (Number(p.amount) || 0),
+      ),
+    )
+  }
+
+  return [...totals.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, amount]) => ({ currency, amount }))
 }
-function mixedSelected(c) { return selectedCurrencies(c).length > 1 }
-function currencyOf(c) { return selectedCurrencies(c)[0] || c.currencies?.[0] || '' }
+
+function selectedAmount(c) {
+  const totals = selectedCurrencyTotals(c)
+  return totals.length === 1 ? totals[0].amount : null
+}
+
+function selectedCurrencies(c) {
+  return selectedCurrencyTotals(c).map(t => t.currency)
+}
+
+function mixedSelected(c) {
+  return selectedCurrencyTotals(c).length > 1
+}
+
+function currencyOf(c) {
+  const totals = selectedCurrencyTotals(c)
+  return totals.length === 1
+    ? totals[0].currency
+    : ''
+}
 
 function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100 }
 function fmtMoney(n, cur) {
@@ -189,22 +256,35 @@ function fmtMoney(n, cur) {
 const confirm = reactive({
   open: false, client: '', company: '', batchKey: '',
   projects: [], amount: 0, currency: '',
+  mixed: false, currencyTotals: [],
   overrideAmount: '', overrideCurrency: '', overrideRate: '',
   busy: false, error: '',
 })
 
 function openConfirm(c) {
   const sel = selectedOf(c)
+  const currencyTotals = selectedCurrencyTotals(c)
+  const mixed = currencyTotals.length > 1
+
   Object.assign(confirm, {
     open: true,
     client: c.client,
     company: c.company,
     batchKey: batchKey(c),
     projects: sel,
-    amount: selectedAmount(c),
-    currency: currencyOf(c),
-    overrideAmount: '', overrideCurrency: '', overrideRate: '',
-    busy: false, error: '',
+    amount: mixed
+      ? null
+      : (currencyTotals[0]?.amount || 0),
+    currency: mixed
+      ? ''
+      : (currencyTotals[0]?.currency || ''),
+    mixed,
+    currencyTotals,
+    overrideAmount: '',
+    overrideCurrency: '',
+    overrideRate: '',
+    busy: false,
+    error: '',
   })
 }
 
@@ -217,7 +297,7 @@ async function doCreate() {
       confirm.projects.map(p => p.bp_project),
       {
         amount: confirm.overrideAmount || undefined,
-        currency: confirm.overrideCurrency || undefined,
+        currency: confirm.overrideCurrency.trim() || undefined,
         conversion_rate: confirm.overrideRate || undefined,
       },
     )
@@ -289,6 +369,15 @@ async function doCreate() {
   display: flex; justify-content: space-between; gap: 12px;
   font-size:var(--text-sm); color: var(--muted); padding: 3px 0;
 }
+
+.bi-target {
+  margin-top: 14px; padding: 12px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface-secondary);
+}
+.bi-target-help {
+  margin-top: 6px; font-size:var(--text-sm); color: var(--muted); line-height: 1.45;
+}
+.bi-source-totals { margin-top: 8px; }
 
 .bi-adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
 .bi-adv summary { font-size:var(--text-sm); font-weight: 500; color: var(--foreground); cursor: pointer; }
