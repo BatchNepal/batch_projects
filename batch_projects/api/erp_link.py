@@ -569,15 +569,11 @@ def _resolve_invoice_currency(company, customer, currency, conversion_rate,
     Order: explicit override -> the PROJECT's own currency ->
     Customer.default_currency -> company currency.
 
-    The project's currency comes before the customer's and the company's for
-    a concrete reason: BP Project.hourly_rate is denominated in
-    BP Project.currency, and those rates flow into Timesheet Detail
-    unconverted. A project priced at 50 USD/hr on a company that books in NPR
-    used to produce an invoice of 50 NPR/hr — the number passed through
-    untouched while the label changed, under-billing by the whole exchange
-    rate. Defaulting to the project's own currency keeps the number and its
-    unit together; conversion_rate then restates it in company currency for
-    the GL, which is exactly what base_grand_total is for.
+    The project's currency comes before the customer's and the company's
+    because BP Project.hourly_rate is denominated in BP Project.currency.
+    When that project rate is selected as a fallback, the invoice must keep
+    the number and its unit together or explicitly convert it. Timesheet row
+    rates are typed separately by their parent Timesheet.currency.
     The override exists for the payment-first case (money already landed in a
     known foreign amount; the invoice must state that exact currency/rate
     rather than have one guessed for it).
@@ -624,6 +620,7 @@ def _convert_billing_rate(
     company,
     customer,
     *,
+    company_currency=None,
     target_to_company=None,
     fx_cache=None,
 ):
@@ -661,8 +658,11 @@ def _convert_billing_rate(
     if source == target:
         return value
 
-    company_currency = frappe.get_cached_value(
-        "Company", company, "default_currency"
+    company_currency = (
+        (company_currency or "").strip()
+        or frappe.get_cached_value(
+            "Company", company, "default_currency"
+        )
     )
     if not company_currency:
         frappe.throw(
@@ -719,6 +719,7 @@ def _convert_billing_rate(
 def _effective_billing_rate(
     *,
     row_rate,
+    row_currency,
     project_rate,
     project_currency,
     client_rate,
@@ -732,9 +733,13 @@ def _effective_billing_rate(
     """Resolve most-specific rate and preserve its source currency.
 
     Hierarchy:
-      1. Timesheet row rate      -> company currency
+      1. Timesheet row rate      -> Timesheet.currency
       2. BP Project hourly rate  -> BP Project.currency
       3. ERPNext Item Price      -> Item Price.currency
+
+    Timer-created Timesheets are deliberately kept in company currency,
+    but rows entered directly in ERPNext may legitimately use another
+    Timesheet currency. Never infer their unit from the project/company.
     """
     row_value = flt(row_rate)
     project_value = flt(project_rate)
@@ -747,7 +752,7 @@ def _effective_billing_rate(
 
     if row_value:
         value = row_value
-        source_currency = company_currency
+        source_currency = row_currency
     elif project_value:
         value = project_value
         source_currency = project_currency
@@ -763,6 +768,7 @@ def _effective_billing_rate(
         target_currency,
         company,
         customer,
+        company_currency=company_currency,
         target_to_company=target_to_company,
         fx_cache=fx_cache,
     )
@@ -874,6 +880,7 @@ def generate_invoice(project, period=None, tasks=None,
         """
         SELECT tsd.name, tsd.parent AS timesheet, tsd.custom_bp_task AS bp_task,
                tsd.hours, tsd.billing_hours, tsd.billing_rate, tsd.billing_amount,
+               ts.currency AS timesheet_currency,
                tsd.activity_type, tsd.description, tsd.from_time, tsd.to_time,
                tsd.project_name, tsd.project AS erp_project
         FROM `tabTimesheet Detail` tsd
@@ -934,8 +941,8 @@ def generate_invoice(project, period=None, tasks=None,
     #      project for a year" case.
     #   4. nothing -> 0, and the caller is told rather than silently billing
     #      real hours at zero (see the zero-rate guard below).
-    # Resolved BEFORE rates are priced: converting a company-currency
-    # billing_rate into the invoice's currency needs to know that currency
+    # Resolved BEFORE rates are priced: converting any typed source rate
+    # into the invoice's currency needs to know that target currency
     # first. Decided explicitly, never defaulted silently — see
     # _resolve_invoice_currency() for why falling back to company currency
     # was actively wrong for foreign clients.
@@ -956,6 +963,7 @@ def generate_invoice(project, period=None, tasks=None,
 
         eff_rate = _effective_billing_rate(
             row_rate=r.billing_rate,
+            row_currency=r.timesheet_currency,
             project_rate=project_rate.get("rate"),
             project_currency=project_rate.get("currency"),
             client_rate=client_rate,
@@ -1209,7 +1217,7 @@ def get_batch_invoice_candidates():
     rows = frappe.db.sql(
         """
         SELECT tsd.project AS erp_project, tsd.hours, tsd.billing_hours,
-               tsd.billing_rate
+               tsd.billing_rate, ts.currency AS timesheet_currency
         FROM `tabTimesheet Detail` tsd
         JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
         LEFT JOIN `tabBP Task` bt ON bt.name = tsd.custom_bp_task
@@ -1263,6 +1271,7 @@ def get_batch_invoice_candidates():
 
         eff_rate = _effective_billing_rate(
             row_rate=r.billing_rate,
+            row_currency=r.timesheet_currency,
             project_rate=p.hourly_rate,
             project_currency=project_currency,
             client_rate=client_rate_cache[p.client],

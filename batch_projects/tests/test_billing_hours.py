@@ -62,12 +62,14 @@ class TestBillingHoursInvariant(unittest.TestCase):
                 "hours": 8,
                 "billing_hours": 0,
                 "billing_rate": 0,
+                "timesheet_currency": "USD",
             }),
             frappe._dict({
                 "erp_project": "ERP-TEST",
                 "hours": 5,
                 "billing_hours": 2.5,
                 "billing_rate": 0,
+                "timesheet_currency": "USD",
             }),
         ]
 

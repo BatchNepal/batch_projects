@@ -160,11 +160,26 @@ def _get_or_create_draft_timesheet(user, employee, company, erp_project):
     Admin SUBMIT — another project's pending rows (submit is doc-level in
     ERPNext). parent_project also buys core validation for free: ERPNext
     itself rejects any row whose project differs from it."""
+    company_currency = (
+        frappe.get_cached_value(
+            "Company", company, "default_currency"
+        )
+        if company else None
+    )
+
     filters = {
         "docstatus": 0,
         "start_date": frappe.utils.nowdate(),
         "parent_project": erp_project,
     }
+
+    # A billing_rate is typed by Timesheet.currency in ERPNext. BatchProjects
+    # deliberately captures timer rows in company currency, so only reuse a
+    # draft that already carries that exact currency model. Older blank- or
+    # foreign-currency drafts remain untouched and a new safe draft is made.
+    if company_currency:
+        filters["currency"] = company_currency
+        filters["exchange_rate"] = 1.0
     if employee:
         filters["employee"] = employee
     else:
@@ -174,11 +189,6 @@ def _get_or_create_draft_timesheet(user, employee, company, erp_project):
     name = frappe.db.get_value("Timesheet", filters, "name", order_by="creation desc")
     if name:
         return frappe.get_doc("Timesheet", name)
-
-    company_currency = (
-        frappe.get_cached_value("Company", company, "default_currency")
-        if company else None
-    )
 
     return frappe.get_doc({
         "doctype": "Timesheet",
@@ -205,14 +215,12 @@ def _append_time_log(task, user, from_time, to_time, hours, description=None):
     company = (employee and frappe.db.get_value("Employee", employee, "company")) or proj.company
     ts = _get_or_create_draft_timesheet(user, employee, company, proj.erpnext_project)
 
-    # BP Project.hourly_rate is denominated in BP Project.currency, but
-    # Timesheet Detail.billing_rate is ERPNext's field and ERPNext reads it as
-    # COMPANY currency everywhere downstream (Timesheet.total_billable_amount,
-    # Project.total_billable_amount, every stock report). Storing 50 for a
-    # project priced at 50 USD on an NPR-books company therefore recorded
-    # 50 NPR of revenue — off by the entire exchange rate. Convert once, here,
-    # at capture, so ERPNext's own rollups are right; generate_invoice converts
-    # back when it bills in the project's currency.
+    # ERPNext types Timesheet Detail.billing_rate by the parent
+    # Timesheet.currency. BatchProjects deliberately creates/reuses its timer
+    # Timesheets in company currency, so convert the BP Project rate into that
+    # currency before capture. If FX is unavailable the helper returns 0
+    # rather than storing a foreign number under the wrong unit; worked hours
+    # are still preserved and invoice-time typed fallbacks remain available.
     rate = _rate_in_company_currency(flt(proj.hourly_rate or 0), proj.currency, company)
     # Real per-employee cost, not the client's billing rate wearing a
     # different field name: ERPNext's own get_activity_cost() (the same

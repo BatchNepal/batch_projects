@@ -20,12 +20,13 @@ class TestBatchInvoicePreviewFX(unittest.TestCase):
             "erpnext_project": "ERP-FX-TEST",
         })
 
-    def _row(self, *, billing_rate, billing_hours=8):
+    def _row(self, *, billing_rate, billing_hours=8, currency="USD"):
         return frappe._dict({
             "erp_project": "ERP-FX-TEST",
             "hours": billing_hours,
             "billing_hours": billing_hours,
             "billing_rate": billing_rate,
+            "timesheet_currency": currency,
         })
 
     def _candidates(self, project, row, *, resolver_return=None, resolver_error=None):
@@ -70,7 +71,11 @@ class TestBatchInvoicePreviewFX(unittest.TestCase):
         # Preview must therefore use 50 USD/hour, not 6,875 USD/hour.
         result, resolver = self._candidates(
             self._project(currency="USD"),
-            self._row(billing_rate=6875, billing_hours=8),
+            self._row(
+                billing_rate=6875,
+                billing_hours=8,
+                currency="NPR",
+            ),
             resolver_return=("NPR", "USD", 137.5),
         )
 
@@ -88,7 +93,11 @@ class TestBatchInvoicePreviewFX(unittest.TestCase):
         ):
             self._candidates(
                 self._project(currency="USD"),
-                self._row(billing_rate=6875, billing_hours=8),
+                self._row(
+                    billing_rate=6875,
+                    billing_hours=8,
+                    currency="NPR",
+                ),
                 resolver_error=frappe.ValidationError(
                     "No exchange rate configured for USD → NPR"
                 ),

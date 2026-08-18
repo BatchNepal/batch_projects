@@ -32,6 +32,7 @@ class TestBillingRateCurrency(unittest.TestCase):
     def test_row_company_rate_converts_to_invoice_currency(self):
         rate = erp_link._effective_billing_rate(
             row_rate=6875,
+            row_currency="NPR",
             project_rate=0,
             project_currency="USD",
             client_rate=None,
@@ -43,9 +44,35 @@ class TestBillingRateCurrency(unittest.TestCase):
         )
         self.assertEqual(rate, 50)
 
+    def test_row_rate_uses_parent_timesheet_currency(self):
+        with patch.object(
+            erp_link,
+            "_resolve_invoice_currency",
+            return_value=("NPR", "EUR", 150.0),
+        ):
+            rate = erp_link._effective_billing_rate(
+                row_rate=50,
+                row_currency="EUR",
+                project_rate=0,
+                project_currency="USD",
+                client_rate=None,
+                company_currency="NPR",
+                target_currency="USD",
+                company="TEST-COMPANY",
+                customer="TEST-CUSTOMER",
+                target_to_company=137.5,
+            )
+
+        self.assertAlmostEqual(
+            rate,
+            50 * 150 / 137.5,
+            places=6,
+        )
+
     def test_project_rate_same_currency_is_identity(self):
         rate = erp_link._effective_billing_rate(
             row_rate=0,
+            row_currency=None,
             project_rate=50,
             project_currency="USD",
             client_rate=None,
@@ -65,6 +92,7 @@ class TestBillingRateCurrency(unittest.TestCase):
         ):
             rate = erp_link._effective_billing_rate(
                 row_rate=0,
+                row_currency=None,
                 project_rate=50,
                 project_currency="EUR",
                 client_rate=None,
@@ -89,6 +117,7 @@ class TestBillingRateCurrency(unittest.TestCase):
         ):
             rate = erp_link._effective_billing_rate(
                 row_rate=0,
+                row_currency=None,
                 project_rate=0,
                 project_currency="USD",
                 client_rate=frappe._dict({
@@ -147,6 +176,7 @@ class TestBillingRateCurrency(unittest.TestCase):
             "hours": 8,
             "billing_hours": 8,
             "billing_rate": 0,
+            "timesheet_currency": "NPR",
         })
 
         with (
@@ -199,6 +229,43 @@ class TestBillingRateCurrency(unittest.TestCase):
             result[0]["projects"][0]["amount"],
             436.36,
         )
+
+    def test_timer_timesheet_is_explicitly_company_currency(self):
+        sentinel = object()
+
+        with (
+            patch.object(
+                timers.frappe,
+                "get_cached_value",
+                return_value="NPR",
+            ),
+            patch.object(
+                timers.frappe.db,
+                "get_value",
+                return_value=None,
+            ) as get_value,
+            patch.object(
+                timers.frappe,
+                "get_doc",
+                return_value=sentinel,
+            ) as get_doc,
+        ):
+            result = timers._get_or_create_draft_timesheet(
+                "user@example.com",
+                "EMP-TEST",
+                "TEST-COMPANY",
+                "ERP-PROJECT",
+            )
+
+        self.assertIs(result, sentinel)
+
+        filters = get_value.call_args.args[1]
+        self.assertEqual(filters["currency"], "NPR")
+        self.assertEqual(filters["exchange_rate"], 1.0)
+
+        doc = get_doc.call_args.args[0]
+        self.assertEqual(doc["currency"], "NPR")
+        self.assertEqual(doc["exchange_rate"], 1.0)
 
     def test_timer_missing_fx_keeps_hours_price_unresolved(self):
         with (
