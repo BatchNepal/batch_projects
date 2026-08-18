@@ -14,6 +14,7 @@ from batch_projects.billing_reservation import (
 
 
 def _clone_current_connection():
+    """Create an independent DB connection while the caller has Frappe context."""
     source = frappe.db
 
     db = get_db(
@@ -26,6 +27,32 @@ def _clone_current_connection():
     )
     db.connect()
     return db
+
+
+def _connect_thread_site(site, sites_path):
+    """Bind Frappe thread-locals and open an independent worker connection.
+
+    frappe.conf, frappe.flags, frappe.session and frappe.db are Werkzeug
+    thread-local proxies. Passing a DB object created on the main test thread
+    into a worker is not enough because Database.sql() itself consults those
+    proxies while logging queries. Each worker must initialize its own site
+    context before using Frappe's database wrapper.
+    """
+    frappe.init(
+        site=site,
+        sites_path=sites_path,
+    )
+    frappe.connect()
+    frappe.flags.in_test = True
+    return frappe.db
+
+
+def _destroy_thread_site():
+    try:
+        frappe.destroy()
+    except Exception:
+        # Preserve the test's original failure if initialization itself failed.
+        pass
 
 
 def _close(db):
@@ -63,9 +90,12 @@ class TestBillingReservationConcurrency(unittest.TestCase):
         invoice = f"BP-RES-SI-{token}"
         child = f"BP-RES-SIT-{token}"
 
+        # Capture site identity while the unittest runner's Frappe context is
+        # bound. Worker threads will initialize independent contexts from it.
+        site = frappe.local.site
+        sites_path = frappe.local.sites_path
+
         setup = _clone_current_connection()
-        db_a = _clone_current_connection()
-        db_b = _clone_current_connection()
 
         a_locked = threading.Event()
         b_attempting = threading.Event()
@@ -124,7 +154,13 @@ class TestBillingReservationConcurrency(unittest.TestCase):
             setup.commit()
 
             def transaction_a():
+                db_a = None
                 try:
+                    db_a = _connect_thread_site(
+                        site,
+                        sites_path,
+                    )
+
                     _guard_timesheet_details_with_db(
                         db_a,
                         [detail],
@@ -212,18 +248,27 @@ class TestBillingReservationConcurrency(unittest.TestCase):
 
                 except Exception as exc:
                     result["a_error"] = exc
-                    try:
-                        db_a.rollback()
-                    except Exception:
-                        pass
+                    if db_a is not None:
+                        try:
+                            db_a.rollback()
+                        except Exception:
+                            pass
                     a_locked.set()
+                finally:
+                    _destroy_thread_site()
 
             def transaction_b():
+                db_b = None
                 try:
                     if not a_locked.wait(timeout=5):
                         raise AssertionError(
                             "transaction A never acquired the source lock"
                         )
+
+                    db_b = _connect_thread_site(
+                        site,
+                        sites_path,
+                    )
 
                     b_attempting.set()
 
@@ -238,10 +283,13 @@ class TestBillingReservationConcurrency(unittest.TestCase):
 
                 except Exception as exc:
                     result["b_error"] = exc
-                    try:
-                        db_b.rollback()
-                    except Exception:
-                        pass
+                    if db_b is not None:
+                        try:
+                            db_b.rollback()
+                        except Exception:
+                            pass
+                finally:
+                    _destroy_thread_site()
 
             thread_a = threading.Thread(
                 target=transaction_a,
@@ -284,7 +332,8 @@ class TestBillingReservationConcurrency(unittest.TestCase):
             )
 
         finally:
-            # B has rolled back and released its row lock by this point.
+            # Both workers destroy their own Frappe contexts and connections
+            # before cleanup reaches this point.
             try:
                 setup.sql(
                     """
@@ -309,8 +358,6 @@ class TestBillingReservationConcurrency(unittest.TestCase):
                 )
                 setup.commit()
             finally:
-                _close(db_a)
-                _close(db_b)
                 _close(setup)
 
 
