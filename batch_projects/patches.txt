@@ -59,3 +59,8 @@ batch_projects.patches.backfill_workflow_definition_identity
 # narrow current/locking read on this field; persist search_index metadata and
 # create the index after DocType schema synchronization.
 batch_projects.patches.add_sales_invoice_timesheet_detail_index
+
+# P0 milestone billing lifecycle (2026-08-19): old two-state model marked
+# Draft Sales Invoices as "Invoiced". Reconcile existing milestones against
+# authoritative ERPNext Sales Invoice docstatus after the DocType options sync.
+batch_projects.patches.reconcile_milestone_invoice_lifecycle

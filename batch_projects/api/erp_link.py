@@ -1363,14 +1363,45 @@ def generate_milestone_invoice(milestone):
     access.require_capability(doc.project, "view_money")
     require_feature("billing_writeback")
 
+    # Billing eligibility was checked on an unlocked snapshot above only for
+    # authorization. Financial state is re-read after deterministic locks:
+    #
+    #     BP Project → BP Milestone
+    #
+    # Project-level serialization is required because percentage milestones
+    # share one 100%-of-budget invariant across different milestone rows.
+    from batch_projects.milestone_billing import (
+        DRAFT,
+        INVOICED,
+        assert_percent_capacity,
+        lock_generation_scope,
+        reconcile_milestone,
+    )
+
+    lock_generation_scope(
+        doc.project,
+        doc.name,
+    )
+
+    # Self-heal this exact milestone from the linked ERPNext invoice before
+    # making any financial decision. This also repairs a missed lifecycle hook
+    # without relying solely on the migration.
+    reconcile_milestone(doc.name)
+
+    doc = frappe.get_doc("BP Milestone", milestone)
+    project = frappe.get_doc("BP Project", doc.project)
+
     if doc.status != "Completed":
         frappe.throw("Complete this milestone before invoicing it.")
     if not doc.billing_type or doc.billing_type == "None":
         frappe.throw("Set a billing type on this milestone before invoicing it.")
-    if doc.invoice_status == "Invoiced":
-        frappe.throw(f"This milestone was already invoiced as {doc.sales_invoice}.")
+    if doc.invoice_status in (DRAFT, INVOICED):
+        state = "draft invoice" if doc.invoice_status == DRAFT else "submitted invoice"
+        frappe.throw(
+            f"This milestone already has {state} {doc.sales_invoice}. "
+            "Delete/cancel that invoice before creating another."
+        )
 
-    project = frappe.get_doc("BP Project", doc.project)
     if not project.erpnext_project:
         frappe.throw(f"Link '{project.project_name}' to an ERPNext Project before invoicing it.")
     if not project.client:
@@ -1379,28 +1410,15 @@ def generate_milestone_invoice(milestone):
     if doc.billing_type == "Fixed Amount":
         amount = flt(doc.invoice_amount)
     else:
-        # Percent of Budget — guard against invoicing past 100% of this
-        # project's budget across all its milestones. Checked against
-        # already-INVOICED siblings at the moment of invoicing, not against
-        # every configured-but-not-yet-invoiced milestone — a project can
-        # have more milestones configured with a plausible percent than will
-        # ever actually run; the harm only happens at the irreversible act of
-        # actually invoicing past 100%, so that's where the guard belongs.
-        already = flt(frappe.db.sql(
-            """
-            SELECT SUM(invoice_percent) FROM `tabBP Milestone`
-            WHERE project = %(project)s AND billing_type = 'Percent of Budget'
-              AND invoice_status = 'Invoiced' AND name != %(name)s
-            """,
-            {"project": doc.project, "name": doc.name},
-        )[0][0] or 0)
-        total_pct = already + flt(doc.invoice_percent)
-        if total_pct > 100:
-            frappe.throw(
-                f"Invoicing this milestone at {flt(doc.invoice_percent)}% would bring this "
-                f"project's total invoiced-by-percent to {total_pct}%, over its 100% budget "
-                f"({already}% already invoiced across other milestones)."
-            )
+        # A Draft invoice already reserves part of this project's commercial
+        # budget even though it has not reached the ledger yet. Count Draft +
+        # Invoiced siblings while the BP Project row lock serializes different
+        # milestones racing for the same remaining percentage.
+        assert_percent_capacity(
+            doc.project,
+            doc.name,
+            doc.invoice_percent,
+        )
         amount = flt(project.budget_amount) * flt(doc.invoice_percent) / 100
 
     company = project.company or frappe.defaults.get_global_default("company")
@@ -1449,8 +1467,15 @@ def generate_milestone_invoice(milestone):
     si.conversion_rate = fx
     si.insert(ignore_permissions=True)
 
-    doc.db_set("invoice_status", "Invoiced", update_modified=False)
-    doc.db_set("sales_invoice", si.name, update_modified=False)
+    frappe.db.set_value(
+        "BP Milestone",
+        doc.name,
+        {
+            "invoice_status": DRAFT,
+            "sales_invoice": si.name,
+        },
+        update_modified=False,
+    )
     # The "Open" toast action deep-links straight to /app/sales-invoice/<name>
     # — same zero-native-ERPNext-role gap ensure_erp_doc_access exists for,
     # but this invoice has no BP Task Reference/project-field trail for that
@@ -1461,7 +1486,12 @@ def generate_milestone_invoice(milestone):
         flags={"ignore_share_permission": True})
     frappe.db.commit()
 
-    return {"ok": True, "sales_invoice": si.name, "grand_total": si.grand_total}
+    return {
+        "ok": True,
+        "sales_invoice": si.name,
+        "grand_total": si.grand_total,
+        "invoice_status": DRAFT,
+    }
 
 
 @frappe.whitelist()

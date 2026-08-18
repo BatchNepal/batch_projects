@@ -390,13 +390,27 @@
                 <p class="flex-1 min-w-0 text-sm font-medium truncate"
                   :class="m.status === 'Completed' ? 'text-muted line-through' : 'text-foreground'">{{ m.title }}</p>
                 <button
-                  v-if="m.status === 'Completed'"
+                  v-if="m.status === 'Completed' && m.invoice_status === 'Not Invoiced'"
                   type="button"
                   class="shrink-0 text-xs font-medium text-primary hover:underline whitespace-nowrap"
                   title="Generate Sales Invoice"
                   :disabled="invoicingMilestone === m.name"
                   @click="generateMilestoneInvoiceRow(m)"
                 >{{ invoicingMilestone === m.name ? 'Invoicing…' : 'Invoice' }}</button>
+
+                <button
+                  v-else-if="m.status === 'Completed' && m.invoice_status === 'Draft' && m.sales_invoice"
+                  type="button"
+                  class="shrink-0 text-xs font-medium text-warning-soft-foreground hover:underline whitespace-nowrap"
+                  title="Open Draft Sales Invoice"
+                  @click="window.open(`/app/sales-invoice/${encodeURIComponent(m.sales_invoice)}`, '_blank')"
+                >Draft · {{ m.sales_invoice }}</button>
+
+                <span
+                  v-else-if="m.status === 'Completed' && m.invoice_status === 'Invoiced'"
+                  class="shrink-0 text-xs font-medium text-success-soft-foreground whitespace-nowrap"
+                >Invoiced</span>
+
                 <button
                   v-else
                   type="button"
@@ -404,7 +418,9 @@
                   title="Mark completed"
                   @click="completeMilestone(m)"
                 >✓</button>
+
                 <button
+                  v-if="m.invoice_status === 'Not Invoiced'"
                   type="button"
                   class="shrink-0 text-xs text-muted hover:text-danger-soft-foreground transition-colors opacity-0 group-hover:opacity-100"
                   title="Delete milestone"
@@ -695,7 +711,7 @@ async function generateMilestoneInvoiceRow(m) {
   invoicingMilestone.value = m.name
   try {
     const res = await generateMilestoneInvoice(m.name)
-    m.invoice_status = 'Invoiced'
+    m.invoice_status = res.invoice_status || 'Draft'
     m.sales_invoice = res.sales_invoice
     toast.success(`Draft Sales Invoice ${res.sales_invoice} created`, {
       description: 'Review and submit it in ERPNext.',
