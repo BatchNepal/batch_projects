@@ -1003,10 +1003,12 @@ def generate_invoice(project, period=None, tasks=None,
     get_gl_entries uses `item.project or self.project`, so every contributing
     project's billed figure and GL rows stay correct with no extra work here.
 
-    The header `project` field is set only when invoicing exactly one project.
-    Leaving it blank for a batch is deliberate: a single header project would
-    be a lie about the other N-1, and it also keeps ERPNext's validate_proj_cust
-    (which only fires when a header project is set) from rejecting the invoice.
+    The header `project` is populated even for a batch, using the first
+    selected ERPNext Project, but ONLY as an ERPNext Timesheet-writeback safety
+    sentinel. It is not the business attribution for the invoice. Every invoice
+    item carries its own ERPNext Project and all BatchProjects reporting/history
+    must treat those item-level values as authoritative. See the writeback
+    safety comment below where the header is assigned.
 
     `period` remains in the public signature only for compatibility with
     older/external callers. Period-scoped invoice generation is not currently
@@ -1749,6 +1751,7 @@ def generate_milestone_invoice(milestone):
     si.append("items", {
         "item_name": doc.title,
         "description": doc.title,
+        "project": project.erpnext_project,
         "qty": 1,
         "rate": amount,
         "income_account": income_account,
@@ -1901,6 +1904,7 @@ def generate_expense_invoice(project):
         si.append("items", {
             "item_name": description,
             "description": description,
+            "project": doc.erpnext_project,
             "qty": 1,
             "rate": amount,
             "income_account": income_account,
@@ -2059,7 +2063,10 @@ _DOC_SPECS = {
                    "currency", "grand_total", "outstanding_amount"],
         "child_doctype": "Sales Invoice Item",
         "child_key": "items",
-        "child_fields": _ITEM_FIELDS,
+        # `project` is fetched only so the security projection below can scope
+        # a shared invoice to the requested project. It is removed before the
+        # curated response is returned.
+        "child_fields": _ITEM_FIELDS + ["project"],
     },
     "Purchase Invoice": {
         "header": ["name", "status", "posting_date", "supplier", "currency", "grand_total"],
@@ -2114,6 +2121,56 @@ def _erp_project_for(project: str) -> str:
     return erp_project
 
 
+def _scope_sales_invoice_items(
+    children,
+    header_project,
+    erp_project,
+):
+    """Return only Sales Invoice Item rows attributable to `erp_project`.
+
+    Blank item project inherits the header project for historical/single-project
+    invoices. The internal `project` field is removed again from the curated
+    response so the existing drawer wire shape stays stable.
+    """
+    scoped = []
+
+    for child in children:
+        item_project = (
+            child.get("project")
+            or header_project
+        )
+
+        if item_project != erp_project:
+            continue
+
+        row = dict(child)
+        row.pop("project", None)
+        scoped.append(row)
+
+    return scoped
+
+
+def _scope_sales_invoice_timesheets(
+    rows,
+    detail_project_by_name,
+    erp_project,
+):
+    """Project-scope a shared invoice's backing Timesheet references.
+
+    Sales Invoice Timesheet itself does not carry project. Its
+    `timesheet_detail` pointer is authoritative, so resolve that exact source
+    row to Timesheet Detail.project before returning hours/amounts.
+    """
+    return [
+        row
+        for row in rows
+        if row.get("timesheet_detail")
+        and detail_project_by_name.get(
+            row.get("timesheet_detail")
+        ) == erp_project
+    ]
+
+
 def _tenant_ok(doctype: str, name: str, erp_project: str) -> bool:
     """THE security boundary: does this ERPNext doc actually belong to this
     project? Checked with raw field reads (frappe.db.get_value/exists) so a
@@ -2127,8 +2184,43 @@ def _tenant_ok(doctype: str, name: str, erp_project: str) -> bool:
         # No header project set — fall back to any time_logs row landing on
         # this project (mirrors how the timer itself stamps rows: project
         # is set per-row, parent_project is never set by our own code).
-        return bool(frappe.db.exists("Timesheet Detail", {"parent": name, "project": erp_project}))
-    return frappe.db.get_value(doctype, name, "project") == erp_project
+        return bool(frappe.db.exists(
+            "Timesheet Detail",
+            {
+                "parent": name,
+                "project": erp_project,
+            },
+        ))
+
+    if doctype == "Sales Invoice":
+        header_project = frappe.db.get_value(
+            "Sales Invoice",
+            name,
+            "project",
+        )
+
+        if header_project == erp_project:
+            return True
+
+        # Combined invoices carry business attribution on each item. Blank
+        # item projects inherit the header and are therefore already covered
+        # by the branch above.
+        return bool(frappe.db.exists(
+            "Sales Invoice Item",
+            {
+                "parent": name,
+                "project": erp_project,
+            },
+        ))
+
+    return (
+        frappe.db.get_value(
+            doctype,
+            name,
+            "project",
+        )
+        == erp_project
+    )
 
 
 @frappe.whitelist()
@@ -2182,6 +2274,19 @@ def get_erp_doc_summary(project, doctype, name):
         fields=spec["child_fields"], order_by="idx asc",
     )
 
+    if doctype == "Sales Invoice":
+        header_project = frappe.db.get_value(
+            "Sales Invoice",
+            name,
+            "project",
+        )
+
+        children = _scope_sales_invoice_items(
+            children,
+            header_project,
+            erp_project,
+        )
+
     if doctype == "Timesheet":
         task_names = list({c["custom_bp_task"] for c in children if c.get("custom_bp_task")})
         task_meta = {}
@@ -2205,18 +2310,79 @@ def get_erp_doc_summary(project, doctype, name):
         # revenue drawer a dead end (user-reported). Name-only pointers per
         # the non-transitivity rule: opening one re-enters this same gate.
         ts_rows = frappe.get_all(
-            "Sales Invoice Timesheet", filters={"parent": name},
-            fields=["time_sheet", "billing_hours", "billing_amount"],
+            "Sales Invoice Timesheet",
+            filters={"parent": name},
+            fields=[
+                "time_sheet",
+                "timesheet_detail",
+                "billing_hours",
+                "billing_amount",
+            ],
             order_by="idx asc",
         )
+
+        detail_names = list({
+            r.get("timesheet_detail")
+            for r in ts_rows
+            if r.get("timesheet_detail")
+        })
+
+        detail_project_by_name = {}
+
+        if detail_names:
+            detail_project_by_name = {
+                r["name"]: r["project"]
+                for r in frappe.get_all(
+                    "Timesheet Detail",
+                    filters={
+                        "name": [
+                            "in",
+                            detail_names,
+                        ],
+                    },
+                    fields=[
+                        "name",
+                        "project",
+                    ],
+                )
+            }
+
+        ts_rows = _scope_sales_invoice_timesheets(
+            ts_rows,
+            detail_project_by_name,
+            erp_project,
+        )
+
         grouped = {}
+
         for r in ts_rows:
-            if not r.time_sheet:
+            if not r.get("time_sheet"):
                 continue
-            g = grouped.setdefault(r.time_sheet, {"timesheet": r.time_sheet, "hours": 0.0, "amount": 0.0})
-            g["hours"] = round(g["hours"] + float(r.billing_hours or 0), 2)
-            g["amount"] = round(g["amount"] + float(r.billing_amount or 0), 2)
-        out["timesheets"] = list(grouped.values())
+
+            g = grouped.setdefault(
+                r["time_sheet"],
+                {
+                    "timesheet": r["time_sheet"],
+                    "hours": 0.0,
+                    "amount": 0.0,
+                },
+            )
+
+            g["hours"] = round(
+                g["hours"]
+                + float(r.get("billing_hours") or 0),
+                2,
+            )
+
+            g["amount"] = round(
+                g["amount"]
+                + float(r.get("billing_amount") or 0),
+                2,
+            )
+
+        out["timesheets"] = list(
+            grouped.values()
+        )
 
     return out
 
