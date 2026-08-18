@@ -11,9 +11,11 @@ Linking itself is free-tier plumbing — entitlement gates belong on the money
 surfaces built on top of this, not on creating the link.
 """
 
-import frappe
 import json
+import math
 import re
+
+import frappe
 
 from frappe.utils import flt, add_days, nowdate
 
@@ -622,55 +624,184 @@ def _requires_billing_rate(row):
     return _authoritative_billing_hours(row) != 0
 
 
-def _resolve_invoice_currency(company, customer, currency, conversion_rate,
-                               project_currency=None):
-    """Decide the invoice currency and its FX rate, or refuse.
+def _currency_code(value):
+    """Normalize an optional currency selector without inventing a value."""
+    if value is None:
+        return None
 
-    Order: explicit override -> the PROJECT's own currency ->
-    Customer.default_currency -> company currency.
+    code = str(value).strip()
+    return code or None
 
-    The project's currency comes before the customer's and the company's
-    because BP Project.hourly_rate is denominated in BP Project.currency.
-    When that project rate is selected as a fallback, the invoice must keep
-    the number and its unit together or explicitly convert it. Timesheet row
-    rates are typed separately by their parent Timesheet.currency.
-    The override exists for the payment-first case (money already landed in a
-    known foreign amount; the invoice must state that exact currency/rate
-    rather than have one guessed for it).
 
-    When the result differs from company currency we need a conversion rate.
-    If none is given and ERPNext has no Currency Exchange record for the pair,
-    we THROW rather than silently falling back to company currency — the old
-    behaviour did exactly that, producing an invoice denominated in the wrong
-    currency at face value. A loud refusal is recoverable; a wrong invoice
-    that someone submits is not."""
-    company_currency = frappe.get_cached_value("Company", company, "default_currency")
+def _validated_conversion_rate(value, label="Conversion rate"):
+    """Return a finite positive FX value, or None when genuinely omitted."""
+    if value is None:
+        return None
+
+    if isinstance(value, str) and not value.strip():
+        return None
+
+    if isinstance(value, bool):
+        frappe.throw(
+            f"{label} must be a finite number greater than zero."
+        )
+
+    try:
+        rate = float(value)
+    except (TypeError, ValueError):
+        frappe.throw(
+            f"{label} must be a finite number greater than zero."
+        )
+
+    if not math.isfinite(rate) or rate <= 0:
+        frappe.throw(
+            f"{label} must be a finite number greater than zero."
+        )
+
+    return rate
+
+
+def _validated_expected_amount(value):
+    """Normalize the optional payment-first amount assertion.
+
+    The amount is not used to alter pricing. It is only an assertion that the
+    independently computed invoice total equals money already received.
+    Non-finite / non-numeric input must therefore fail rather than weakening
+    that assertion.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, str) and not value.strip():
+        return None
+
+    if isinstance(value, bool):
+        frappe.throw(
+            "Expected received amount must be a finite number."
+        )
+
+    try:
+        expected = float(value)
+    except (TypeError, ValueError):
+        frappe.throw(
+            "Expected received amount must be a finite number."
+        )
+
+    if not math.isfinite(expected):
+        frappe.throw(
+            "Expected received amount must be a finite number."
+        )
+
+    return expected
+
+
+def _resolve_invoice_currency(
+    company,
+    customer,
+    currency,
+    conversion_rate,
+    project_currency=None,
+):
+    """Resolve one target invoice currency and authoritative target FX.
+
+    Resolution order for the target remains:
+
+        explicit override
+        -> project currency
+        -> Customer.default_currency
+        -> company currency
+
+    An explicit conversion_rate is a target->company FX override. It never
+    chooses the target currency itself.
+
+    If the target is company currency, its conversion rate is definitionally
+    1. Any explicit non-1 value is contradictory financial input and is
+    rejected rather than silently ignored.
+    """
+    company_currency = _currency_code(
+        frappe.get_cached_value(
+            "Company",
+            company,
+            "default_currency",
+        )
+    )
+
+    if not company_currency:
+        frappe.throw(
+            f"Company '{company}' has no Default Currency configured."
+        )
+
     target = (
-        currency
-        or project_currency
-        or frappe.db.get_value("Customer", customer, "default_currency")
+        _currency_code(currency)
+        or _currency_code(project_currency)
+        or _currency_code(
+            frappe.db.get_value(
+                "Customer",
+                customer,
+                "default_currency",
+            )
+        )
         or company_currency
     )
-    if target == company_currency:
-        return company_currency, target, 1.0
 
-    if conversion_rate:
-        return company_currency, target, flt(conversion_rate)
+    explicit_fx = _validated_conversion_rate(
+        conversion_rate,
+        "Explicit conversion rate",
+    )
+
+    if target == company_currency:
+        if (
+            explicit_fx is not None
+            and abs(explicit_fx - 1.0) > 1e-12
+        ):
+            frappe.throw(
+                f"Invoice currency '{target}' is the company currency, "
+                "so its conversion rate must be 1."
+            )
+
+        return (
+            company_currency,
+            target,
+            1.0,
+        )
+
+    if explicit_fx is not None:
+        return (
+            company_currency,
+            target,
+            explicit_fx,
+        )
 
     from erpnext.setup.utils import get_exchange_rate
+
     try:
-        fx = get_exchange_rate(target, company_currency, nowdate())
+        fx = get_exchange_rate(
+            target,
+            company_currency,
+            nowdate(),
+        )
     except Exception:
         fx = None
-    if not fx:
+
+    if fx in (None, "", 0, 0.0):
         frappe.throw(
             f"This invoice would be in {target} but the company books in "
             f"{company_currency}, and no exchange rate is configured for "
-            f"{target} → {company_currency}. Add a Currency Exchange record, or "
-            f"pass an explicit conversion_rate (the payment-first flow, where "
-            f"the received amount and rate are already known)."
+            f"{target} → {company_currency}. Add a Currency Exchange record, "
+            "or pass an explicit conversion_rate (the payment-first flow, "
+            "where the received amount and rate are already known)."
         )
-    return company_currency, target, flt(fx)
+
+    resolved_fx = _validated_conversion_rate(
+        fx,
+        "Resolved exchange rate",
+    )
+
+    return (
+        company_currency,
+        target,
+        resolved_fx,
+    )
 
 
 def _convert_billing_rate(
@@ -898,6 +1029,8 @@ def generate_invoice(project, period=None, tasks=None,
     # this before candidate SQL, source reservation, pricing or draft creation.
     _validate_invoice_period_contract(period)
 
+    expected_amount = _validated_expected_amount(amount)
+
     docs = [frappe.get_doc("BP Project", p) for p in project_names]
     doc = docs[0]
 
@@ -925,17 +1058,33 @@ def generate_invoice(project, period=None, tasks=None,
     # on project order.
     company = _validated_invoice_company(docs)
 
-    # Rates are denominated in each project's own currency, so bundling
-    # projects that disagree would put numbers in different units on the same
-    # invoice with a single currency label — silently wrong money.
-    proj_currencies = sorted({(d.currency or "").strip() for d in docs if (d.currency or "").strip()})
-    if len(proj_currencies) > 1:
+    # Every source rate retains its own typed currency, so multiple project
+    # currencies are financially valid ONLY after one target invoice currency
+    # is chosen explicitly. Never pick one project's currency by list order.
+    proj_currencies = sorted({
+        (d.currency or "").strip()
+        for d in docs
+        if (d.currency or "").strip()
+    })
+
+    explicit_currency = _currency_code(currency)
+
+    if len(proj_currencies) > 1 and not explicit_currency:
         frappe.throw(
-            "These projects are priced in different currencies (" +
-            ", ".join(proj_currencies) + ") — one invoice can only be in one "
-            "currency. Invoice them separately, or pass an explicit currency "
-            "and conversion_rate."
+            "These projects are priced in different currencies ("
+            + ", ".join(proj_currencies)
+            + "). Choose an explicit invoice currency before combining them. "
+            "The conversion rate may be omitted when ERPNext has the required "
+            "Currency Exchange records."
         )
+
+    # Validate a caller-supplied financial selector before candidate SQL or
+    # source reservation. The resolver later validates its relationship to
+    # the actual target/company currency.
+    explicit_conversion_rate = _validated_conversion_rate(
+        conversion_rate,
+        "Explicit conversion rate",
+    )
 
     erp_projects = [d.erpnext_project for d in docs]
     project_rate_by_erp = {
@@ -1024,8 +1173,15 @@ def generate_invoice(project, period=None, tasks=None,
     # `company` was normalized and validated across every selected project
     # above. Never derive it again from the first project.
     company_currency, inv_currency, fx = _resolve_invoice_currency(
-        company, doc.client, currency, conversion_rate,
-        project_currency=(proj_currencies[0] if proj_currencies else None),
+        company,
+        doc.client,
+        explicit_currency,
+        explicit_conversion_rate,
+        project_currency=(
+            proj_currencies[0]
+            if len(proj_currencies) == 1
+            else None
+        ),
     )
 
     service_item = _service_item()
@@ -1212,16 +1368,15 @@ def generate_invoice(project, period=None, tasks=None,
     # total differs we refuse and show both numbers, so a human fixes the
     # rates/hours — rather than silently writing an invoice that reconciles
     # against nothing.
-    if amount not in (None, ""):
-        expected = flt(amount)
+    if expected_amount is not None:
         # From our own resolved rows, NOT si.items — item `amount` is only
         # populated by calculate_taxes_and_totals() during validate(), which
         # hasn't run yet at this point, so reading it here always yields 0.
         computed = round(sum(r.eff_amount for r in rows), 2)
-        if abs(computed - expected) > 0.01:
+        if abs(computed - expected_amount) > 0.01:
             frappe.throw(
                 f"Computed total {computed} {inv_currency} does not match the "
-                f"expected {expected} {inv_currency}. Nothing was created. "
+                f"expected {expected_amount} {inv_currency}. Nothing was created. "
                 "Adjust the hours or rates so the invoice matches the amount "
                 "actually received, then try again."
             )
@@ -1411,19 +1566,95 @@ def get_batch_invoice_candidates():
 
     result = []
     for (client, company), entry in out.items():
-        currencies = sorted(c for c in entry["currencies"] if c)
+        currencies = sorted(
+            c
+            for c in entry["currencies"]
+            if c
+        )
+
+        currency_total_map = {}
+
+        for project_row in entry["projects"]:
+            code = project_row["currency"]
+
+            if not code:
+                continue
+
+            currency_total_map[code] = (
+                currency_total_map.get(code, 0.0)
+                + project_row["amount"]
+            )
+
+        currency_totals = [
+            {
+                "currency": code,
+                "amount": round(
+                    currency_total_map[code],
+                    2,
+                ),
+            }
+            for code in sorted(currency_total_map)
+        ]
+
+        mixed_currency = len(currencies) > 1
+
+        if mixed_currency:
+            sorted_projects = sorted(
+                entry["projects"],
+                key=lambda project_row: (
+                    project_row.get("currency") or "",
+                    project_row.get("project_name") or "",
+                    project_row.get("bp_project") or "",
+                ),
+            )
+        else:
+            sorted_projects = sorted(
+                entry["projects"],
+                key=lambda project_row: (
+                    -project_row["amount"],
+                    project_row.get("project_name") or "",
+                    project_row.get("bp_project") or "",
+                ),
+            )
+
         result.append({
             "client": client,
             "company": entry["company"],
-            # Surfaced so the screen can warn BEFORE the user selects a mix
-            # that generate_invoice would refuse — a batch must be one currency.
             "currencies": currencies,
-            "mixed_currency": len(currencies) > 1,
-            "projects": sorted(entry["projects"], key=lambda x: -x["amount"]),
-            "total_amount": round(sum(p["amount"] for p in entry["projects"]), 2),
-            "total_hours": round(sum(p["hours"] for p in entry["projects"]), 2),
+            "currency_totals": currency_totals,
+            "mixed_currency": mixed_currency,
+            "projects": sorted_projects,
+            # A scalar sum across unlike currencies is not money.
+            "total_amount": (
+                None
+                if mixed_currency
+                else round(
+                    sum(
+                        p["amount"]
+                        for p in entry["projects"]
+                    ),
+                    2,
+                )
+            ),
+            "total_hours": round(
+                sum(
+                    p["hours"]
+                    for p in entry["projects"]
+                ),
+                2,
+            ),
         })
-    result.sort(key=lambda c: -c["total_amount"])
+
+    # Do not rank independent customer/company groups by monetary totals when
+    # those totals may be denominated in unrelated currencies.
+    result.sort(
+        key=lambda entry: (
+            -entry["total_hours"],
+            entry["client"],
+            entry["company"],
+        )
+    )
+
     return result
 
 
