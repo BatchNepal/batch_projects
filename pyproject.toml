@@ -10,5 +10,5 @@ frappe = ">=15.0.0,<16.0.0"
 erpnext = ">=15.0.0,<16.0.0"
 
 [build-system]
-requires = ["flit_core >=3.4,<4"]
+requires = ["flit_core >=3.4,<5"]
 build-backend = "flit_core.buildapi"
