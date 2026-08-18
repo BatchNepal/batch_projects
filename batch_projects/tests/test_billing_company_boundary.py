@@ -33,12 +33,57 @@ def project(
 
 def row(erp_project, hours=1):
     return frappe._dict({
+        "name": f"TSD-{erp_project}",
+        "timesheet": f"TS-{erp_project}",
+        "bp_task": None,
         "erp_project": erp_project,
+        "project_name": erp_project,
         "hours": hours,
         "billing_hours": hours,
         "billing_rate": 100,
+        "billing_amount": hours * 100,
         "timesheet_currency": "USD",
+        "activity_type": "Project Work",
+        "description": "Company-boundary regression",
+        "from_time": "2026-08-19 09:00:00",
+        "to_time": "2026-08-19 10:00:00",
     })
+
+
+class _FakeSalesInvoice:
+    def __init__(self, name):
+        self.flags = frappe._dict()
+        self.items = []
+        self.timesheets = []
+        self.name = name
+        self.grand_total = 0.0
+
+    def append(self, table, value):
+        row = frappe._dict(value)
+        getattr(self, table).append(row)
+        return row
+
+    def run_method(self, method):
+        if method != "set_missing_values":
+            raise AssertionError(
+                f"unexpected Sales Invoice method: {method}"
+            )
+
+    def insert(self, ignore_permissions=False):
+        if not ignore_permissions:
+            raise AssertionError(
+                "invoice must use upstream BP authorization"
+            )
+
+        self.grand_total = round(
+            sum(
+                float(item.qty) * float(item.rate)
+                for item in self.items
+            ),
+            2,
+        )
+
+        return self
 
 
 class TestBillingCompanyBoundary(unittest.TestCase):
@@ -89,6 +134,214 @@ class TestBillingCompanyBoundary(unittest.TestCase):
             reverse,
             "COMPANY-A",
         )
+
+    def test_generate_invoice_missing_effective_company_fails_before_sql(self):
+        p = project(
+            "BP-NO-COMPANY",
+            company="",
+        )
+
+        with (
+            patch.object(
+                erp_link,
+                "_check_permission",
+            ),
+            patch(
+                "batch_projects.access.require_capability",
+            ),
+            patch.object(
+                erp_link,
+                "require_feature",
+            ),
+            patch.object(
+                erp_link.frappe.defaults,
+                "get_global_default",
+                return_value=None,
+            ),
+            patch.object(
+                erp_link.frappe,
+                "get_doc",
+                return_value=p,
+            ),
+            patch.object(
+                erp_link.frappe.db,
+                "sql",
+            ) as sql,
+            patch.object(
+                erp_link.frappe,
+                "new_doc",
+            ) as new_doc,
+        ):
+            with self.assertRaisesRegex(
+                frappe.ValidationError,
+                "global default Company",
+            ):
+                erp_link.generate_invoice(
+                    "BP-NO-COMPANY"
+                )
+
+        sql.assert_not_called()
+        new_doc.assert_not_called()
+
+    def test_generate_invoice_uses_effective_company_in_both_orders(self):
+        blank = project(
+            "BP-BLANK",
+            company="",
+            erp_project="ERP-BLANK",
+        )
+        explicit = project(
+            "BP-EXPLICIT",
+            company="COMPANY-A",
+            erp_project="ERP-EXPLICIT",
+        )
+
+        projects = {
+            blank.name: blank,
+            explicit.name: explicit,
+        }
+
+        orders = (
+            ["BP-BLANK", "BP-EXPLICIT"],
+            ["BP-EXPLICIT", "BP-BLANK"],
+        )
+
+        for index, order in enumerate(orders, start=1):
+            with self.subTest(order=order):
+                invoice = _FakeSalesInvoice(
+                    f"SINV-COMPANY-{index}"
+                )
+
+                rows = [
+                    row(
+                        projects[name].erpnext_project
+                    )
+                    for name in order
+                ]
+
+                seen = {}
+
+                def resolve_currency(
+                    company,
+                    customer,
+                    currency,
+                    conversion_rate,
+                    project_currency=None,
+                ):
+                    seen["company"] = company
+                    self.assertEqual(
+                        customer,
+                        "CUSTOMER-1",
+                    )
+                    self.assertEqual(
+                        project_currency,
+                        "USD",
+                    )
+                    return (
+                        "USD",
+                        "USD",
+                        1.0,
+                    )
+
+                with (
+                    patch.object(
+                        erp_link,
+                        "_check_permission",
+                    ),
+                    patch(
+                        "batch_projects.access.require_capability",
+                    ),
+                    patch.object(
+                        erp_link,
+                        "require_feature",
+                    ),
+                    patch.object(
+                        erp_link.frappe.defaults,
+                        "get_global_default",
+                        return_value="COMPANY-A",
+                    ),
+                    patch.object(
+                        erp_link.frappe,
+                        "get_doc",
+                        side_effect=lambda doctype, name: projects[name],
+                    ),
+                    patch.object(
+                        erp_link.frappe.db,
+                        "sql",
+                        return_value=rows,
+                    ),
+                    patch.object(
+                        erp_link,
+                        "guard_timesheet_details",
+                    ),
+                    patch.object(
+                        erp_link,
+                        "_service_item",
+                        return_value=None,
+                    ),
+                    patch.object(
+                        erp_link,
+                        "_price_list_rate",
+                        return_value=None,
+                    ),
+                    patch.object(
+                        erp_link,
+                        "_resolve_invoice_currency",
+                        side_effect=resolve_currency,
+                    ),
+                    patch.object(
+                        erp_link,
+                        "_effective_billing_rate",
+                        return_value=100,
+                    ),
+                    patch.object(
+                        erp_link.frappe,
+                        "get_all",
+                        return_value=[],
+                    ),
+                    patch.object(
+                        erp_link.frappe.db,
+                        "get_value",
+                        return_value="Income - COMPANY-A",
+                    ),
+                    patch.object(
+                        erp_link.frappe,
+                        "new_doc",
+                        return_value=invoice,
+                    ),
+                    patch.object(
+                        erp_link.frappe.share,
+                        "add_docshare",
+                    ),
+                    patch.object(
+                        erp_link.frappe.db,
+                        "commit",
+                    ),
+                ):
+                    result = (
+                        erp_link.generate_invoice(
+                            order
+                        )
+                    )
+
+                self.assertEqual(
+                    seen["company"],
+                    "COMPANY-A",
+                )
+
+                self.assertEqual(
+                    invoice.company,
+                    "COMPANY-A",
+                )
+
+                self.assertEqual(
+                    result["sales_invoice"],
+                    invoice.name,
+                )
+
+                self.assertEqual(
+                    len(result["projects"]),
+                    2,
+                )
 
     def test_generate_invoice_rejects_mixed_companies_before_candidate_sql(self):
         projects = {
