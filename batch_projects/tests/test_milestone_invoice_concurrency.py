@@ -187,10 +187,14 @@ class TestMilestoneInvoiceConcurrency(unittest.TestCase):
 
                     if not b_attempting.wait(timeout=5):
                         raise AssertionError(
-                            "transaction B never attempted project lock"
+                            "transaction B never established its stale snapshot"
                         )
 
-                    # Give B time to reach the same project mutex.
+                    # B has now completed a plain consistent read while this
+                    # transaction still owns the project mutex. Its
+                    # repeatable-read snapshot therefore says the first
+                    # milestone is Not Invoiced. Give B a deterministic window
+                    # to reach our project FOR UPDATE and wait before commit.
                     time.sleep(0.25)
 
                     db.sql(
@@ -228,6 +232,32 @@ class TestMilestoneInvoiceConcurrency(unittest.TestCase):
                         site,
                         sites_path,
                     )
+
+                    # Establish the exact stale-snapshot condition this
+                    # regression exists to defeat. A still owns the project
+                    # mutex and has not written Draft yet, so this ordinary
+                    # consistent SELECT must see Not Invoiced. After A commits,
+                    # only locking/current reads may escape this old snapshot.
+                    snapshot = db.sql(
+                        """
+                        SELECT invoice_status
+                        FROM `tabBP Milestone`
+                        WHERE name = %(name)s
+                        """,
+                        {"name": first},
+                    )
+
+                    snapshot_status = (
+                        snapshot[0][0]
+                        if snapshot
+                        else None
+                    )
+
+                    if snapshot_status != "Not Invoiced":
+                        raise AssertionError(
+                            "transaction B did not establish the expected "
+                            "pre-commit Not Invoiced snapshot"
+                        )
 
                     b_attempting.set()
 
