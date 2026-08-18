@@ -19,8 +19,10 @@ Sales Invoice Timesheet rows become the durable reservation after commit.
 """
 
 from collections import Counter
+import math
 
 import frappe
+from frappe.utils import flt
 
 
 def _validation_error(message):
@@ -433,15 +435,151 @@ def guard_timesheet_details(
     )
 
 
+def _payment_first_total_field(doc):
+    """Return ERPNext's authoritative customer-payable total field.
+
+    ERPNext itself treats rounded_total as the payable document amount when
+    rounding is enabled and grand_total as authoritative when rounded totals
+    are disabled.
+    """
+    if doc.is_rounded_total_disabled():
+        return "grand_total"
+
+    return "rounded_total"
+
+
+def _validate_payment_first_final_total(doc):
+    """Enforce BatchProjects' payment-first contract after ERPNext validate.
+
+    `generate_invoice()` stores the caller's already-received amount only in
+    `doc.flags`. Frappe doc-event hooks execute AFTER the Sales Invoice
+    controller's validate() method, so at this point ERPNext has already run
+    its own item precision, taxes, charges and rounded-total calculations.
+
+    This hook still runs BEFORE Document.insert() reaches db_insert(), so a
+    mismatch cannot create even a transient committed Draft Sales Invoice.
+    """
+    # A normal ERPNext Sales Invoice has no BatchProjects payment-first
+    # contract. Be defensive here because this is a site-wide validate hook:
+    # lightweight test doubles/custom callers may not expose a flags mapping
+    # at all. No contract means an immediate no-op.
+    flags = getattr(
+        doc,
+        "flags",
+        None,
+    )
+
+    if not flags:
+        return
+
+    expected = flags.get(
+        "bp_expected_received_amount"
+    )
+
+    if expected is None:
+        return
+
+    if (
+        isinstance(expected, bool)
+        or not isinstance(
+            expected,
+            (int, float),
+        )
+        or not math.isfinite(
+            float(expected)
+        )
+    ):
+        _validation_error(
+            "Expected received amount must be a finite number."
+        )
+
+    expected_currency = (
+        flags.get(
+            "bp_expected_received_currency"
+        )
+        or ""
+    ).strip()
+
+    actual_currency = (
+        doc.get("currency")
+        or ""
+    ).strip()
+
+    if (
+        expected_currency
+        and actual_currency != expected_currency
+    ):
+        _validation_error(
+            "ERPNext changed the invoice currency during validation "
+            f"from {expected_currency} to {actual_currency or '(blank)'}. "
+            "Nothing was created. Refresh the billing screen and try again."
+        )
+
+    total_field = (
+        _payment_first_total_field(doc)
+    )
+
+    raw_total = doc.get(
+        total_field
+    )
+
+    if raw_total is None:
+        _validation_error(
+            "ERPNext did not calculate the final Sales Invoice total. "
+            "Nothing was created."
+        )
+
+    precision = doc.precision(
+        total_field
+    )
+
+    if precision is None:
+        precision = 2
+
+    actual = flt(
+        raw_total,
+        precision,
+    )
+
+    expected_final = flt(
+        expected,
+        precision,
+    )
+
+    if actual != expected_final:
+        label = (
+            "rounded total"
+            if total_field == "rounded_total"
+            else "grand total"
+        )
+
+        _validation_error(
+            f"ERPNext final {label} {actual} "
+            f"{actual_currency or expected_currency} does not match the "
+            f"expected received amount {expected_final} "
+            f"{expected_currency or actual_currency}. Nothing was created. "
+            "Adjust the invoice inputs so ERPNext's final payable total "
+            "matches the amount actually received."
+        )
+
+
 def validate_sales_invoice_sources(doc, method=None):
     """Sales Invoice validate hook.
 
-    This is the final enforcement point for:
-    - BatchProjects-created invoices;
-    - invoices created/edited directly in ERPNext.
+    Frappe executes this doc-event hook after ERPNext's Sales Invoice
+    controller validate() method and before db_insert(). Two independent
+    BatchProjects invariants therefore meet here:
 
-    Non-BP Sales Invoice Timesheet rows are intentionally ignored.
+    1. payment-first invoices must match ERPNext's FINAL payable total;
+    2. BP-owned Timesheet Detail sources must remain exclusively reserved.
+
+    Native ERPNext invoices pay only an O(1) transient-flag check for the first
+    invariant, then retain the existing BP-source fast path below.
     """
+    _validate_payment_first_final_total(
+        doc
+    )
+
     details = [
         getattr(row, "timesheet_detail", None)
         for row in (doc.get("timesheets") or [])
