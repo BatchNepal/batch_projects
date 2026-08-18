@@ -116,10 +116,16 @@ class TestGenerateInvoiceRateCurrency(unittest.TestCase):
                 amount=109.09,
             )
 
-        expected_rate = round(50 * 150 / 137.5, 4)
+        # generate_invoice rounds the converted row subtotal to cents before
+        # deriving the invoice-line rate. Two hours at the converted rate give
+        # 109.09 USD, so the emitted unit rate is 109.09 / 2 = 54.545 USD/h.
+        expected_amount = round(2 * 50 * 150 / 137.5, 2)
+        expected_rate = round(expected_amount / 2, 4)
+
         self.assertEqual(len(invoice.items), 1)
         self.assertEqual(invoice.items[0].qty, 2)
         self.assertEqual(invoice.items[0].rate, expected_rate)
+        self.assertEqual(expected_rate, 54.545)
         self.assertNotEqual(invoice.items[0].rate, 50)
 
         self.assertEqual(invoice.currency, "USD")
