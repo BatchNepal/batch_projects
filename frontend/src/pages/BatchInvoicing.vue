@@ -27,12 +27,13 @@
     />
 
     <div v-else class="bi-body">
-      <section v-for="c in clients" :key="c.client" class="bi-card">
+      <section v-for="c in clients" :key="batchKey(c)" class="bi-card">
         <div class="bi-card-head">
           <div class="min-w-0">
             <p class="bi-client">{{ c.client }}</p>
             <p class="bi-meta">
-              {{ c.projects.length }} project{{ c.projects.length === 1 ? '' : 's' }}
+              {{ c.company }}
+              · {{ c.projects.length }} project{{ c.projects.length === 1 ? '' : 's' }}
               · <span class="tnum">{{ c.total_hours }}</span> h unbilled
             </p>
           </div>
@@ -40,8 +41,8 @@
             <span class="bi-total tnum">{{ fmtMoney(selectedAmount(c), currencyOf(c)) }}</span>
             <Button
               size="sm" color="primary"
-              :isDisabled="!selectedCount(c) || busy === c.client || mixedSelected(c)"
-              :isLoading="busy === c.client"
+              :isDisabled="!selectedCount(c) || busy === batchKey(c) || mixedSelected(c)"
+              :isLoading="busy === batchKey(c)"
               @click="openConfirm(c)"
             >Create invoice</Button>
           </div>
@@ -95,7 +96,8 @@
       <ModalHeader>Create invoice</ModalHeader>
       <ModalBody>
         <p class="bi-confirm-line">
-          <strong>{{ confirm.client }}</strong> —
+          <strong>{{ confirm.client }}</strong>
+          · {{ confirm.company }} —
           {{ confirm.projects.length }} project{{ confirm.projects.length === 1 ? '' : 's' }},
           <span class="tnum">{{ fmtMoney(confirm.amount, confirm.currency) }}</span>
         </p>
@@ -161,6 +163,10 @@ async function load() {
 }
 onMounted(load)
 
+function batchKey(c) {
+  return `${c.client}::${c.company || ''}`
+}
+
 function isSelected(p) { return !!picked[p.bp_project] }
 function toggle(p) { picked[p.bp_project] = !picked[p.bp_project] }
 function selectedOf(c) { return c.projects.filter(isSelected) }
@@ -181,7 +187,8 @@ function fmtMoney(n, cur) {
 }
 
 const confirm = reactive({
-  open: false, client: '', projects: [], amount: 0, currency: '',
+  open: false, client: '', company: '', batchKey: '',
+  projects: [], amount: 0, currency: '',
   overrideAmount: '', overrideCurrency: '', overrideRate: '',
   busy: false, error: '',
 })
@@ -189,8 +196,13 @@ const confirm = reactive({
 function openConfirm(c) {
   const sel = selectedOf(c)
   Object.assign(confirm, {
-    open: true, client: c.client, projects: sel,
-    amount: selectedAmount(c), currency: currencyOf(c),
+    open: true,
+    client: c.client,
+    company: c.company,
+    batchKey: batchKey(c),
+    projects: sel,
+    amount: selectedAmount(c),
+    currency: currencyOf(c),
     overrideAmount: '', overrideCurrency: '', overrideRate: '',
     busy: false, error: '',
   })
@@ -199,7 +211,7 @@ function openConfirm(c) {
 async function doCreate() {
   confirm.busy = true
   confirm.error = ''
-  busy.value = confirm.client
+  busy.value = confirm.batchKey
   try {
     const res = await generateInvoice(
       confirm.projects.map(p => p.bp_project),
