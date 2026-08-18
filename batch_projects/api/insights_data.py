@@ -71,6 +71,148 @@ def _query(table_exists, sql, params):
         return []
 
 
+def _shape_sales_invoice_project_revenue_rows(rows):
+    """Collapse submitted Sales Invoice Item rows by (project, invoice).
+
+    `grand_total` is intentionally retained as the wire key consumed by the
+    current gateway, but its value is PROJECT-ATTRIBUTED NET REVENUE in company
+    currency, not the invoice header's grand total.
+
+    Outstanding is still an invoice-level receivable. For a shared invoice it
+    is apportioned by the same base-net share so the same unpaid balance is not
+    repeated in every contributing project's Money tab.
+    """
+    grouped = {}
+
+    for row in rows:
+        project = row.get("project")
+        invoice = row.get("name")
+
+        if not project or not invoice:
+            continue
+
+        key = (project, invoice)
+
+        current = grouped.setdefault(
+            key,
+            {
+                "project": project,
+                "name": invoice,
+                "date": row.get("date"),
+                "status": row.get("status"),
+                "grand_total": 0.0,
+                "outstanding_amount": 0.0,
+                "conversion_rate": float(
+                    row.get("conversion_rate") or 0
+                ),
+                "_invoice_base_net_total": float(
+                    row.get("base_net_total") or 0
+                ),
+                "_invoice_outstanding": float(
+                    row.get("outstanding_amount") or 0
+                ),
+            },
+        )
+
+        current["grand_total"] += float(
+            row.get("base_net_amount") or 0
+        )
+
+    result = []
+
+    for current in grouped.values():
+        project_revenue = round(
+            current["grand_total"],
+            2,
+        )
+
+        invoice_net = current.pop(
+            "_invoice_base_net_total"
+        )
+
+        invoice_outstanding = current.pop(
+            "_invoice_outstanding"
+        )
+
+        if abs(invoice_net) > 1e-12:
+            current["outstanding_amount"] = round(
+                invoice_outstanding
+                * project_revenue
+                / invoice_net,
+                2,
+            )
+        else:
+            # There is no financially meaningful denominator with which to
+            # allocate an invoice-level receivable to this project's lines.
+            # Do not duplicate the whole invoice outstanding as a fallback.
+            current["outstanding_amount"] = 0.0
+
+        current["grand_total"] = project_revenue
+
+        result.append(current)
+
+    # SQL delivers invoice/date order and dict insertion order preserves it.
+    return result
+
+
+def _sales_invoice_project_revenue_rows(
+    projects,
+    from_date,
+    to_date,
+):
+    """Submitted invoice revenue for the requested ERPNext Projects.
+
+    Effective project is item.project first, header project only as a fallback
+    for legacy/single-project invoices whose items were not explicitly tagged.
+
+    The row-level read is intentional. A combined invoice is one legal/accounting
+    document but several project revenue claims.
+    """
+    if not projects:
+        return []
+
+    raw = _query(
+        "Sales Invoice Item",
+        """
+        SELECT
+            COALESCE(
+                NULLIF(sii.project, ''),
+                si.project
+            ) AS project,
+            si.name,
+            si.posting_date AS date,
+            si.status,
+            si.outstanding_amount,
+            si.conversion_rate,
+            si.base_net_total,
+            sii.base_net_amount
+        FROM `tabSales Invoice Item` sii
+        JOIN `tabSales Invoice` si
+          ON si.name = sii.parent
+         AND si.docstatus = 1
+        WHERE COALESCE(
+                NULLIF(sii.project, ''),
+                si.project
+              ) IN %(projects)s
+          AND si.posting_date >= %(from_date)s
+          AND si.posting_date <= %(to_date)s
+        ORDER BY
+            si.posting_date DESC,
+            si.name DESC,
+            sii.idx ASC
+        """,
+        {
+            "projects": tuple(projects),
+            "from_date": from_date,
+            "to_date": to_date,
+        },
+    )
+
+    return _shape_sales_invoice_project_revenue_rows(
+        raw
+    )
+
+
 def _visible_money_projects(user: str) -> list[dict]:
     """Active projects `user` may see AND holds `view_money` on.
 
@@ -132,13 +274,23 @@ def get_margin_inputs(from_date, to_date, user):
     from_dt = f"{from_date} 00:00:00"
     to_dt = f"{to_date} 23:59:59"
 
-    invoices = _query("Sales Invoice", """
-        SELECT project, SUM(base_grand_total) AS revenue
-        FROM `tabSales Invoice`
-        WHERE docstatus = 1 AND project IN %(projects)s
-          AND posting_date >= %(from_date)s AND posting_date <= %(to_date)s
-        GROUP BY project
-    """, {"projects": erpnext_names, "from_date": from_date, "to_date": to_date})
+    # Revenue follows Sales Invoice Item.project, not the invoice header.
+    # Header project is only a legacy/single-project fallback. Item
+    # base_net_amount is company-currency net sales: taxes/charges never become
+    # project revenue.
+    invoice_rows = _sales_invoice_project_revenue_rows(
+        erpnext_names,
+        from_date,
+        to_date,
+    )
+
+    invoices = [
+        {
+            "project": row["project"],
+            "revenue": row["grand_total"],
+        }
+        for row in invoice_rows
+    ]
 
     timesheets = _query("Timesheet Detail", """
         SELECT tsd.project, tsd.hours, tsd.costing_amount
@@ -227,14 +379,14 @@ def get_money_inputs(project, from_date, to_date, user):
     from batch_projects.api.board import _company_currency
     currency = _company_currency(doc.company) or doc.currency or "USD"
 
-    revenue = _query("Sales Invoice", """
-        SELECT name, posting_date AS date, base_grand_total AS grand_total,
-               status, outstanding_amount, conversion_rate
-        FROM `tabSales Invoice`
-        WHERE project = %(proj)s AND docstatus = 1
-          AND posting_date >= %(from_date)s AND posting_date <= %(to_date)s
-        ORDER BY posting_date DESC
-    """, window)
+    # One legal invoice may cover several projects. The Money tab therefore
+    # reads project-attributed item revenue rather than trusting the invoice's
+    # single header project.
+    revenue = _sales_invoice_project_revenue_rows(
+        [erp],
+        from_date,
+        to_date,
+    )
 
     timesheets = _query("Timesheet Detail", """
         SELECT tsd.hours, tsd.costing_amount
