@@ -1,0 +1,41 @@
+name: Security hardening
+description: Track non-sensitive security engineering work. Do not disclose vulnerabilities here.
+title: "[Security hardening]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not use this form to disclose a vulnerability or exploit.** Follow SECURITY.md for private reporting. This form is for planned hardening work that is already safe to discuss publicly.
+  - type: textarea
+    id: objective
+    attributes:
+      label: Hardening objective
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Trust boundary / threat being addressed
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Security requirements
+      placeholder: |
+        - [ ] Fail closed when ...
+        - [ ] Never expose ...
+        - [ ] Add regression coverage for ...
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and rollout considerations
+  - type: checkboxes
+    id: disclosure
+    attributes:
+      label: Confirmation
+      options:
+        - label: This issue contains no secret, exploit instructions, or undisclosed vulnerability details.
+          required: true

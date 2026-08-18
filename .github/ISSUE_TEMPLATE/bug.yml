@@ -1,0 +1,93 @@
+name: Bug report
+description: Report a reproducible defect in BatchProjects.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve BatchProjects. Do not disclose security vulnerabilities here; follow SECURITY.md instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the observed behaviour and its impact.
+      placeholder: A clear description of the defect.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest reliable reproduction you can.
+      placeholder: |
+        1. Open ...
+        2. Configure ...
+        3. Click ...
+        4. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Impact
+      options:
+        - Blocks normal use / data integrity risk
+        - Major workflow degraded
+        - Minor workflow degraded
+        - Cosmetic / low impact
+    validations:
+      required: true
+  - type: input
+    id: bp_version
+    attributes:
+      label: BatchProjects version / commit
+      placeholder: e.g. 1.1.0 / fe142f1
+    validations:
+      required: true
+  - type: input
+    id: erpnext_version
+    attributes:
+      label: ERPNext / Frappe version
+      placeholder: e.g. ERPNext 15.x, Frappe 15.x
+    validations:
+      required: true
+  - type: input
+    id: gateway_version
+    attributes:
+      label: Gateway version
+      description: Enter "not installed" if Community-only.
+      placeholder: e.g. 1.0.23
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Self-hosted bare bench
+        - Self-hosted Docker
+        - Frappe Cloud
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, screenshots, or recordings
+      description: Redact secrets, tokens, customer data, and personal information.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: This is not a security vulnerability disclosure.
+          required: true

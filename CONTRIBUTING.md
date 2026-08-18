@@ -1,34 +1,48 @@
 # Contributing to BatchProjects
 
-Thanks for looking at this. A few things to know before you send a PR.
+BatchProjects is maintained as production software for the ERPNext ecosystem. Contributions are welcome, but changes must be reviewable, testable, and safe to operate.
 
-## How contributions land
+## Before you start
 
-This repo is **PR-only** — there's no direct push to `version-15` (the
-default branch), including for maintainers. The flow:
+- Use the structured GitHub issue forms for bugs, regressions, features, and engineering work.
+- Security vulnerabilities are **never** reported through public issues; follow [`SECURITY.md`](SECURITY.md).
+- Read [`docs/engineering/DEVELOPMENT_WORKFLOW.md`](docs/engineering/DEVELOPMENT_WORKFLOW.md) and [`docs/engineering/DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md) before non-trivial changes.
+- Architecture decisions that affect trust boundaries, money, compatibility, migrations, or Community/Gateway ownership belong in [`docs/architecture/`](docs/architecture/).
 
-1. Fork, branch off `version-15`.
-2. Open a PR. Fill in the template — what changed and why, not just what.
-3. CI has to pass (see below).
-4. A maintainer reviews, may ask for changes, then merges.
+## How changes land
 
-By submitting a PR you agree your contribution is licensed under this
-project's license (AGPL-3.0-only, see [`LICENSE`](LICENSE)).
+Supported release branches are PR-only by policy. The expected flow is:
+
+1. Start from the matching `version-NN` branch.
+2. Create a short-lived branch for one concern.
+3. Implement the smallest coherent change.
+4. Add or update regression coverage.
+5. Run the relevant checks locally.
+6. Open a pull request and complete the full PR template.
+7. Address review and CI findings.
+8. Merge only after required checks and review are satisfied.
+
+Do not bundle unrelated cleanup into a product change. Smaller PRs are easier to reason about, safer to revert, and produce more useful repository history.
+
+By submitting a PR you agree your contribution is licensed under this project's license (AGPL-3.0-only, see [`LICENSE`](LICENSE)).
 
 ## Branch model
 
-Branches are named `version-NN`, matching the ERPNext major version they
-target — `version-15` today, following the same convention used by
-[HRMS](https://github.com/frappe/hrms), Payments, Shipping, and other Frappe
-community apps. Open PRs against the branch matching the ERPNext version
-you're testing on. See [`deploy/README.md`](deploy/README.md) for the full
-compatibility story (this app's version, the optional gateway add-on's
-version, and ERPNext's version are three separate things that don't move in
-lockstep).
+Branches are named `version-NN`, matching the ERPNext/Frappe major version they target. Open PRs against the release line you actually tested.
 
-## Dev setup
+Short-lived implementation branches should describe intent, for example:
 
-This is a standard Frappe app plus a Vue 3 / Vite SPA.
+- `fix/381-zero-billing-hours`
+- `sec/417-gateway-ssrf`
+- `feat/402-resource-calendar`
+- `refactor/455-board-service`
+- `chore/470-ci-frappe-tests`
+
+See [`deploy/README.md`](deploy/README.md) for BatchProjects/Gateway/ERPNext compatibility.
+
+## Development setup
+
+BatchProjects is a Frappe app plus a Vue 3 / Vite SPA.
 
 ```bash
 # Inside an existing bench
@@ -38,39 +52,40 @@ bench --site yoursite.local install-app batch_projects
 # Frontend
 cd apps/batch_projects/frontend
 NODE_ENV=development yarn install --production=false
-yarn dev      # dev server with hot reload
-yarn build    # production build → ../batch_projects/public/frontend
+yarn dev
+yarn build
 ```
 
-`bench build` does **not** rebuild this SPA (it's a separate Vite project,
-not part of Frappe's own asset pipeline) — always run `yarn build` after
-frontend changes, before committing.
+`bench build` does **not** rebuild the standalone Vite SPA. After frontend source changes, run `yarn build` and commit the resulting `batch_projects/public/frontend/` output in the same PR.
 
-## The dist-drift check
+## Testing expectations
 
-`public/frontend/assets/` (the built SPA) is committed to the repo — this is
-deliberate, so `bench get-app` + `bench install-app` works with zero Node
-dependency for anyone consuming the app normally. CI enforces that committed
-output actually matches source: it runs `yarn build` and diffs the result
-against what you committed. **If you touch anything under `frontend/src/`,
-run `yarn build` and commit the resulting changes in `public/frontend/` in
-the same PR**, or CI will fail.
+At minimum, test the behaviour you changed and its failure path. Higher-risk areas require stronger evidence:
 
-## Code style
+- permissions/tenancy: prove denied access as well as allowed access;
+- billing/accounting: test zero/null semantics, currency, lifecycle, and duplicate execution where relevant;
+- migrations/schema: test fresh install and upgrade behaviour;
+- Gateway contracts: test incompatible/missing Gateway behaviour and fail-closed enforcement;
+- UI: cover loading, empty, error, permission, and disabled states where the change affects them.
 
-- Python: match the existing style in the file you're editing. No new
-  formatter/linter config without discussing it first.
-- Vue/frontend: use the existing `@/ui` component kit, don't hand-roll CSS
-  or introduce a second component library. If you're touching UI, a
-  screenshot in the PR description speeds up review a lot.
-- Keep changes scoped to what the PR is about. Unrelated cleanup makes
-  review slower, not faster — send it as a separate PR.
+Frappe integration tests can be run with `bench run-tests --app batch_projects` or a narrower module while developing.
 
-## Reporting bugs vs. security issues
+## Frontend conventions
 
-Regular bugs: open a GitHub issue with repro steps.
-Security vulnerabilities: **do not** open a public issue — see
-[`SECURITY.md`](SECURITY.md).
+Use the existing `@/ui` component kit and token system. Do not add a second component library or introduce page-local visual conventions when an existing primitive covers the interaction. Visible UI changes should include screenshots or a short recording in the PR.
+
+## Code and architecture conventions
+
+- Prefer domain-focused modules over adding unrelated responsibilities to large API modules.
+- Low-level helpers should not decide transaction boundaries unless that ownership is intentional and documented.
+- `ignore_permissions=True` requires an explicit, server-side authorization boundary before it is used.
+- Financial logic must preserve value units and ERPNext's role as accounting source of truth.
+- Premium capability should follow [`ADR-001`](docs/architecture/ADR-001-open-core-boundary.md); a removable public-code conditional is not sufficient protection for valuable executable capability that can live in Gateway.
+- Do not reference private/non-shipped planning files as the sole explanation for public architecture.
+
+## Pull request review
+
+The reviewer is expected to understand why the change exists, what invariant it affects, what can fail, and how it is tested. The PR template intentionally asks for security, financial, migration, compatibility, and rollback impact so those questions are answered before merge instead of after an incident.
 
 ## Code of Conduct
 

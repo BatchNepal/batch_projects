@@ -1,0 +1,62 @@
+name: Feature request
+description: Propose a product capability or workflow improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the workflow pain, user, and business outcome before proposing a UI or implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current workaround
+      description: How is this handled today in BatchProjects, ERPNext, or another tool?
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the behaviour you want. Avoid prescribing implementation unless it is essential.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Primary scope
+      options:
+        - Work management
+        - ERPNext integration
+        - Billing / financial operations
+        - Resource / capacity planning
+        - Automation / integrations
+        - Reporting / dashboards
+        - Collaboration
+        - Administration / governance
+        - Developer / platform
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What must be true for this to be considered complete?
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and discussions for similar requests.
+          required: true
+        - label: I described the problem independently of a specific implementation.
+          required: true
