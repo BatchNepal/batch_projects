@@ -40,12 +40,19 @@ jobs:
       - name: Install
         working-directory: frontend
         run: NODE_ENV=development yarn install --production=false --frozen-lockfile
+      - name: Preserve committed manifest
+        run: cp batch_projects/public/frontend/.vite/manifest.json /tmp/bp-vite-manifest-committed.json
       - name: Build
         working-directory: frontend
         run: yarn build
+      - name: Verify Vite manifest
+        run: >-
+          python .github/scripts/compare_vite_manifests.py
+          /tmp/bp-vite-manifest-committed.json
+          batch_projects/public/frontend/.vite/manifest.json
       - name: Fail if committed dist is stale
         run: |
-          if ! git diff --exit-code -- batch_projects/public/frontend; then
+          if ! git diff --exit-code -- . ':(exclude)batch_projects/public/frontend/.vite/manifest.json'; then
             echo "::error::public/frontend/ doesn't match a fresh 'yarn build' of frontend/src." \
                  "Run 'yarn build' inside frontend/ and commit the result in this PR."
             exit 1
