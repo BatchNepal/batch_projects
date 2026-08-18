@@ -1,0 +1,46 @@
+name: Regression report
+description: Report behaviour that worked in a previous release and is now broken.
+title: "[Regression]: "
+labels: ["bug"]
+body:
+  - type: input
+    id: last_good
+    attributes:
+      label: Last known good version / commit
+    validations:
+      required: true
+  - type: input
+    id: first_bad
+    attributes:
+      label: First known bad version / commit
+    validations:
+      required: true
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: Behaviour that regressed
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Operational impact
+      description: Include data, permission, financial, upgrade, or customer impact where relevant.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: ERPNext / Frappe / Gateway versions
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs / screenshots / failing test

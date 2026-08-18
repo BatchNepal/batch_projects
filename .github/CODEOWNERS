@@ -1,0 +1,29 @@
+# CODEOWNERS
+#
+# Ownership is deliberately narrow today: BatchNepal maintainers own the
+# repository until dedicated teams exist. Split paths into team owners as the
+# organization grows; do not invent placeholder GitHub teams that do not exist.
+
+* @ChetSocio
+
+# Security-sensitive trust boundaries
+/batch_projects/gateway_guard.py @ChetSocio
+/batch_projects/access.py @ChetSocio
+/batch_projects/permissions.py @ChetSocio
+/batch_projects/api/credentials.py @ChetSocio
+
+# Financial / ERP write-back surfaces
+/batch_projects/api/erp_link.py @ChetSocio
+/batch_projects/timesheet_sync.py @ChetSocio
+/batch_projects/erp_triggers.py @ChetSocio
+
+# Installation and schema evolution
+/batch_projects/patches/ @ChetSocio
+/batch_projects/setup/ @ChetSocio
+/batch_projects/hooks.py @ChetSocio
+
+# Repository governance and CI
+/.github/ @ChetSocio
+/SECURITY.md @ChetSocio
+/CONTRIBUTING.md @ChetSocio
+/docs/architecture/ @ChetSocio

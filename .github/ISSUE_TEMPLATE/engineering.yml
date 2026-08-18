@@ -1,0 +1,61 @@
+name: Engineering task
+description: Track technical debt, refactoring, architecture, migration, or engineering infrastructure work.
+title: "[Engineering]: "
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Work type
+      options:
+        - Architecture
+        - Technical debt
+        - Refactor
+        - Migration / schema
+        - CI / developer experience
+        - Performance
+        - Reliability
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What engineering problem exists and why does it matter now?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Invariants that must not change
+      description: Permissions, API compatibility, financial semantics, migrations, or other behaviours that must remain stable.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Expected risk
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Migration / rollout / rollback notes
