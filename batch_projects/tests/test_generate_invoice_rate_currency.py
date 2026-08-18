@@ -15,6 +15,7 @@ class _FakeSalesInvoice:
         self.timesheets = []
         self.name = "SINV-RATE-TEST"
         self.grand_total = 0.0
+        self.before_insert_check = None
 
     def append(self, table, value):
         row = frappe._dict(value)
@@ -28,6 +29,8 @@ class _FakeSalesInvoice:
     def insert(self, ignore_permissions=False):
         if not ignore_permissions:
             raise AssertionError("invoice must be inserted with upstream authorization")
+        if self.before_insert_check:
+            self.before_insert_check()
         self.grand_total = round(
             sum(float(row.qty) * float(row.rate) for row in self.items), 2
         )
@@ -62,6 +65,23 @@ class TestGenerateInvoiceRateCurrency(unittest.TestCase):
             "erp_project": "ERP-RATE-TEST",
         })
         invoice = _FakeSalesInvoice()
+        guard_seen = {"value": False}
+
+        def guard_sources(detail_names, **kwargs):
+            self.assertEqual(
+                detail_names,
+                ["TSD-RATE-TEST"],
+            )
+            self.assertEqual(
+                kwargs,
+                {"enforce_all_sources": True},
+            )
+            guard_seen["value"] = True
+
+        invoice.before_insert_check = lambda: self.assertTrue(
+            guard_seen["value"],
+            "billing source guard must run before Sales Invoice insertion",
+        )
 
         def resolve_currency(company, customer, currency, conversion_rate,
                              project_currency=None):
@@ -90,7 +110,12 @@ class TestGenerateInvoiceRateCurrency(unittest.TestCase):
             patch.object(
                 erp_link.frappe.db,
                 "sql",
-                side_effect=[[row], []],
+                side_effect=[[row]],
+            ),
+            patch.object(
+                erp_link,
+                "guard_timesheet_details",
+                side_effect=guard_sources,
             ),
             patch.object(erp_link, "_service_item", return_value=None),
             patch.object(erp_link, "_price_list_rate", return_value=None),
@@ -122,6 +147,7 @@ class TestGenerateInvoiceRateCurrency(unittest.TestCase):
         expected_amount = round(2 * 50 * 150 / 137.5, 2)
         expected_rate = round(expected_amount / 2, 4)
 
+        self.assertTrue(guard_seen["value"])
         self.assertEqual(len(invoice.items), 1)
         self.assertEqual(invoice.items[0].qty, 2)
         self.assertEqual(invoice.items[0].rate, expected_rate)

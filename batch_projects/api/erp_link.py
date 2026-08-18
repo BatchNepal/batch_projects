@@ -19,6 +19,7 @@ from frappe.utils import flt, add_days, nowdate
 
 from batch_projects.api.board import _check_permission, _require_system_user
 from batch_projects.entitlements import require_feature, require_workspace_feature
+from batch_projects.billing_reservation import guard_timesheet_details
 
 
 @frappe.whitelist()
@@ -904,25 +905,15 @@ def generate_invoice(project, period=None, tasks=None,
             + " (Hours on tasks awaiting or refused approval are held back.)"
         )
 
-    # ERPNext stamps tsd.sales_invoice only when the SI is SUBMITTED, so the
-    # unbilled query above still returns these rows while a generated draft
-    # sits unsubmitted in ERPNext — a second click here would mint a duplicate
-    # draft double-billing the same hours. Refuse and point at the draft
-    # instead (same idempotency pattern as the SO button's custom_bp_project).
-    covering_draft = frappe.db.sql(
-        """
-        SELECT DISTINCT sit.parent
-        FROM `tabSales Invoice Timesheet` sit
-        JOIN `tabSales Invoice` si ON si.name = sit.parent AND si.docstatus = 0
-        WHERE sit.timesheet_detail IN %(details)s
-        """,
-        {"details": tuple(r.name for r in rows)},
+    # Serialize the exact financial source rows before any pricing or draft
+    # construction. These FOR UPDATE locks remain owned by this transaction
+    # until the Sales Invoice is inserted and the explicit commit near the end
+    # of this method completes. A second overlapping request therefore waits,
+    # then re-checks current committed state rather than minting another draft.
+    guard_timesheet_details(
+        [r.name for r in rows],
+        enforce_all_sources=True,
     )
-    if covering_draft:
-        frappe.throw(
-            f"Draft Sales Invoice {covering_draft[0][0]} already covers these hours — "
-            "submit or delete it in ERPNext first."
-        )
 
     # Same billing_rate-or-project-rate fallback the Money tab's unbilled
     # figure already uses (bp-gateway internal/insights/money.go) — a row with billing_rate=0 (e.g. a Timesheet Detail
