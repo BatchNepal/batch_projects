@@ -616,9 +616,21 @@ class TestInvoiceProjectAttribution(unittest.TestCase):
             generated,
         )
 
+        # inspect.getsource() preserves source line wrapping, so normalize
+        # whitespace before asserting the semantic header contract. The source
+        # intentionally wraps "safety" / "sentinel" across two lines.
+        normalized_generated = " ".join(
+            generated.split()
+        )
+
         self.assertIn(
-            "safety sentinel",
-            generated,
+            "ERPNext Timesheet-writeback safety sentinel",
+            normalized_generated,
+        )
+
+        self.assertIn(
+            "It is not the business attribution for the invoice",
+            normalized_generated,
         )
 
 
