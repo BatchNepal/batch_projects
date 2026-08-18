@@ -78,9 +78,28 @@ class TestGenerateInvoiceRateCurrency(unittest.TestCase):
             )
             guard_seen["value"] = True
 
-        invoice.before_insert_check = lambda: self.assertTrue(
-            guard_seen["value"],
-            "billing source guard must run before Sales Invoice insertion",
+        def before_insert_check():
+            self.assertTrue(
+                guard_seen["value"],
+                "billing source guard must run before Sales Invoice insertion",
+            )
+
+            # #34: payment-first equality is no longer checked against
+            # BatchProjects' intermediate row sum. generate_invoice passes the
+            # contract to the post-ERPNext-validation hook through transient
+            # document flags.
+            self.assertEqual(
+                invoice.flags.bp_expected_received_amount,
+                109.09,
+            )
+
+            self.assertEqual(
+                invoice.flags.bp_expected_received_currency,
+                "USD",
+            )
+
+        invoice.before_insert_check = (
+            before_insert_check
         )
 
         def resolve_currency(company, customer, currency, conversion_rate,

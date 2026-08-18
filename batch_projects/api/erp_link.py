@@ -1370,19 +1370,18 @@ def generate_invoice(project, period=None, tasks=None,
     # the decimal is the failure mode being guarded against. If the computed
     # total differs we refuse and show both numbers, so a human fixes the
     # rates/hours — rather than silently writing an invoice that reconciles
-    # against nothing.
+    # Payment-first is a FINAL ERPNext document invariant, not a comparison
+    # against BatchProjects' intermediate row math. Store the already-received
+    # amount only in transient document flags. Frappe runs the Sales Invoice
+    # validate doc-event hook after ERPNext has calculated item amounts,
+    # taxes/charges and rounded totals, but before db_insert().
     if expected_amount is not None:
-        # From our own resolved rows, NOT si.items — item `amount` is only
-        # populated by calculate_taxes_and_totals() during validate(), which
-        # hasn't run yet at this point, so reading it here always yields 0.
-        computed = round(sum(r.eff_amount for r in rows), 2)
-        if abs(computed - expected_amount) > 0.01:
-            frappe.throw(
-                f"Computed total {computed} {inv_currency} does not match the "
-                f"expected {expected_amount} {inv_currency}. Nothing was created. "
-                "Adjust the hours or rates so the invoice matches the amount "
-                "actually received, then try again."
-            )
+        si.flags.bp_expected_received_amount = (
+            expected_amount
+        )
+        si.flags.bp_expected_received_currency = (
+            inv_currency
+        )
 
     si.insert(ignore_permissions=True)
     # ProjectMoney.vue's "Open" toast action deep-links straight to
