@@ -8,6 +8,7 @@ because Python considers zero falsy.
 
 import inspect
 import unittest
+from unittest.mock import patch
 
 import frappe
 
@@ -44,6 +45,48 @@ class TestBillingHoursInvariant(unittest.TestCase):
     def test_nonzero_hours_require_a_billing_rate(self):
         row = self._row(2.5, hours=8)
         self.assertTrue(erp_link._requires_billing_rate(row))
+
+    def test_batch_preview_does_not_inflate_zero_billing_hours(self):
+        project = frappe._dict({
+            "name": "BP-TEST",
+            "project_name": "Billing Test",
+            "client": "TEST-CUSTOMER",
+            "company": "TEST-COMPANY",
+            "currency": None,
+            "hourly_rate": 100,
+            "erpnext_project": "ERP-TEST",
+        })
+        rows = [
+            frappe._dict({
+                "erp_project": "ERP-TEST",
+                "hours": 8,
+                "billing_hours": 0,
+                "billing_rate": 0,
+            }),
+            frappe._dict({
+                "erp_project": "ERP-TEST",
+                "hours": 5,
+                "billing_hours": 2.5,
+                "billing_rate": 0,
+            }),
+        ]
+
+        with (
+            patch.object(erp_link, "require_feature"),
+            patch.object(erp_link, "_require_system_user"),
+            patch("batch_projects.permissions.get_accessible_projects", return_value=None),
+            patch.object(erp_link.frappe, "get_all", return_value=[project]),
+            patch.object(erp_link.frappe.db, "sql", return_value=rows),
+            patch.object(erp_link, "_service_item", return_value=None),
+            patch.object(erp_link, "_price_list_rate", return_value=0),
+        ):
+            result = erp_link.get_batch_invoice_candidates()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["total_hours"], 2.5)
+        self.assertEqual(result[0]["total_amount"], 250.0)
+        self.assertEqual(result[0]["projects"][0]["hours"], 2.5)
+        self.assertEqual(result[0]["projects"][0]["amount"], 250.0)
 
     def test_financial_module_has_no_worked_hours_fallback(self):
         source = inspect.getsource(erp_link)
