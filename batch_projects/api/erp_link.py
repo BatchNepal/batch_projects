@@ -22,6 +22,7 @@ from frappe.utils import flt, add_days, nowdate
 from batch_projects.api.board import _check_permission, _require_system_user
 from batch_projects.entitlements import require_feature, require_workspace_feature
 from batch_projects.billing_reservation import guard_timesheet_details
+from batch_projects.expense_reservation import guard_expense_claim_details
 
 
 @frappe.whitelist()
@@ -1862,6 +1863,18 @@ def generate_expense_invoice(project):
     )
     if not rows:
         frappe.throw("Nothing to invoice — no unbilled billable expenses on this project.")
+
+    # The query above is discovery only. Another request may have selected the
+    # same sources at the same time. Lock the exact rows and continue ONLY from
+    # the authoritative current rows returned by the reservation guard.
+    #
+    # This is deliberately the same Repeatable Read rule as Timesheet billing:
+    # after waiting on FOR UPDATE, never fall back to the older candidate
+    # snapshot for financial fields.
+    rows = guard_expense_claim_details(
+        [r.name for r in rows],
+        doc.erpnext_project,
+    )
 
     for r in rows:
         r.eff_amount = round(
