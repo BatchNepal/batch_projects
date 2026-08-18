@@ -21,7 +21,10 @@ from frappe.utils import flt, add_days, nowdate
 
 from batch_projects.api.board import _check_permission, _require_system_user
 from batch_projects.entitlements import require_feature, require_workspace_feature
-from batch_projects.billing_reservation import guard_timesheet_details
+from batch_projects.billing_reservation import (
+    guard_timesheet_details,
+    get_live_claimed_timesheet_details,
+)
 from batch_projects.expense_reservation import guard_expense_claim_details
 
 
@@ -625,6 +628,93 @@ def _requires_billing_rate(row):
     return _authoritative_billing_hours(row) != 0
 
 
+def _billing_row_amount(
+    row,
+    effective_rate,
+):
+    """Financial amount for one Timesheet Detail source row.
+
+    Generation and preview MUST share this primitive. The amount of each
+    financial source row is rounded independently before rows are grouped.
+    """
+    return round(
+        _authoritative_billing_hours(row)
+        * flt(effective_rate),
+        2,
+    )
+
+
+def _validate_resolved_billing_rates(
+    rows,
+    name_by_erp,
+):
+    """Fail if real billing hours would be invoiced without a resolved rate."""
+    zero_rate_projects = sorted({
+        name_by_erp.get(
+            r.erp_project,
+            r.erp_project,
+        )
+        for r in rows
+        if (
+            _requires_billing_rate(r)
+            and not flt(
+                r.get("eff_rate")
+                if hasattr(r, "get")
+                else getattr(
+                    r,
+                    "eff_rate",
+                    None,
+                )
+            )
+        )
+    })
+
+    if zero_rate_projects:
+        frappe.throw(
+            "No billing rate resolved for: "
+            + ", ".join(
+                zero_rate_projects
+            )
+            + ". Set an hourly rate on the project, or a Price List rate "
+              "for the client, before invoicing — billing hours at zero "
+              "can't be undone."
+        )
+
+
+def _sales_invoice_payable_total(doc):
+    """Return ERPNext's actual customer-payable total.
+
+    Real Sales Invoice documents expose ``is_rounded_total_disabled``.
+    Lightweight test doubles used by older billing regressions do not, so
+    those safely fall back to grand_total.
+    """
+    rounded_disabled = getattr(
+        doc,
+        "is_rounded_total_disabled",
+        None,
+    )
+
+    if callable(rounded_disabled):
+        field = (
+            "grand_total"
+            if rounded_disabled()
+            else "rounded_total"
+        )
+    else:
+        field = "grand_total"
+
+    if hasattr(doc, "get"):
+        value = doc.get(field)
+    else:
+        value = getattr(
+            doc,
+            field,
+            None,
+        )
+
+    return flt(value)
+
+
 def _currency_code(value):
     """Normalize an optional currency selector without inventing a value."""
     if value is None:
@@ -1211,24 +1301,18 @@ def generate_invoice(project, period=None, tasks=None,
         )
 
         r.eff_rate = eff_rate
-        r.eff_amount = round(
-            _authoritative_billing_hours(r) * eff_rate, 2
+        r.eff_amount = _billing_row_amount(
+            r,
+            eff_rate,
         )
 
-    # Billing non-zero hours without a rate would permanently mark real work
-    # billed for nothing. A zero-billing-hours row has no amount to price,
-    # however, so it must not be blocked solely because no rate is configured.
-    zero_rate_projects = sorted({
-        name_by_erp.get(r.erp_project, r.erp_project)
-        for r in rows
-        if _requires_billing_rate(r) and not r.eff_rate
-    })
-    if zero_rate_projects:
-        frappe.throw(
-            "No billing rate resolved for: " + ", ".join(zero_rate_projects) +
-            ". Set an hourly rate on the project, or a Price List rate for the "
-            "client, before invoicing — billing hours at zero can't be undone."
-        )
+    # The preview endpoint calls this same validator. A row with persisted
+    # zero billing_hours needs no rate; real billing hours must never silently
+    # become a zero-value financial source.
+    _validate_resolved_billing_rates(
+        rows,
+        name_by_erp,
+    )
 
     # Grouped by (project, task): one line per task, never merging the same
     # task key across projects, so each line can carry its own project tag.
@@ -1398,6 +1482,10 @@ def generate_invoice(project, period=None, tasks=None,
         "currency": si.currency,
         "conversion_rate": si.conversion_rate,
         "grand_total": si.grand_total,
+        # #34 validates payment-first against this same ERPNext payable
+        # concept. Keep grand_total for compatibility, but expose the value a
+        # customer actually owes after ERPNext rounding.
+        "payable_total": _sales_invoice_payable_total(si),
         "hours_invoiced": round(sum(_authoritative_billing_hours(r) for r in rows), 2),
         # Per-project breakdown of what went onto this one invoice — the
         # batch caller needs it to show "6 projects, $600" without re-querying.
@@ -1446,11 +1534,24 @@ def get_batch_invoice_candidates():
     if not projects:
         return []
 
-    by_erp = {p.erpnext_project: p for p in projects}
+    by_erp = {
+        p.erpnext_project: p
+        for p in projects
+    }
+
+    name_by_erp = {
+        p.erpnext_project: p.project_name
+        for p in projects
+    }
     rows = frappe.db.sql(
         """
-        SELECT tsd.project AS erp_project, tsd.hours, tsd.billing_hours,
-               tsd.billing_rate, ts.currency AS timesheet_currency
+        SELECT
+               tsd.name AS name,
+               tsd.project AS erp_project,
+               tsd.hours,
+               tsd.billing_hours,
+               tsd.billing_rate,
+               ts.currency AS timesheet_currency
         FROM `tabTimesheet Detail` tsd
         JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
         LEFT JOIN `tabBP Task` bt ON bt.name = tsd.custom_bp_task
@@ -1462,6 +1563,28 @@ def get_batch_invoice_candidates():
         {"projs": tuple(by_erp)},
         as_dict=True,
     )
+
+    # Submitted Timesheets may still be reserved by a Draft Sales Invoice:
+    # ERPNext does not stamp Timesheet Detail.sales_invoice until submit.
+    # Use the same claimant reader as generation, but deliberately without
+    # FOR UPDATE because this endpoint is read-only.
+    claimed_details = (
+        get_live_claimed_timesheet_details(
+            [
+                r.get("name")
+                for r in rows
+                if r.get("name")
+            ]
+        )
+    )
+
+    if claimed_details:
+        rows = [
+            r
+            for r in rows
+            if r.get("name")
+            not in claimed_details
+        ]
 
     service_item = _service_item()
     client_rate_cache = {}
@@ -1528,6 +1651,8 @@ def get_batch_invoice_candidates():
             fx_cache=fx_cache,
         )
 
+        r.eff_rate = eff_rate
+
         hrs = _authoritative_billing_hours(r)
         agg = totals.setdefault(
             r.erp_project,
@@ -1538,7 +1663,17 @@ def get_batch_invoice_candidates():
             },
         )
         agg["hours"] += hrs
-        agg["amount"] += hrs * eff_rate
+        agg["amount"] += _billing_row_amount(
+            r,
+            eff_rate,
+        )
+
+    # Same fail-closed contract as generate_invoice(). Do not advertise real
+    # billable hours as a valid zero-value candidate.
+    _validate_resolved_billing_rates(
+        rows,
+        name_by_erp,
+    )
 
     out = {}
     for erp, agg in totals.items():

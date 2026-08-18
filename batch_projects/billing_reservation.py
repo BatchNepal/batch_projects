@@ -213,27 +213,45 @@ def _validate_locked_source_state(rows):
         )
 
 
-def _live_claims(db, detail_names, current_invoice=None):
-    """Current/locking read of native live Sales Invoice claimants.
+def _claim_rows(
+    db,
+    detail_names,
+    current_invoice=None,
+    *,
+    for_update,
+):
+    """Read native live Sales Invoice claimants for Timesheet Detail rows.
 
-    A normal repeatable-read SELECT is insufficient after waiting for a
-    Timesheet Detail row lock: it could keep using an older transaction
-    snapshot and miss a draft that committed while this transaction waited.
+    Generation calls this with ``for_update=True`` after locking its source
+    Timesheet Detail rows. That must remain a current locking read under
+    MariaDB/InnoDB Repeatable Read.
 
-    FOR UPDATE forces a current read. The migration shipped with this feature
-    indexes timesheet_detail so the lock/read remains narrow.
+    Batch preview calls it with ``for_update=False``. Preview is read-only:
+    it needs identical Draft/Submitted claimant semantics but must not take
+    financial write locks merely to render the candidate screen.
     """
     if not detail_names:
         return []
 
     params = {
         "details": tuple(detail_names),
-        "current_invoice": (current_invoice or "").strip(),
+        "current_invoice": (
+            current_invoice or ""
+        ).strip(),
     }
 
     self_clause = ""
+
     if params["current_invoice"]:
-        self_clause = "AND sit.parent != %(current_invoice)s"
+        self_clause = (
+            "AND sit.parent != %(current_invoice)s"
+        )
+
+    lock_clause = (
+        "FOR UPDATE"
+        if for_update
+        else ""
+    )
 
     claims = db.sql(
         f"""
@@ -247,23 +265,90 @@ def _live_claims(db, detail_names, current_invoice=None):
         WHERE sit.timesheet_detail IN %(details)s
           AND si.docstatus IN (0, 1)
           {self_clause}
-        ORDER BY sit.timesheet_detail ASC, sit.parent ASC
-        FOR UPDATE
+        ORDER BY
+            sit.timesheet_detail ASC,
+            sit.parent ASC
+        {lock_clause}
         """,
         params,
         as_dict=True,
     )
 
-    # Defence in depth if a mocked/custom database adapter ignores the SQL
+    # Defence in depth if a mocked/custom DB adapter ignores the SQL
     # self-exclusion condition.
     if params["current_invoice"]:
         claims = [
             row
             for row in claims
-            if row.parent != params["current_invoice"]
+            if row.parent
+            != params["current_invoice"]
         ]
 
     return claims
+
+
+def _live_claims(
+    db,
+    detail_names,
+    current_invoice=None,
+):
+    """Current/locking read used by invoice-source reservation.
+
+    A normal Repeatable Read SELECT after waiting for the Timesheet Detail
+    mutex can retain an older transaction snapshot. ``FOR UPDATE`` forces
+    the current read needed by the #21 reservation contract.
+    """
+    return _claim_rows(
+        db,
+        detail_names,
+        current_invoice=current_invoice,
+        for_update=True,
+    )
+
+
+def _live_claimed_timesheet_details_with_db(
+    db,
+    detail_names,
+):
+    """Return live Draft/Submitted claimants without taking write locks."""
+    names = sorted(
+        set(
+            _clean_detail_names(
+                detail_names
+            )
+        )
+    )
+
+    if not names:
+        return set()
+
+    claims = _claim_rows(
+        db,
+        names,
+        for_update=False,
+    )
+
+    return {
+        row.timesheet_detail
+        for row in claims
+        if getattr(
+            row,
+            "timesheet_detail",
+            None,
+        )
+    }
+
+
+def get_live_claimed_timesheet_details(
+    detail_names,
+):
+    """Read-only live-claim set for candidate/preview surfaces."""
+    return (
+        _live_claimed_timesheet_details_with_db(
+            frappe.db,
+            detail_names,
+        )
+    )
 
 
 def _guard_timesheet_details_with_db(

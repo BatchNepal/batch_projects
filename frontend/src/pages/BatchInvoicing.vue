@@ -302,7 +302,9 @@ async function doCreate() {
       },
     )
     confirm.open = false
-    toast.success(`Draft ${res.sales_invoice} created`, { description: fmtMoney(res.grand_total, res.currency) })
+    toast.success(`Draft ${res.sales_invoice} created`, {
+      description: fmtMoney(res.payable_total ?? res.grand_total, res.currency),
+    })
     await load()
   } catch (e) {
     // The backend refuses rather than creating a wrong invoice (currency
