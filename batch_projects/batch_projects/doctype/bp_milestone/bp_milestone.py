@@ -1,24 +1,14 @@
-import frappe
 from frappe.model.document import Document
 
 from batch_projects.milestone_billing import (
-    ACTIVE_STATUSES,
-    invoice_state,
+    assert_milestone_deletable,
 )
 
 
 class BPMilestone(Document):
     def on_trash(self):
-        # Derive from ERPNext rather than trusting the possibly-stale persisted
-        # status. A live Draft/Submitted invoice must never be orphaned by
-        # deleting its BP Milestone.
-        status, invoice = invoice_state(
-            self.sales_invoice
+        # `self` may have been loaded before a competing invoice transaction.
+        # The lifecycle helper re-reads this exact milestone with FOR UPDATE.
+        assert_milestone_deletable(
+            self.name
         )
-
-        if status in ACTIVE_STATUSES:
-            frappe.throw(
-                f"Milestone '{self.title}' cannot be deleted while "
-                f"Sales Invoice {invoice} is {status}. "
-                "Delete the draft or cancel the submitted invoice first."
-            )

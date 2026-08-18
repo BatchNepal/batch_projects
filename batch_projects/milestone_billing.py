@@ -43,7 +43,14 @@ def _database(db=None):
 def _lock_project(db, project):
     rows = db.sql(
         """
-        SELECT name
+        SELECT
+            name,
+            project_name,
+            erpnext_project,
+            client,
+            company,
+            currency,
+            budget_amount
         FROM `tabBP Project`
         WHERE name = %(name)s
         FOR UPDATE
@@ -51,10 +58,13 @@ def _lock_project(db, project):
         {"name": project},
         as_dict=True,
     )
+
     if not rows:
         frappe.throw(
             f"Batch Project '{project}' no longer exists. Refresh and try again."
         )
+
+    return rows[0]
 
 
 def _lock_milestone(db, milestone, project=None):
@@ -70,10 +80,13 @@ def _lock_milestone(db, milestone, project=None):
         SELECT
             name,
             project,
-            invoice_status,
-            sales_invoice,
+            title,
+            status,
             billing_type,
-            invoice_percent
+            invoice_amount,
+            invoice_percent,
+            invoice_status,
+            sales_invoice
         FROM `tabBP Milestone`
         WHERE name = %(name)s
           {project_clause}
@@ -104,16 +117,31 @@ def lock_generation_scope(project, milestone, db=None):
     """
     db = _database(db)
 
-    _lock_project(db, project)
-    return _lock_milestone(
+    project_row = _lock_project(
+        db,
+        project,
+    )
+    milestone_row = _lock_milestone(
         db,
         milestone,
         project=project,
     )
 
+    return project_row, milestone_row
+
 
 def reserved_percent(project, exclude_milestone=None, db=None):
-    """Percent already reserved by live draft/submitted milestone invoices."""
+    """Return the project's current live percentage reservation.
+
+    `invoice_status` is the transactionally-maintained projection of ERPNext
+    Sales Invoice lifecycle. This query deliberately uses FOR UPDATE rather
+    than a plain aggregate so a transaction that waited behind another
+    generator sees the newly committed Draft/Invoiced milestone instead of
+    its older repeatable-read snapshot.
+
+    Caller owns the BP Project row first, so different generation/amendment
+    transactions serialize before these sibling milestone locks are taken.
+    """
     db = _database(db)
 
     params = {
@@ -121,19 +149,27 @@ def reserved_percent(project, exclude_milestone=None, db=None):
         "exclude": exclude_milestone or "",
     }
 
-    row = db.sql(
+    rows = db.sql(
         """
-        SELECT COALESCE(SUM(invoice_percent), 0)
+        SELECT
+            name,
+            invoice_percent
         FROM `tabBP Milestone`
         WHERE project = %(project)s
           AND billing_type = 'Percent of Budget'
           AND invoice_status IN ('Draft', 'Invoiced')
           AND (%(exclude)s = '' OR name != %(exclude)s)
+        ORDER BY name ASC
+        FOR UPDATE
         """,
         params,
+        as_dict=True,
     )
 
-    return flt(row[0][0] if row else 0)
+    return sum(
+        flt(row.invoice_percent)
+        for row in rows
+    )
 
 
 def assert_percent_capacity(
@@ -164,6 +200,25 @@ def assert_percent_capacity(
         )
 
     return already
+
+
+def assert_milestone_deletable(milestone, db=None):
+    """Refuse deletion while the current locked milestone has a live invoice."""
+    db = _database(db)
+
+    row = _lock_milestone(
+        db,
+        milestone,
+    )
+
+    if row.invoice_status in ACTIVE_STATUSES:
+        frappe.throw(
+            f"Milestone '{row.title}' cannot be deleted while "
+            f"Sales Invoice {row.sales_invoice} is {row.invoice_status}. "
+            "Delete the draft or cancel the submitted invoice first."
+        )
+
+    return row
 
 
 def invoice_state(invoice, db=None):
@@ -377,16 +432,47 @@ def _on_sales_invoice_after_insert_with_db(doc, db):
     if not predecessor:
         return False
 
-    row = _locked_current_milestone(
-        db,
-        predecessor,
+    # Discovery only. The exact pointer is re-verified after the same
+    # deterministic lock order used by generate_milestone_invoice:
+    #
+    #     BP Project -> BP Milestone
+    #
+    # This matters because cancellation releases percentage capacity. An
+    # amendment is allowed to reclaim it only if capacity still exists after
+    # any other milestone reservations that committed in the meantime.
+    discovery = db.get_value(
+        "BP Milestone",
+        {"sales_invoice": predecessor},
+        ["name", "project"],
+        as_dict=True,
     )
-    if not row:
+    if not discovery:
         return False
 
-    # The exact predecessor pointer was re-verified under lock, so a late
-    # amendment cannot steal a milestone that has already acquired a newer
-    # draft through BatchProjects.
+    _lock_project(
+        db,
+        discovery.project,
+    )
+
+    row = _lock_milestone(
+        db,
+        discovery.name,
+        project=discovery.project,
+    )
+
+    # Discovery may have raced a fresh BP-generated invoice or another
+    # amendment. A stale amendment event may never steal the pointer.
+    if (row.sales_invoice or "").strip() != predecessor:
+        return False
+
+    if row.billing_type == "Percent of Budget":
+        assert_percent_capacity(
+            row.project,
+            row.name,
+            row.invoice_percent,
+            db=db,
+        )
+
     _set_milestone_state(
         db,
         row.name,

@@ -1375,21 +1375,15 @@ def generate_milestone_invoice(milestone):
         INVOICED,
         assert_percent_capacity,
         lock_generation_scope,
-        reconcile_milestone,
     )
 
-    lock_generation_scope(
+    # IMPORTANT: use the rows returned by the locking reads themselves.
+    # Ordinary SELECT/get_doc calls after waiting on FOR UPDATE can still use
+    # the transaction's older repeatable-read snapshot.
+    project, doc = lock_generation_scope(
         doc.project,
         doc.name,
     )
-
-    # Self-heal this exact milestone from the linked ERPNext invoice before
-    # making any financial decision. This also repairs a missed lifecycle hook
-    # without relying solely on the migration.
-    reconcile_milestone(doc.name)
-
-    doc = frappe.get_doc("BP Milestone", milestone)
-    project = frappe.get_doc("BP Project", doc.project)
 
     if doc.status != "Completed":
         frappe.throw("Complete this milestone before invoicing it.")

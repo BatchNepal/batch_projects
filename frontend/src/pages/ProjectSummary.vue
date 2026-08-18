@@ -403,7 +403,7 @@
                   type="button"
                   class="shrink-0 text-xs font-medium text-warning-soft-foreground hover:underline whitespace-nowrap"
                   title="Open Draft Sales Invoice"
-                  @click="window.open(`/app/sales-invoice/${encodeURIComponent(m.sales_invoice)}`, '_blank')"
+                  @click="openMilestoneInvoice(m)"
                 >Draft · {{ m.sales_invoice }}</button>
 
                 <span
@@ -724,6 +724,15 @@ async function generateMilestoneInvoiceRow(m) {
   } finally {
     invoicingMilestone.value = null
   }
+}
+
+function openMilestoneInvoice(m) {
+  const invoice = m?.sales_invoice
+  if (!invoice) return
+  window.open(
+    `/app/sales-invoice/${encodeURIComponent(invoice)}`,
+    '_blank',
+  )
 }
 
 async function deleteMilestoneRow(m) {

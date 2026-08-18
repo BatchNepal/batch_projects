@@ -15,11 +15,23 @@ APP_ROOT = Path(__file__).resolve().parents[2]
 def milestone_row(
     *,
     name="MS-TEST",
+    project="BP-PROJECT",
+    title="Milestone",
+    status="Completed",
+    billing_type="Fixed Amount",
+    invoice_amount=1000,
+    invoice_percent=0,
     invoice_status="Not Invoiced",
     sales_invoice="",
 ):
     return frappe._dict({
         "name": name,
+        "project": project,
+        "title": title,
+        "status": status,
+        "billing_type": billing_type,
+        "invoice_amount": invoice_amount,
+        "invoice_percent": invoice_percent,
         "invoice_status": invoice_status,
         "sales_invoice": sales_invoice,
     })
@@ -122,7 +134,16 @@ class TestMilestoneInvoiceLifecycle(unittest.TestCase):
 
     def test_percent_reservation_counts_draft_and_invoiced(self):
         db = Mock()
-        db.sql.return_value = [(75,)]
+        db.sql.return_value = [
+            frappe._dict({
+                "name": "MS-A",
+                "invoice_percent": 25,
+            }),
+            frappe._dict({
+                "name": "MS-B",
+                "invoice_percent": 50,
+            }),
+        ]
 
         reserved = milestone_billing.reserved_percent(
             "BP-PROJECT",
@@ -138,10 +159,23 @@ class TestMilestoneInvoiceLifecycle(unittest.TestCase):
             "invoice_status IN ('Draft', 'Invoiced')",
             query,
         )
+        self.assertIn(
+            "ORDER BY name ASC",
+            query,
+        )
+        self.assertIn(
+            "FOR UPDATE",
+            query,
+        )
 
     def test_percent_capacity_fails_closed_over_100(self):
         db = Mock()
-        db.sql.return_value = [(60,)]
+        db.sql.return_value = [
+            frappe._dict({
+                "name": "MS-FIRST",
+                "invoice_percent": 60,
+            })
+        ]
 
         with self.assertRaisesRegex(
             frappe.ValidationError,
@@ -225,12 +259,21 @@ class TestMilestoneInvoiceLifecycle(unittest.TestCase):
     def test_amendment_insert_moves_pointer_to_new_draft(self):
         db = Mock()
 
-        db.get_value.return_value = "MS-TEST"
-        db.sql.return_value = [
-            milestone_row(
-                invoice_status="Not Invoiced",
-                sales_invoice="SINV-OLD",
-            )
+        db.get_value.return_value = frappe._dict({
+            "name": "MS-TEST",
+            "project": "BP-PROJECT",
+        })
+        db.sql.side_effect = [
+            [frappe._dict({
+                "name": "BP-PROJECT",
+            })],
+            [
+                milestone_row(
+                    billing_type="Fixed Amount",
+                    invoice_status="Not Invoiced",
+                    sales_invoice="SINV-OLD",
+                )
+            ],
         ]
 
         doc = frappe._dict({
@@ -256,6 +299,50 @@ class TestMilestoneInvoiceLifecycle(unittest.TestCase):
             },
             update_modified=False,
         )
+
+    def test_percentage_amendment_rechecks_freed_capacity(self):
+        db = Mock()
+
+        db.get_value.return_value = frappe._dict({
+            "name": "MS-OLD",
+            "project": "BP-PROJECT",
+        })
+        db.sql.side_effect = [
+            [frappe._dict({
+                "name": "BP-PROJECT",
+            })],
+            [
+                milestone_row(
+                    name="MS-OLD",
+                    billing_type="Percent of Budget",
+                    invoice_percent=60,
+                    invoice_status="Not Invoiced",
+                    sales_invoice="SINV-OLD",
+                )
+            ],
+            [
+                frappe._dict({
+                    "name": "MS-OTHER",
+                    "invoice_percent": 60,
+                })
+            ],
+        ]
+
+        doc = frappe._dict({
+            "name": "SINV-AMEND",
+            "amended_from": "SINV-OLD",
+        })
+
+        with self.assertRaisesRegex(
+            frappe.ValidationError,
+            "over its 100% budget",
+        ):
+            milestone_billing._on_sales_invoice_after_insert_with_db(
+                doc,
+                db,
+            )
+
+        db.set_value.assert_not_called()
 
     def test_trash_initial_draft_reopens_and_clears_pointer(self):
         db = Mock()
@@ -369,6 +456,77 @@ class TestMilestoneInvoiceLifecycle(unittest.TestCase):
         db.sql.assert_not_called()
         db.set_value.assert_not_called()
 
+    def test_live_invoice_blocks_milestone_delete_from_locked_state(self):
+        db = Mock()
+        db.sql.return_value = [
+            milestone_row(
+                invoice_status="Draft",
+                sales_invoice="SINV-LIVE",
+            )
+        ]
+
+        with self.assertRaisesRegex(
+            frappe.ValidationError,
+            "cannot be deleted",
+        ):
+            milestone_billing.assert_milestone_deletable(
+                "MS-TEST",
+                db=db,
+            )
+
+        query = db.sql.call_args.args[0]
+        self.assertIn(
+            "FOR UPDATE",
+            query,
+        )
+
+    def test_reconcile_repair_then_second_run_is_idempotent(self):
+        db = Mock()
+
+        db.sql.side_effect = [
+            [
+                milestone_row(
+                    invoice_status="Invoiced",
+                    sales_invoice="SINV-DRAFT",
+                )
+            ],
+            [
+                milestone_row(
+                    invoice_status="Draft",
+                    sales_invoice="SINV-DRAFT",
+                )
+            ],
+        ]
+
+        db.get_value.side_effect = [
+            0,
+            0,
+        ]
+
+        first = milestone_billing.reconcile_milestone(
+            "MS-TEST",
+            db=db,
+        )
+        second = milestone_billing.reconcile_milestone(
+            "MS-TEST",
+            db=db,
+        )
+
+        self.assertEqual(
+            first.invoice_status,
+            "Draft",
+        )
+        self.assertEqual(
+            second.invoice_status,
+            "Draft",
+        )
+
+        # First run repairs old two-state data; second canonical run is a no-op.
+        self.assertEqual(
+            db.set_value.call_count,
+            1,
+        )
+
     def test_project_summary_treats_new_invoice_as_draft(self):
         page = (
             APP_ROOT
@@ -390,6 +548,21 @@ class TestMilestoneInvoiceLifecycle(unittest.TestCase):
 
         self.assertIn(
             "m.invoice_status === 'Draft'",
+            page,
+        )
+
+        self.assertIn(
+            "@click=\"openMilestoneInvoice(m)\"",
+            page,
+        )
+
+        self.assertIn(
+            "function openMilestoneInvoice(m)",
+            page,
+        )
+
+        self.assertNotIn(
+            "@click=\"window.open(",
             page,
         )
 
