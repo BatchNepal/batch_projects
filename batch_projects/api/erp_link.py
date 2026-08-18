@@ -1056,11 +1056,13 @@ def get_batch_invoice_candidates():
         if row_rate and pc:
             key = (pc, p.company)
             if key not in fx_cache:
-                try:
-                    _cc, _tc, _fx = _resolve_invoice_currency(p.company, p.client, None, None, pc)
-                    fx_cache[key] = _fx if _tc != _cc else 1.0
-                except Exception:
-                    fx_cache[key] = 1.0
+                # Financial preview must fail exactly where invoice generation
+                # would fail. A missing/failed FX lookup is not permission to
+                # relabel a company-currency billing_rate at 1:1.
+                _cc, _tc, _fx = _resolve_invoice_currency(
+                    p.company, p.client, None, None, pc
+                )
+                fx_cache[key] = _fx if _tc != _cc else 1.0
             if fx_cache[key]:
                 row_rate = row_rate / flt(fx_cache[key])
         eff_rate = (
