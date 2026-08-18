@@ -524,6 +524,23 @@ def _resolve_project_list(project):
     return names
 
 
+def _authoritative_billing_hours(row):
+    """Return persisted Timesheet Detail.billing_hours for financial use.
+
+    ERPNext v15 normal Timesheet validation already materializes
+    billing_hours from worked hours for billable rows when appropriate.
+    Financial code must therefore consume the persisted value directly:
+    a stored 0 is 0, not a signal to infer worked hours again.
+    """
+    value = row.get("billing_hours") if hasattr(row, "get") else getattr(row, "billing_hours", None)
+    return flt(value)
+
+
+def _requires_billing_rate(row):
+    """A zero-billing-hours row has no amount that requires pricing."""
+    return _authoritative_billing_hours(row) != 0
+
+
 def _resolve_invoice_currency(company, customer, currency, conversion_rate,
                                project_currency=None):
     """Decide the invoice currency and its FX rate, or refuse.
@@ -767,14 +784,15 @@ def generate_invoice(project, period=None, tasks=None,
             or (client_rate or 0)
         )
         r.eff_rate = eff_rate
-        r.eff_amount = round(flt(r.billing_hours or r.hours) * eff_rate, 2)
+        r.eff_amount = round(_authoritative_billing_hours(r) * eff_rate, 2)
 
-    # Billing real hours at 0 permanently marks them billed for nothing —
-    # unrecoverable without a credit note, and ERPNext doesn't even unbill
-    # timesheets on a return (frappe/erpnext#51131). Refuse instead, and name
-    # the projects whose rate is missing so it's actionable.
+    # Billing non-zero hours without a rate would permanently mark real work
+    # billed for nothing. A zero-billing-hours row has no amount to price,
+    # however, so it must not be blocked solely because no rate is configured.
     zero_rate_projects = sorted({
-        name_by_erp.get(r.erp_project, r.erp_project) for r in rows if not r.eff_rate
+        name_by_erp.get(r.erp_project, r.erp_project)
+        for r in rows
+        if _requires_billing_rate(r) and not r.eff_rate
     })
     if zero_rate_projects:
         frappe.throw(
@@ -844,7 +862,7 @@ def generate_invoice(project, period=None, tasks=None,
     # configured for it. Let set_missing_values default to company currency.
 
     for (erp_project, bp_task), task_rows in by_task.items():
-        hours = round(sum(flt(r.billing_hours or r.hours) for r in task_rows), 2)
+        hours = round(sum(_authoritative_billing_hours(r) for r in task_rows), 2)
         # NOT `amount` — that's this function's own parameter (the
         # payment-first expected total). Reusing the name here silently
         # overwrote it with the last line's subtotal, so the assertion below
@@ -890,7 +908,7 @@ def generate_invoice(project, period=None, tasks=None,
         si.append("timesheets", {
             "time_sheet": r.timesheet,
             "timesheet_detail": r.name,
-            "billing_hours": r.billing_hours or r.hours,
+            "billing_hours": _authoritative_billing_hours(r),
             "billing_amount": r.eff_amount,
             "activity_type": r.activity_type,
             "description": r.description,
@@ -953,7 +971,7 @@ def generate_invoice(project, period=None, tasks=None,
         "currency": si.currency,
         "conversion_rate": si.conversion_rate,
         "grand_total": si.grand_total,
-        "hours_invoiced": round(sum(flt(r.billing_hours or r.hours) for r in rows), 2),
+        "hours_invoiced": round(sum(_authoritative_billing_hours(r) for r in rows), 2),
         # Per-project breakdown of what went onto this one invoice — the
         # batch caller needs it to show "6 projects, $600" without re-querying.
         "projects": [
@@ -965,7 +983,7 @@ def generate_invoice(project, period=None, tasks=None,
                     sum(r.eff_amount for r in rows if r.erp_project == d.erpnext_project), 2
                 ),
                 "hours": round(
-                    sum(flt(r.billing_hours or r.hours) for r in rows
+                    sum(_authoritative_billing_hours(r) for r in rows
                         if r.erp_project == d.erpnext_project), 2
                 ),
             }
@@ -1050,7 +1068,7 @@ def get_batch_invoice_candidates():
             or flt(p.hourly_rate or 0)
             or (client_rate_cache[p.client] or 0)
         )
-        hrs = flt(r.billing_hours or r.hours)
+        hrs = _authoritative_billing_hours(r)
         agg = totals.setdefault(r.erp_project, {"hours": 0.0, "amount": 0.0})
         agg["hours"] += hrs
         agg["amount"] += hrs * eff_rate
