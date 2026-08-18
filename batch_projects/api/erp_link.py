@@ -775,6 +775,27 @@ def _effective_billing_rate(
     )
 
 
+def _validate_invoice_period_contract(period):
+    """Reject unsupported date-scoped invoice requests.
+
+    Invoice selection is intentionally the all-time currently-unbilled
+    billable balance. Keeping `period` in generate_invoice's public Python
+    signature lets legacy/external callers fail with an explicit financial
+    contract error instead of having the value silently ignored.
+    """
+    if period is None:
+        return
+
+    if isinstance(period, str) and not period.strip():
+        return
+
+    frappe.throw(
+        "Period-scoped invoice generation is not supported. "
+        "Omit 'period' to invoice all currently-unbilled billable hours. "
+        "Use the task filter when you need to invoice specific approved work."
+    )
+
+
 @frappe.whitelist()
 def generate_invoice(project, period=None, tasks=None,
                       currency=None, conversion_rate=None, amount=None):
@@ -797,10 +818,11 @@ def generate_invoice(project, period=None, tasks=None,
     be a lie about the other N-1, and it also keeps ERPNext's validate_proj_cust
     (which only fires when a header project is set) from rejecting the invoice.
 
-    `period` is accepted for call-signature symmetry with the Money tab's
-    period selector but doesn't scope what's invoiced: like the Money tab's
-    "unbilled" figure (intentionally all-time — "what could I invoice right
-    now"), this generates exactly that figure, not a date-windowed subset.
+    `period` remains in the public signature only for compatibility with
+    older/external callers. Period-scoped invoice generation is not currently
+    implemented: any non-empty value is rejected explicitly below. Omitting it
+    invoices the same all-time currently-unbilled balance shown by the Money
+    tab's Unbilled figure.
 
     Draft only — submission (and the ERPNext-side billed-hours writeback
     that follows from it) stays a deliberate human act in ERPNext. Mirrors
@@ -812,6 +834,10 @@ def generate_invoice(project, period=None, tasks=None,
         _check_permission(_p, "BP Admin")
         access.require_capability(_p, "view_money")
     require_feature("billing_writeback")
+
+    # Financial selectors must never be accepted and then ignored. Validate
+    # this before candidate SQL, source reservation, pricing or draft creation.
+    _validate_invoice_period_contract(period)
 
     docs = [frappe.get_doc("BP Project", p) for p in project_names]
     doc = docs[0]
