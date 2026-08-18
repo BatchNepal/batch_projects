@@ -483,25 +483,46 @@ def _service_item():
 
 
 def _price_list_rate(customer, item_code):
-    """The customer's contracted rate for the service item, read from
-    ERPNext's own rate-card mechanism (Customer.default_price_list ->
-    Item Price) rather than duplicated into batch_projects.
+    """Return the customer's contracted Item Price with its currency.
 
-    This is the "negotiate once per client, apply to every project" case.
-    Returns None when there's no price list, no item, or no price — callers
-    fall back to the project rate, so an unconfigured site behaves as today."""
+    ERPNext v15 makes Item Price.price_list_rate a Currency field whose
+    currency is Item Price.currency, and ItemPrice.validate() copies that
+    currency from the linked Price List. Returning a naked float discards
+    money type information and makes cross-currency fallback unsafe.
+    """
     if not customer or not item_code:
         return None
-    price_list = frappe.db.get_value("Customer", customer, "default_price_list")
+
+    price_list = frappe.db.get_value(
+        "Customer", customer, "default_price_list"
+    )
     if not price_list:
         return None
-    rate = frappe.db.get_value(
-        "Item Price",
-        {"item_code": item_code, "price_list": price_list, "selling": 1},
-        "price_list_rate",
-    )
-    return flt(rate) if rate else None
 
+    row = frappe.db.get_value(
+        "Item Price",
+        {
+            "item_code": item_code,
+            "price_list": price_list,
+            "selling": 1,
+        },
+        ["price_list_rate", "currency"],
+        as_dict=True,
+    )
+    if not row or not flt(row.price_list_rate):
+        return None
+
+    currency = (row.currency or "").strip()
+    if not currency:
+        frappe.throw(
+            f"Item Price for '{item_code}' in Price List '{price_list}' "
+            "has a rate but no currency. Fix the Price List before billing."
+        )
+
+    return frappe._dict({
+        "rate": flt(row.price_list_rate),
+        "currency": currency,
+    })
 
 def _resolve_project_list(project):
     """`project` accepts ONE BP Project name (every existing caller, e.g.
@@ -548,15 +569,11 @@ def _resolve_invoice_currency(company, customer, currency, conversion_rate,
     Order: explicit override -> the PROJECT's own currency ->
     Customer.default_currency -> company currency.
 
-    The project's currency comes before the customer's and the company's for
-    a concrete reason: BP Project.hourly_rate is denominated in
-    BP Project.currency, and those rates flow into Timesheet Detail
-    unconverted. A project priced at 50 USD/hr on a company that books in NPR
-    used to produce an invoice of 50 NPR/hr — the number passed through
-    untouched while the label changed, under-billing by the whole exchange
-    rate. Defaulting to the project's own currency keeps the number and its
-    unit together; conversion_rate then restates it in company currency for
-    the GL, which is exactly what base_grand_total is for.
+    The project's currency comes before the customer's and the company's
+    because BP Project.hourly_rate is denominated in BP Project.currency.
+    When that project rate is selected as a fallback, the invoice must keep
+    the number and its unit together or explicitly convert it. Timesheet row
+    rates are typed separately by their parent Timesheet.currency.
     The override exists for the payment-first case (money already landed in a
     known foreign amount; the invoice must state that exact currency/rate
     rather than have one guessed for it).
@@ -594,6 +611,167 @@ def _resolve_invoice_currency(company, customer, currency, conversion_rate,
             f"the received amount and rate are already known)."
         )
     return company_currency, target, flt(fx)
+
+
+def _convert_billing_rate(
+    rate,
+    source_currency,
+    target_currency,
+    company,
+    customer,
+    *,
+    company_currency=None,
+    target_to_company=None,
+    fx_cache=None,
+):
+    """Restate one typed billing rate into target_currency.
+
+    All FX is expressed as currency -> company currency. Cross-currency
+    conversion is therefore:
+
+        amount_in_target =
+            amount_in_source
+            * source_to_company
+            / target_to_company
+
+    A non-zero rate without a source currency is invalid money and is
+    refused rather than relabelled.
+    """
+    value = flt(rate)
+    if not value:
+        return 0.0
+
+    source = (source_currency or "").strip()
+    target = (target_currency or "").strip()
+
+    if not source:
+        frappe.throw(
+            "A non-zero billing rate has no source currency. "
+            "Set the project's/Price List's currency before billing."
+        )
+    if not target:
+        frappe.throw(
+            "Cannot calculate a billing rate because the invoice currency "
+            "could not be resolved."
+        )
+
+    if source == target:
+        return value
+
+    company_currency = (
+        (company_currency or "").strip()
+        or frappe.get_cached_value(
+            "Company", company, "default_currency"
+        )
+    )
+    if not company_currency:
+        frappe.throw(
+            f"Company '{company}' has no Default Currency configured."
+        )
+
+    def to_company(currency_code):
+        if currency_code == company_currency:
+            return 1.0
+
+        if (
+            currency_code == target
+            and target_to_company not in (None, "")
+        ):
+            resolved = flt(target_to_company)
+            if resolved > 0:
+                return resolved
+
+        key = (company, currency_code)
+        if fx_cache is not None and key in fx_cache:
+            return fx_cache[key]
+
+        cc, tc, resolved = _resolve_invoice_currency(
+            company,
+            customer,
+            currency_code,
+            None,
+        )
+        resolved = flt(resolved)
+
+        if cc != company_currency or tc != currency_code or resolved <= 0:
+            frappe.throw(
+                f"Could not resolve a valid exchange rate for "
+                f"{currency_code} → {company_currency}."
+            )
+
+        if fx_cache is not None:
+            fx_cache[key] = resolved
+
+        return resolved
+
+    source_fx = to_company(source)
+    target_fx = to_company(target)
+
+    if source_fx <= 0 or target_fx <= 0:
+        frappe.throw(
+            f"Cannot convert billing rate from {source} to {target}: "
+            "the required exchange rate is invalid."
+        )
+
+    return flt(value * source_fx / target_fx)
+
+
+def _effective_billing_rate(
+    *,
+    row_rate,
+    row_currency,
+    project_rate,
+    project_currency,
+    client_rate,
+    company_currency,
+    target_currency,
+    company,
+    customer,
+    target_to_company=None,
+    fx_cache=None,
+):
+    """Resolve most-specific rate and preserve its source currency.
+
+    Hierarchy:
+      1. Timesheet row rate      -> Timesheet.currency
+      2. BP Project hourly rate  -> BP Project.currency
+      3. ERPNext Item Price      -> Item Price.currency
+
+    Timer-created Timesheets are deliberately kept in company currency,
+    but rows entered directly in ERPNext may legitimately use another
+    Timesheet currency. Never infer their unit from the project/company.
+    """
+    row_value = flt(row_rate)
+    project_value = flt(project_rate)
+
+    client_value = 0.0
+    client_currency = None
+    if client_rate and hasattr(client_rate, "get"):
+        client_value = flt(client_rate.get("rate"))
+        client_currency = client_rate.get("currency")
+
+    if row_value:
+        value = row_value
+        source_currency = row_currency
+    elif project_value:
+        value = project_value
+        source_currency = project_currency
+    elif client_value:
+        value = client_value
+        source_currency = client_currency
+    else:
+        return 0.0
+
+    return _convert_billing_rate(
+        value,
+        source_currency,
+        target_currency,
+        company,
+        customer,
+        company_currency=company_currency,
+        target_to_company=target_to_company,
+        fx_cache=fx_cache,
+    )
 
 
 @frappe.whitelist()
@@ -675,7 +853,13 @@ def generate_invoice(project, period=None, tasks=None,
         )
 
     erp_projects = [d.erpnext_project for d in docs]
-    rate_by_erp = {d.erpnext_project: flt(d.hourly_rate or 0) for d in docs}
+    project_rate_by_erp = {
+        d.erpnext_project: frappe._dict({
+            "rate": flt(d.hourly_rate or 0),
+            "currency": (d.currency or "").strip() or None,
+        })
+        for d in docs
+    }
     name_by_erp = {d.erpnext_project: d.project_name for d in docs}
     multi = len(docs) > 1
 
@@ -696,6 +880,7 @@ def generate_invoice(project, period=None, tasks=None,
         """
         SELECT tsd.name, tsd.parent AS timesheet, tsd.custom_bp_task AS bp_task,
                tsd.hours, tsd.billing_hours, tsd.billing_rate, tsd.billing_amount,
+               ts.currency AS timesheet_currency,
                tsd.activity_type, tsd.description, tsd.from_time, tsd.to_time,
                tsd.project_name, tsd.project AS erp_project
         FROM `tabTimesheet Detail` tsd
@@ -756,8 +941,8 @@ def generate_invoice(project, period=None, tasks=None,
     #      project for a year" case.
     #   4. nothing -> 0, and the caller is told rather than silently billing
     #      real hours at zero (see the zero-rate guard below).
-    # Resolved BEFORE rates are priced: converting a company-currency
-    # billing_rate into the invoice's currency needs to know that currency
+    # Resolved BEFORE rates are priced: converting any typed source rate
+    # into the invoice's currency needs to know that target currency
     # first. Decided explicitly, never defaulted silently — see
     # _resolve_invoice_currency() for why falling back to company currency
     # was actively wrong for foreign clients.
@@ -769,22 +954,31 @@ def generate_invoice(project, period=None, tasks=None,
 
     service_item = _service_item()
     client_rate = _price_list_rate(doc.client, service_item)
+    rate_fx_cache = {}
+
     for r in rows:
-        # Timesheet Detail.billing_rate is stored in COMPANY currency (see
-        # timers.py's _rate_in_company_currency). When this invoice is in a
-        # different currency, restate it — otherwise a 6875 NPR/h row would be
-        # billed as 6875 USD/h. The project/client fallbacks are already in the
-        # project's own currency, so they need no conversion.
-        row_rate = flt(r.billing_rate)
-        if row_rate and inv_currency != company_currency and fx:
-            row_rate = row_rate / flt(fx)
-        eff_rate = (
-            row_rate
-            or rate_by_erp.get(r.erp_project, 0)
-            or (client_rate or 0)
+        project_rate = project_rate_by_erp.get(
+            r.erp_project, frappe._dict()
         )
+
+        eff_rate = _effective_billing_rate(
+            row_rate=r.billing_rate,
+            row_currency=r.timesheet_currency,
+            project_rate=project_rate.get("rate"),
+            project_currency=project_rate.get("currency"),
+            client_rate=client_rate,
+            company_currency=company_currency,
+            target_currency=inv_currency,
+            company=company,
+            customer=doc.client,
+            target_to_company=fx,
+            fx_cache=rate_fx_cache,
+        )
+
         r.eff_rate = eff_rate
-        r.eff_amount = round(_authoritative_billing_hours(r) * eff_rate, 2)
+        r.eff_amount = round(
+            _authoritative_billing_hours(r) * eff_rate, 2
+        )
 
     # Billing non-zero hours without a rate would permanently mark real work
     # billed for nothing. A zero-billing-hours row has no amount to price,
@@ -1023,7 +1217,7 @@ def get_batch_invoice_candidates():
     rows = frappe.db.sql(
         """
         SELECT tsd.project AS erp_project, tsd.hours, tsd.billing_hours,
-               tsd.billing_rate
+               tsd.billing_rate, ts.currency AS timesheet_currency
         FROM `tabTimesheet Detail` tsd
         JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
         LEFT JOIN `tabBP Task` bt ON bt.name = tsd.custom_bp_task
@@ -1039,39 +1233,65 @@ def get_batch_invoice_candidates():
     service_item = _service_item()
     client_rate_cache = {}
     fx_cache = {}
+    preview_currency_cache = {}
     totals = {}
+
     for r in rows:
         p = by_erp.get(r.erp_project)
         if not p:
             continue
+
         if p.client not in client_rate_cache:
-            client_rate_cache[p.client] = _price_list_rate(p.client, service_item)
-        # Timesheet Detail.billing_rate is in COMPANY currency; this screen
-        # quotes the project's currency (which is what generate_invoice will
-        # actually bill in). Convert with the same rate, or the figure shown
-        # here differs from the invoice that gets created — the one thing this
-        # endpoint exists to guarantee against.
-        row_rate = flt(r.billing_rate)
-        pc = (p.currency or "").strip()
-        if row_rate and pc:
-            key = (pc, p.company)
-            if key not in fx_cache:
-                # Financial preview must fail exactly where invoice generation
-                # would fail. A missing/failed FX lookup is not permission to
-                # relabel a company-currency billing_rate at 1:1.
-                _cc, _tc, _fx = _resolve_invoice_currency(
-                    p.company, p.client, None, None, pc
+            client_rate_cache[p.client] = _price_list_rate(
+                p.client, service_item
+            )
+
+        project_currency = (p.currency or "").strip() or None
+        currency_key = (p.company, p.client, project_currency)
+
+        if currency_key not in preview_currency_cache:
+            company_currency, preview_currency, preview_fx = (
+                _resolve_invoice_currency(
+                    p.company,
+                    p.client,
+                    None,
+                    None,
+                    project_currency,
                 )
-                fx_cache[key] = _fx if _tc != _cc else 1.0
-            if fx_cache[key]:
-                row_rate = row_rate / flt(fx_cache[key])
-        eff_rate = (
-            row_rate
-            or flt(p.hourly_rate or 0)
-            or (client_rate_cache[p.client] or 0)
+            )
+            preview_currency_cache[currency_key] = (
+                company_currency,
+                preview_currency,
+                preview_fx,
+            )
+
+        company_currency, preview_currency, preview_fx = (
+            preview_currency_cache[currency_key]
         )
+
+        eff_rate = _effective_billing_rate(
+            row_rate=r.billing_rate,
+            row_currency=r.timesheet_currency,
+            project_rate=p.hourly_rate,
+            project_currency=project_currency,
+            client_rate=client_rate_cache[p.client],
+            company_currency=company_currency,
+            target_currency=preview_currency,
+            company=p.company,
+            customer=p.client,
+            target_to_company=preview_fx,
+            fx_cache=fx_cache,
+        )
+
         hrs = _authoritative_billing_hours(r)
-        agg = totals.setdefault(r.erp_project, {"hours": 0.0, "amount": 0.0})
+        agg = totals.setdefault(
+            r.erp_project,
+            {
+                "hours": 0.0,
+                "amount": 0.0,
+                "currency": preview_currency,
+            },
+        )
         agg["hours"] += hrs
         agg["amount"] += hrs * eff_rate
 
@@ -1079,15 +1299,17 @@ def get_batch_invoice_candidates():
     for erp, agg in totals.items():
         p = by_erp[erp]
         entry = out.setdefault(p.client, {
-            "client": p.client, "company": p.company, "projects": [],
+            "client": p.client,
+            "company": p.company,
+            "projects": [],
             "currencies": set(),
         })
-        entry["currencies"].add((p.currency or "").strip() or None)
+        entry["currencies"].add(agg["currency"] or None)
         entry["projects"].append({
             "bp_project": p.name,
             "project_name": p.project_name,
             "erpnext_project": erp,
-            "currency": p.currency or None,
+            "currency": agg["currency"] or None,
             "hours": round(agg["hours"], 2),
             "amount": round(agg["amount"], 2),
         })

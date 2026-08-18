@@ -52,7 +52,7 @@ class TestBillingHoursInvariant(unittest.TestCase):
             "project_name": "Billing Test",
             "client": "TEST-CUSTOMER",
             "company": "TEST-COMPANY",
-            "currency": None,
+            "currency": "USD",
             "hourly_rate": 100,
             "erpnext_project": "ERP-TEST",
         })
@@ -62,12 +62,14 @@ class TestBillingHoursInvariant(unittest.TestCase):
                 "hours": 8,
                 "billing_hours": 0,
                 "billing_rate": 0,
+                "timesheet_currency": "USD",
             }),
             frappe._dict({
                 "erp_project": "ERP-TEST",
                 "hours": 5,
                 "billing_hours": 2.5,
                 "billing_rate": 0,
+                "timesheet_currency": "USD",
             }),
         ]
 
@@ -79,6 +81,11 @@ class TestBillingHoursInvariant(unittest.TestCase):
             patch.object(erp_link.frappe.db, "sql", return_value=rows),
             patch.object(erp_link, "_service_item", return_value=None),
             patch.object(erp_link, "_price_list_rate", return_value=0),
+            patch.object(
+                erp_link,
+                "_resolve_invoice_currency",
+                return_value=("USD", "USD", 1.0),
+            ),
         ):
             result = erp_link.get_batch_invoice_candidates()
 
