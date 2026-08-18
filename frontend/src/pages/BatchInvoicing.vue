@@ -203,7 +203,6 @@ async function doCreate() {
   try {
     const res = await generateInvoice(
       confirm.projects.map(p => p.bp_project),
-      null,
       {
         amount: confirm.overrideAmount || undefined,
         currency: confirm.overrideCurrency || undefined,
