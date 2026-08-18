@@ -1861,7 +1861,7 @@ def generate_milestone_invoice(milestone):
         )
         amount = flt(project.budget_amount) * flt(doc.invoice_percent) / 100
 
-    company = project.company or frappe.defaults.get_global_default("company")
+    company = _effective_project_company(project)
     income_account = frappe.db.get_value("Company", company, "default_income_account")
     if not income_account:
         frappe.throw(f"Set a Default Income Account on Company '{company}' before invoicing.")
@@ -2021,7 +2021,7 @@ def generate_expense_invoice(project):
     for r in rows:
         by_type.setdefault(r.expense_type or "Other", []).append(r)
 
-    company = doc.company or frappe.defaults.get_global_default("company")
+    company = _effective_project_company(doc)
     income_account = frappe.db.get_value("Company", company, "default_income_account")
     if not income_account:
         frappe.throw(f"Set a Default Income Account on Company '{company}' before invoicing.")
