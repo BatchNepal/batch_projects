@@ -41,3 +41,15 @@ batch_projects.patches.grant_bp_member_baseline_docperm
 # BP Project unsavable (LinkValidationError), including edits that never
 # touch the members table. See the patch docstring.
 batch_projects.patches.clean_orphaned_project_members
+# BP Task v2 fields (2026-08-14): sequence_no (global monotonic identity),
+# planned_start/planned_end (scheduling plan vs due-date commitment),
+# completed_by + blocked_reason/blocked_since/blocked_by. Backfills existing
+# rows; must run after the new columns are synced.
+batch_projects.patches.backfill_task_sequence_and_planned_dates
+# BP Task Watcher watch_reason (2026-08-14): records why each watcher exists
+# (manual/mentioned/assigned/commented/approval/automation). Existing rows
+# get 'manual' — the original cause can't be reconstructed.
+batch_projects.patches.backfill_watch_reason
+# Durable graph execution identity.  Runs after DocType sync so existing
+# workflows receive a stable revision/hash before Gateway can admit events.
+batch_projects.patches.backfill_workflow_definition_identity

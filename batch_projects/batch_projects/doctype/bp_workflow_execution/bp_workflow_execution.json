@@ -1,0 +1,31 @@
+{
+  "name": "BP Workflow Execution",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "autoname": "hash",
+  "naming_rule": "Random",
+  "track_changes": 0,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "fields": [
+    {"fieldname": "execution_key", "fieldtype": "Data", "label": "Execution Key", "reqd": 1, "unique": 1, "read_only": 1},
+    {"fieldname": "workflow", "fieldtype": "Link", "label": "Workflow", "options": "BP Workflow", "reqd": 1, "in_standard_filter": 1},
+    {"fieldname": "event_id", "fieldtype": "Data", "label": "Event ID", "reqd": 1, "in_standard_filter": 1, "search_index": 1},
+    {"fieldname": "recovery_envelope", "fieldtype": "JSON", "label": "Recovery Envelope", "reqd": 1, "read_only": 1},
+    {"fieldname": "workflow_revision", "fieldtype": "Int", "label": "Workflow Revision", "reqd": 1},
+    {"fieldname": "definition_hash", "fieldtype": "Data", "label": "Definition Hash", "reqd": 1},
+    {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "pending\nrunning\nsucceeded\nfailed\nneeds_review", "default": "pending", "reqd": 1, "in_standard_filter": 1},
+    {"fieldname": "terminal_reason", "fieldtype": "Data", "label": "Terminal Reason", "read_only": 1},
+    {"fieldname": "started_at", "fieldtype": "Datetime", "label": "Started At", "read_only": 1},
+    {"fieldname": "finished_at", "fieldtype": "Datetime", "label": "Finished At", "read_only": 1},
+    {"fieldname": "section_lease", "fieldtype": "Section Break", "label": "Execution Lease", "collapsible": 1},
+    {"fieldname": "lease_owner", "fieldtype": "Data", "label": "Lease Owner", "read_only": 1},
+    {"fieldname": "lease_generation", "fieldtype": "Int", "label": "Lease Generation", "default": "0", "reqd": 1, "read_only": 1},
+    {"fieldname": "lease_expires_at", "fieldtype": "Datetime", "label": "Lease Expires At", "in_standard_filter": 1, "read_only": 1}
+  ],
+  "permissions": [
+    {"role": "Projects Manager", "read": 1},
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}
+  ]
+}

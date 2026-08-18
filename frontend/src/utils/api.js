@@ -988,8 +988,8 @@ export const updateSharedTask = (token, task, fields) =>
 
 // ─── TASK LINKS ──────────────────────────────────────────────────────────────
 
-export const addTaskLink = (task, linked_task, link_type, dep_type = "FS", lag_days = 0) =>
-  call("add_task_link", { issue: task, linked_task, link_type, dep_type, lag_days });
+export const addTaskLink = (task, linked_task, link_type, dep_type = "FS", lag_days = 0, link_metadata = null) =>
+  call("add_task_link", { issue: task, linked_task, link_type, dep_type, lag_days, link_metadata });
 
 export const removeTaskLink = (task, linked_task, link_type) =>
   call("remove_task_link", { issue: task, linked_task, link_type });

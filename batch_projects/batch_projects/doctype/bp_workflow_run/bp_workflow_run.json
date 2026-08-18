@@ -28,6 +28,14 @@
       "description": "Groups every node-row from one graph execution — the UI renders 'this run touched n1->n2->n3' by grouping on this."
     },
     {
+      "fieldname": "execution",
+      "fieldtype": "Link",
+      "label": "Execution",
+      "options": "BP Workflow Execution",
+      "in_standard_filter": 1,
+      "description": "Durable execution authority; run_id remains Gateway trace history."
+    },
+    {
       "fieldname": "node_id",
       "fieldtype": "Data",
       "label": "Node ID"
@@ -53,6 +61,58 @@
       "fieldname": "run_at",
       "fieldtype": "Datetime",
       "label": "Run At"
+    },
+    {
+      "fieldname": "section_execution",
+      "fieldtype": "Section Break",
+      "label": "Execution Metadata",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "correlation_id",
+      "fieldtype": "Data",
+      "label": "Correlation ID",
+      "description": "Links this node execution back to the originating event — same ID threaded through BP Activity and BP Audit Log for end-to-end tracing."
+    },
+    {
+      "fieldname": "source",
+      "fieldtype": "Select",
+      "label": "Source",
+      "options": "\nevent\nschedule\ngateway\nwebhook\nmanual",
+      "description": "What initiated this workflow execution."
+    },
+    {
+      "fieldname": "attempt",
+      "fieldtype": "Int",
+      "label": "Attempt",
+      "default": "1",
+      "description": "Number of attempts taken by this node execution."
+    },
+    {
+      "fieldname": "column_break_exec",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "started_at",
+      "fieldtype": "Datetime",
+      "label": "Started At"
+    },
+    {
+      "fieldname": "finished_at",
+      "fieldtype": "Datetime",
+      "label": "Finished At"
+    },
+    {
+      "fieldname": "duration_ms",
+      "fieldtype": "Int",
+      "label": "Duration (ms)",
+      "description": "finished_at - started_at in milliseconds."
+    },
+    {
+      "fieldname": "error_code",
+      "fieldtype": "Data",
+      "label": "Error Code",
+      "description": "Short machine-readable error class extracted from the exception type."
     }
   ],
   "permissions": [

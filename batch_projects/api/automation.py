@@ -23,9 +23,12 @@ These are server-to-server. The agent authenticates with the service account
 so a stray browser session can't drive automations.
 """
 
-import frappe
 import json
 import time
+import uuid
+from datetime import timezone
+
+import frappe
 
 # Attempts for the optimistic-lock retry in apply_action — a dispatched action
 # racing the SPA's drag writes (move_task + reorder_tasks) needs a beat or two.
@@ -154,6 +157,18 @@ def apply_action(rule=None, payload=None, **_):
     if not rule_doc.is_active:
         return {"status": "skipped", "message": "rule inactive"}
 
+    # Execution traceability — one execution_id per gateway-dispatched fire,
+    # correlation_id links back to the originating event across BP Activity
+    # and BP Audit Log. Prefer the event_id emit() stamped on the payload
+    # (the gateway's envelope carries it through, so several rules fired by
+    # ONE event share a single correlation); fall back to a generated ID so
+    # every run row is traceable even for a manually-dispatched action.
+    payload["_execution_id"] = payload.get("_execution_id") or str(uuid.uuid4())
+    payload["_correlation_id"] = (
+        payload.get("_correlation_id") or payload.get("event_id") or payload["_execution_id"]
+    )
+    payload["_source"] = "gateway"
+
     depth = int(payload.get("depth", 0))
     frappe.flags.bp_automation_depth = depth + 1
     try:
@@ -167,6 +182,10 @@ def apply_action(rule=None, payload=None, **_):
         status = message = None
         for attempt in range(1, _CONFLICT_RETRIES + 1):
             try:
+                # Thread the attempt number into the payload so _run_actions →
+                # _log_run records it on every run row — without this, a run
+                # that "succeeded on retry 2/3" would write attempt=1 in the DB.
+                payload["_attempt"] = attempt
                 ctx = _build_context(payload)  # fresh task doc every attempt
                 results = _run_actions(rule_doc, ctx, payload)
                 status, message = _aggregate_status(results)
@@ -190,12 +209,17 @@ def apply_action(rule=None, payload=None, **_):
                 time.sleep(0.15 * attempt)
         _update_rule_last_run(rule, status)
         return {"status": status, "message": message}
-    except Exception:
+    except Exception as e:
         frappe.log_error(frappe.get_traceback(), f"BP gateway-dispatched action failed: {rule}")
         msg = _short_error()
         if "TimestampMismatchError" in frappe.get_traceback():
             msg = f"{msg} (failed after {_CONFLICT_RETRIES} attempts — conflict retry exhausted)"
-        _log_run(rule_doc, payload, "Failed", msg)
+        _log_run(rule_doc, payload, "Failed", msg,
+                 execution_id=payload.get("_execution_id"),
+                 correlation_id=payload.get("_correlation_id"),
+                 source="gateway",
+                 attempt=payload.get("_attempt") or 1,
+                 error_code=type(e).__name__)
         _update_rule_last_run(rule, "Failed")
         return {"status": "Failed", "message": msg}
     finally:
@@ -258,6 +282,7 @@ def run_external_event(token=None, event=None, body=None, **_):
         **{k: v for k, v in body_dict.items() if k not in ("event", "project")},
         "event": event,          # the third party's own event name/type
         "project": tok.project,  # None for scope="workspace"
+        "_source": "webhook",    # traceability: this fire came from an external webhook
         # Dedicated nested copy — see events.py._event_envelope's own
         # "body" key comment. The flat spread above is kept too (pre-dates
         # this, and an existing rule/workflow may already reference a
@@ -830,10 +855,13 @@ _NODE_REGISTRY = {
     },
 }
 
-# Every node has retry/on_error available except pure-logic/trigger nodes
-# (01-DATA-MODEL.md §1b) — expressed once here instead of on every entry.
+# Graph nodes can create externally visible effects. Retrying after a timeout
+# or transport error can duplicate an effect that actually completed, so the
+# current contract exposes failure routing but not automatic replay. Durable
+# retries require a provider-aware idempotency key/claim model.
 for _node_type, _entry in _NODE_REGISTRY.items():
-    _entry["supports_retry"] = _entry["category"] in ("action", "integration")
+    _entry["supports_retry"] = False
+    _entry["supports_failure_policy"] = _entry["category"] in ("action", "integration")
 
 
 def _assert_registry_matches_doctype():
@@ -869,7 +897,78 @@ _NODE_TYPE_TO_ACTION_TYPE = {v: k for k, v in _ACTION_TYPE_TO_NODE_TYPE.items()}
 
 _WORKFLOW_CACHE_FIELDS = [
     "name", "title", "scope", "project", "project_filter", "nodes", "edges",
+    "automation_revision", "automation_definition_hash",
 ]
+
+
+@frappe.whitelist()
+def admit_workflow_execution(workflow=None, event_id=None, envelope=None,
+                             workflow_revision=None, definition_hash=None, **_):
+    _assert_service_caller()
+    from batch_projects.workflow_execution import admit
+    return admit(
+        workflow, event_id, _as_dict(envelope),
+        expected_revision=workflow_revision, expected_hash=definition_hash,
+    )
+
+
+@frappe.whitelist()
+def claim_workflow_execution_lease(execution_id=None, owner=None, lease_seconds=60, **_):
+    _assert_service_caller()
+    if not execution_id or not owner:
+        return {"claimed": False, "reason": "missing_execution_or_owner"}
+    from batch_projects.workflow_execution import claim_lease
+    return claim_lease(execution_id, owner, lease_seconds)
+
+
+@frappe.whitelist()
+def renew_workflow_execution_lease(execution_id=None, owner=None, lease_generation=None,
+                                   lease_seconds=60, **_):
+    _assert_service_caller()
+    if not execution_id or not owner or lease_generation is None:
+        return {"renewed": False, "reason": "missing_lease_context"}
+    from batch_projects.workflow_execution import renew_lease
+    return renew_lease(execution_id, owner, lease_generation, lease_seconds)
+
+
+@frappe.whitelist()
+def list_recoverable_workflow_executions(limit=100, **_):
+    _assert_service_caller()
+    from batch_projects.workflow_execution import recoverable_executions
+    return recoverable_executions(limit)
+
+
+@frappe.whitelist()
+def begin_external_workflow_step(execution_id=None, node_id=None, owner=None,
+                                 lease_generation=None, **_):
+    _assert_service_caller()
+    if not all((execution_id, node_id, owner)) or lease_generation is None:
+        frappe.throw("Missing workflow execution step context")
+    from batch_projects.workflow_execution import begin_external_step
+    return begin_external_step(execution_id, node_id, owner, lease_generation)
+
+
+@frappe.whitelist()
+def finish_workflow_step(execution_id=None, step_id=None, owner=None, lease_generation=None,
+                         status=None, result=None, error_code=None, error_message=None, **_):
+    _assert_service_caller()
+    if not all((execution_id, step_id, owner, status)) or lease_generation is None:
+        frappe.throw("Missing workflow step completion context")
+    from batch_projects.workflow_execution import finish_step
+    return finish_step(
+        execution_id, step_id, owner, lease_generation, status, _as_dict(result),
+        error_code=error_code, error_message=error_message,
+    )
+
+
+@frappe.whitelist()
+def finish_workflow_execution(execution_id=None, owner=None, lease_generation=None,
+                              status=None, reason=None, **_):
+    _assert_service_caller()
+    if not all((execution_id, owner, status)) or lease_generation is None:
+        frappe.throw("Missing workflow execution completion context")
+    from batch_projects.workflow_execution import finish_execution
+    return finish_execution(execution_id, owner, lease_generation, status, reason)
 
 
 @frappe.whitelist()
@@ -921,7 +1020,10 @@ def run_workflow_node(workflow=None, node=None, node_type=None, config=None, pay
 
     action_type = _NODE_TYPE_TO_ACTION_TYPE.get(node_type)
     if not action_type:
-        return {"status": "Failed", "json": {"message": f"unknown action node type {node_type!r}"}}
+        return {"status": "Failed", "json": {
+            "message": f"unknown action node type {node_type!r}",
+            "error_code": "unknown_action_node",
+        }}
 
     from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import (
         _build_context,
@@ -935,34 +1037,134 @@ def run_workflow_node(workflow=None, node=None, node_type=None, config=None, pay
         ctx = _build_context(payload)
         status, message = _execute({"type": action_type, "config": config}, ctx, payload)
         return {"status": status, "json": {"message": message}}
-    except Exception:
+    except Exception as e:
         frappe.log_error(frappe.get_traceback(), f"BP workflow node failed: {workflow}/{node}")
-        return {"status": "Failed", "json": {"message": _short_error()}}
+        return {"status": "Failed", "json": {
+            "message": _short_error(),
+            "error_code": type(e).__name__,
+        }}
     finally:
         frappe.flags.bp_automation_depth = depth
 
 
+_LOCAL_WORKFLOW_ACTIONS = {
+    "Change Status", "Assign Issue", "Set Priority", "Set Due Date",
+    "Add Label", "Add Comment", "Create Issue", "Update ERPNext Document",
+}
+
+
 @frappe.whitelist()
-def log_workflow_run(workflow=None, run_id=None, node_id=None, node_type=None, status=None, message=None, **_):
+def run_local_workflow_step(execution_id=None, node_id=None, node_type=None, config=None,
+                            payload=None, owner=None, lease_generation=None, **_):
+    """Execute a Frappe-only node and mark its durable step in one request TX.
+
+    Do not catch action exceptions here.  A Frappe POST rolls the whole request
+    back, including the business mutation, step write, and after-commit event
+    callbacks.  That makes a lost response safely repeatable.
+    """
+    _assert_service_caller()
+    if not all((execution_id, node_id, owner)) or lease_generation is None:
+        frappe.throw("Missing local workflow step context")
+    payload = _as_dict(payload)
+    config = _as_dict(config)
+    action_type = _NODE_TYPE_TO_ACTION_TYPE.get(node_type)
+    if action_type not in _LOCAL_WORKFLOW_ACTIONS:
+        frappe.throw("Workflow action is not local-atomic")
+
+    from batch_projects.workflow_execution import finish_step, get_or_create_step
+    from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import (
+        _build_context,
+        _execute,
+    )
+
+    step = get_or_create_step(execution_id, node_id, "frappe_atomic", owner, lease_generation)
+    if step["effect_kind"] != "frappe_atomic":
+        frappe.throw("Workflow step effect kind changed")
+    if step["status"] == "succeeded":
+        return step["result"]
+    if step["status"] in ("failed", "needs_review", "dispatching"):
+        return {
+            "status": "Failed", "json": {"message": step["error_message"] or step["status"],
+                                           "error_code": step["error_code"] or step["status"]},
+        }
+
+    depth = int(payload.get("depth", 0))
+    previous_defer = getattr(frappe.flags, "bp_defer_workflow_events", False)
+    frappe.flags.bp_automation_depth = depth + 1
+    frappe.flags.bp_defer_workflow_events = True
+    try:
+        ctx = _build_context(payload)
+        status, message = _execute({"type": action_type, "config": config}, ctx, payload)
+        result = {"status": status, "json": {"message": message}}
+        terminal = "failed" if status == "Failed" else "succeeded"
+        return finish_step(
+            execution_id, step["step_id"], owner, lease_generation, terminal,
+            result=result,
+            error_code="local_action_failed" if terminal == "failed" else None,
+            error_message=message if terminal == "failed" else None,
+        )["result"]
+    finally:
+        frappe.flags.bp_automation_depth = depth
+        frappe.flags.bp_defer_workflow_events = previous_defer
+
+
+_WORKFLOW_RUN_SOURCES = {"event", "schedule", "gateway", "webhook", "manual"}
+
+
+def _workflow_run_datetime(value):
+    if not value:
+        return None
+    try:
+        parsed = frappe.utils.get_datetime(value)
+        # Gateway timestamps use RFC3339 UTC.  Frappe preserves their tzinfo,
+        # while MariaDB DATETIME rejects an offset suffix, so persist the
+        # equivalent naive UTC datetime.
+        if getattr(parsed, "tzinfo", None):
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return None
+
+
+@frappe.whitelist()
+def log_workflow_run(workflow=None, run_id=None, node_id=None, node_type=None, status=None,
+                     message=None, correlation_id=None, source=None, attempt=1,
+                     started_at=None, finished_at=None, error_code=None, execution_id=None, **_):
     """Best-effort per-node run log (mirrors bp_automation_rule._log_run's
     swallow-everything discipline — logging must never break the graph
     walk). Per-node only — the run's overall status is a SEPARATE call, see
     report_workflow_run below."""
     _assert_service_caller()
     try:
+        started = _workflow_run_datetime(started_at)
+        finished = _workflow_run_datetime(finished_at)
+        duration_ms = None
+        if started and finished:
+            duration_ms = max(0, int((finished - started).total_seconds() * 1000))
+        try:
+            attempt = max(1, int(attempt or 1))
+        except (TypeError, ValueError):
+            attempt = 1
         frappe.get_doc({
             "doctype": "BP Workflow Run",
             "workflow": workflow,
             "run_id": run_id,
+            "execution": execution_id or None,
             "node_id": node_id,
             "node_type": node_type,
             "status": status,
             "message": (message or "")[:500],
             "run_at": frappe.utils.now_datetime(),
+            "correlation_id": correlation_id or None,
+            "source": source if source in _WORKFLOW_RUN_SOURCES else None,
+            "attempt": attempt,
+            "started_at": started,
+            "finished_at": finished,
+            "duration_ms": duration_ms,
+            "error_code": (error_code or "")[:140] or None,
         }).insert(ignore_permissions=True)
-        frappe.db.commit()
     except Exception:
-        pass
+        frappe.log_error(frappe.get_traceback(), f"log_workflow_run failed: {workflow}/{run_id}")
     return {"status": "logged"}
 
 
@@ -985,7 +1187,6 @@ def report_workflow_run(workflow=None, run_id=None, status=None, **_):
             "last_run_at": frappe.utils.now_datetime(),
             "last_run_status": status,
         })
-        frappe.db.commit()
         if status == "Failed" and prev != "Failed":
             _notify_workflow_failure(workflow)
     except Exception:

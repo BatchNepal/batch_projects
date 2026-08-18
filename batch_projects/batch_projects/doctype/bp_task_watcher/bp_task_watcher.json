@@ -38,6 +38,14 @@
       "label": "Project",
       "options": "BP Project",
       "in_standard_filter": 1
+    },
+    {
+      "fieldname": "watch_reason",
+      "fieldtype": "Select",
+      "label": "Watch Reason",
+      "options": "\nmanual\nmentioned\nassigned\ncommented\napproval\nautomation",
+      "default": "manual",
+      "description": "Why this user is watching — manual (UI), or auto-added by mention/assignment/comment/approval/automation."
     }
   ],
   "permissions": [

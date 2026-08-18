@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="drfade">
-      <div v-if="open" class="bp-overlay fixed inset-0 z-modal" style="background:var(--backdrop)" @click="isDismissable && emit('update:open', false)" />
+      <div v-if="open" class="bp-overlay shadow-xl fixed inset-0 z-modal" style="background:var(--backdrop)" @click="isDismissable && emit('update:open', false)" />
     </Transition>
     <Transition :name="placement === 'left' ? 'drslide-left' : 'drslide-right'">
       <div

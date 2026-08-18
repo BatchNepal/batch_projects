@@ -294,7 +294,7 @@
 
       <template v-else>
         <div class="flex flex-col gap-4">
-          <div>
+          <div v-if="meta?.supports_retry === true">
             <p class="text-sm font-medium text-foreground mb-2">Retry on failure</p>
             <div class="flex items-center gap-2">
               <Input v-model.number="retryAttempts" type="number" label="Attempts" size="sm" class="w-28" />
@@ -386,7 +386,7 @@ const ON_ERROR_OPTIONS = [
 const meta = computed(() => (props.node ? nodeMeta(props.node.data.typeKey) : null))
 const categoryLabel = computed(() => meta.value?.category ? `${meta.value.category[0].toUpperCase()}${meta.value.category.slice(1)}` : '')
 const schema = computed(() => meta.value?.config_schema ?? [])
-const showSettingsTab = computed(() => meta.value?.supports_retry === true)
+const showSettingsTab = computed(() => meta.value?.supports_failure_policy === true)
 
 function fieldLabel(field) {
   return field.label ?? field.name.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
@@ -670,7 +670,9 @@ function onSave() {
     nodeId: props.node.id,
     label: localLabel.value,
     config: { ...localConfig },
-    retry: retryAttempts.value > 1 ? { max_attempts: retryAttempts.value, wait_seconds: retryWaitSeconds.value || 0 } : null,
+    retry: meta.value?.supports_retry === true && retryAttempts.value > 1
+      ? { max_attempts: retryAttempts.value, wait_seconds: retryWaitSeconds.value || 0 }
+      : null,
     onError: onError.value,
     disabled: disabled.value,
   })

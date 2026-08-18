@@ -11,7 +11,10 @@
 
   <Drawer :open="open" @update:open="open = $event" size="sm" placement="right">
     <DrawerHeader class="border-b" @close="open = false">
-      <h2 class="text-sm font-semibold">Display</h2>
+      <h2 class="text-sm font-semibold">Manage Board </h2>
+      <p class="text-xs text-muted mt-1">
+        Control how the board is displayed.
+      </p>
     </DrawerHeader>
 
     <DrawerBody class="p-2">
@@ -107,28 +110,29 @@ async function resetDefaults() {
 .dp-section { padding: 2px 2px 4px; }
 .dp-section-label {
   font-size:var(--text-xs);
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .02em;
-  color: var(--muted);
+  color: black;
   padding: 0 6px 4px;
 }
 .dp-list { display: flex; flex-direction: column; }
 .dp-opt {
   display: flex;
   align-items: center;
-  height: 30px;
-  padding: 0 6px;
+  height: 34px;
+  padding: 2px 8px;
   border-radius: var(--radius-md);
   font-size:var(--text-sm);
-  color: var(--foreground);
+  font-weight: 500;
+  color: #4b5563;
   cursor: pointer;
   transition: background-color .1s;
 }
 .dp-opt:hover { background: var(--surface-secondary); }
 .dp-opt.selected {
-  background: var(--accent-soft);
-  color: var(--accent-soft-foreground);
+  background: #f6f5f7;
+  color: black;
   font-weight: 500;
 }
 .dp-opt-label { flex: 1; min-width: 0; }

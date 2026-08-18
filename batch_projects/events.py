@@ -11,6 +11,7 @@ Usage:
 
 import frappe
 import json
+import uuid
 
 
 # ─── EVENT NAMES (constants) ─────────────────────────────────────────────────
@@ -133,14 +134,29 @@ def emit(event_name: str, payload: dict):
     # 2. Realtime broadcast — board/list auto-refresh
     _broadcast(event_name, payload)
 
-    # 3. Automation rules
-    _evaluate_automations(event_name, payload)
+    # A local durable workflow step must commit its business mutation and
+    # durable step state before it can leak another automation event.  Normal
+    # interactive writes keep their established behavior; only this explicitly
+    # fenced execution path defers the outbound side effects.
+    if getattr(frappe.flags, "bp_defer_workflow_events", False):
+        frappe.db.after_commit.add(
+            lambda: _evaluate_automations(event_name, payload)
+        )
+        frappe.db.after_commit.add(
+            lambda: _queue_notifications(event_name, payload)
+        )
+        frappe.db.after_commit.add(
+            lambda: _sync_rebac(event_name, payload)
+        )
+    else:
+        # 3. Automation rules
+        _evaluate_automations(event_name, payload)
 
-    # 4. Notifications
-    _queue_notifications(event_name, payload)
+        # 4. Notifications
+        _queue_notifications(event_name, payload)
 
-    # 5. ReBAC relationship sync — always, independent of bp_automation_engine
-    _sync_rebac(event_name, payload)
+        # 5. ReBAC relationship sync — always, independent of bp_automation_engine
+        _sync_rebac(event_name, payload)
 
 
 # ─── ENRICHMENT ──────────────────────────────────────────────────────────────
@@ -150,6 +166,14 @@ def _enrich(event_name: str, payload: dict) -> dict:
     payload.setdefault("event", event_name)
     payload.setdefault("user", frappe.session.user)
     payload.setdefault("timestamp", now())
+    # One event-level correlation ID per emit() — the "originating event"
+    # in the traceability model (correlation_id → execution_id → attempt).
+    # Generated here so EVERY path that fans out from this event (multiple
+    # matching rules, gateway dispatch, notification side-effects) shares the
+    # same event_id, letting an operator search one ID and see the whole
+    # fan-out. `setdefault` keeps any ID an upstream caller already attached
+    # (e.g. a webhook's own delivery id via run_external_event).
+    payload.setdefault("event_id", str(uuid.uuid4()))
     return payload
 
 
@@ -299,6 +323,11 @@ def _event_envelope(event_name: str, payload: dict) -> dict:
     """
     envelope = {
         "event": event_name,
+        # Make trace identity explicit on the Gateway wire contract. It used
+        # to be reachable only through the generic payload object, which made
+        # graph workflows unable to reliably carry it into their run logs.
+        "event_id": payload.get("event_id"),
+        "source": payload.get("_source") or "event",
         "project": payload.get("project"),
         "task": payload.get("task"),
         "task_key": payload.get("task_key"),
@@ -348,8 +377,13 @@ def _event_envelope(event_name: str, payload: dict) -> dict:
             "task_type": task.task_type,
             "story_points": task.story_points,
             "due_date": str(task.due_date) if task.due_date else None,
+            "planned_start": str(task.planned_start) if task.planned_start else None,
+            "planned_end": str(task.planned_end) if task.planned_end else None,
             "billable": task.billable,
             "reporter": task.reporter,
+            "blocked_reason": task.blocked_reason or None,
+            "blocked_since": str(task.blocked_since) if task.blocked_since else None,
+            "blocked_by": task.blocked_by or None,
             "labels": _safe_json(task.labels, []),
             "assignees": [r.user for r in (task.assignees or [])],
             "custom_field_values": _safe_json(task.custom_field_values, {}),
@@ -755,7 +789,7 @@ _EMAIL_PREF_FIELD = {
 # Fields on a task whose change is worth notifying watchers about.
 _NOTIF_WORTHY_FIELDS = {
     "priority", "due_date", "title", "task_type",
-    "description", "labels", "story_points",
+    "description", "labels", "story_points", "blocked_reason",
 }
 
 _FIELD_LABEL = {
@@ -766,6 +800,7 @@ _FIELD_LABEL = {
     "labels":       "labels",
     "story_points": "story points",
     "description":  "description",
+    "blocked_reason": "block state",
 }
 
 _PREF_FIELDS = [
@@ -1071,17 +1106,24 @@ def _get_watchers(task_name: str) -> list:
     return frappe.get_all("BP Task Watcher", filters={"task": task_name}, pluck="user")
 
 
-def add_watcher(task_name: str, user: str):
-    """Idempotently make a user watch a task (used by auto-watch + the API)."""
+def add_watcher(task_name: str, user: str, reason: str = "manual"):
+    """Idempotently make a user watch a task (used by auto-watch + the API).
+
+    ``reason`` records WHY the watcher row exists — manual (UI button),
+    mentioned, assigned, commented, approval, or automation. When the user
+    is already watching, the existing reason is preserved (never overwritten)
+    — the first cause is the most informative.
+    """
     if not task_name or not user or user == "Guest":
         return
     if frappe.db.exists("BP Task Watcher", {"task": task_name, "user": user}):
-        return
+        return  # already watching — don't overwrite the original reason
     frappe.get_doc({
         "doctype": "BP Task Watcher",
         "task": task_name,
         "user": user,
         "project": frappe.db.get_value("BP Task", task_name, "project"),
+        "watch_reason": reason,
     }).insert(ignore_permissions=True)
 
 
@@ -1096,13 +1138,13 @@ def _notify_comment(payload, actor, task_name, project):
     task_key = frappe.db.get_value("BP Task", task_name, "task_key") or task_name
 
     # Commenting auto-subscribes user to the issue
-    add_watcher(task_name, actor)
+    add_watcher(task_name, actor, reason="commented")
 
     # Mentioned users get a dedicated "Mention" (takes priority over a plain comment notif)
     mentioned = set(payload.get("mentions") or [])
     mentioned.discard(actor)
     for user in mentioned:
-        add_watcher(task_name, user)  # mentioning someone makes them a watcher too
+        add_watcher(task_name, user, reason="mentioned")  # mentioning someone makes them a watcher too
         _create_notification(
             user, "Mention", task_name, project, actor,
             f"{actor_name} mentioned you on {task_key}: {preview}",
@@ -1136,7 +1178,7 @@ def _notify_assignment(payload, actor, task_name, project):
     task_key   = task_data.get("task_key") or task_name
     task_title = task_data.get("title")    or task_name
     message = f"{actor_name} assigned you to {task_key}: {task_title}"
-    add_watcher(task_name, assigned_user)  # auto-watch on assignment
+    add_watcher(task_name, assigned_user, reason="assigned")  # auto-watch on assignment
     _create_notification(
         assigned_user, "Assignment", task_name, project, actor, message,
         email_extras={
@@ -1270,7 +1312,7 @@ def _notify_task_updated(payload, actor, task_name, project):
     mentioned.discard(actor)
 
     for user in mentioned:
-        add_watcher(task_name, user)
+        add_watcher(task_name, user, reason="mentioned")
         _create_notification(
             user, "Mention", task_name, project, actor,
             f"{actor_name} mentioned you in the description of {task_key}: {task_title}",
@@ -1393,7 +1435,7 @@ def _notify_approval_requested(payload, actor, task_name, project):
     task_key   = frappe.db.get_value("BP Task", task_name, "task_key") or task_name
     task_title = frappe.db.get_value("BP Task", task_name, "title") or task_name
     message = f"{actor_name} requested your approval on {task_key}: {task_title}"
-    add_watcher(task_name, approver)  # so they see the eventual decision too
+    add_watcher(task_name, approver, reason="approval")  # so they see the eventual decision too
     _create_notification(approver, "Approval Requested", task_name, project, actor, message)
     _push_notification_badge({approver}, project)
 

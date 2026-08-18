@@ -57,6 +57,21 @@
       "fieldtype": "Long Text",
       "label": "Detail",
       "description": "Small structured (JSON) payload — the specifics of what happened"
+    },
+    {
+      "fieldname": "correlation_id",
+      "fieldtype": "Data",
+      "label": "Correlation ID",
+      "in_standard_filter": 1,
+      "description": "Links this audit entry to the originating event — the same ID threaded through BP Automation Run and BP Activity for end-to-end tracing."
+    },
+    {
+      "fieldname": "source",
+      "fieldtype": "Select",
+      "label": "Source",
+      "options": "\nuser\nautomation\ngateway\nsystem\nbilling",
+      "in_standard_filter": 1,
+      "description": "What caused this audit entry: a user action, an automation rule, the gateway, a system event, or billing."
     }
   ],
   "permissions": [

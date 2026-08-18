@@ -11,10 +11,55 @@ _RECURRENCE_INTERVAL_SECONDS = {
     "Monthly": 2592000,  # 30-day approximation
 }
 
+# ─── GLOBAL SEQUENCE ────────────────────────────────────────────────────────
+_SEQUENCE_DOCTYPE = "BP Task Sequence"
+
+
+def next_task_sequence() -> int:
+    """Next global monotonic sequence number for a BP Task.
+
+    Same atomic counter pattern as BP Project.get_next_issue_number():
+    LAST_INSERT_ID(expr) stores the increment in a connection-local
+    variable, so concurrent inserts each read back their own value instead
+    of a shared read. MariaDB/MySQL only — use a SEQUENCE on Postgres.
+
+    BP Task Sequence is a Single DocType: v15 stores Single records in
+    `tabSingles` (doctype/field/value rows) — there is NO `tabBP Task
+    Sequence` table (see frappe.model.document.update_single). So the
+    atomic UPDATE must target `tabSingles`, not a per-doctype table, and
+    `last_value` is stored as a string there (longtext), hence the
+    CAST(... AS UNSIGNED).
+
+    The counter row is created lazily on first use (the backfill patch
+    pre-creates it with the existing MAX), so the app works even before
+    the patch has run on a fresh install.
+    """
+    if not frappe.db.exists(_SEQUENCE_DOCTYPE, _SEQUENCE_DOCTYPE):
+        try:
+            frappe.get_doc({"doctype": _SEQUENCE_DOCTYPE, "last_value": 0}).insert(
+                ignore_permissions=True, ignore_if_duplicate=True
+            )
+        except frappe.DuplicateEntryError:
+            pass  # raced another insert — row exists now
+
+    frappe.db.sql(
+        "UPDATE `tabSingles` SET value = LAST_INSERT_ID(CAST(value AS UNSIGNED) + 1) "
+        "WHERE doctype = %s AND field = 'last_value'",
+        _SEQUENCE_DOCTYPE,
+    )
+    row = frappe.db.sql("SELECT LAST_INSERT_ID()")
+    return int(row[0][0] or 0)
+
 
 class BPTask(Document):
 
     def before_insert(self):
+        # Global monotonic sequence — stable internal identity, assigned here
+        # so every insertion path (API, REST, automation, import) gets exactly
+        # one and never changes. read_only keeps client-side edits out.
+        if not self.sequence_no:
+            self.sequence_no = next_task_sequence()
+
         # Auto-generate issue key
         project = None
         if not self.task_key:
@@ -73,6 +118,7 @@ class BPTask(Document):
         self._validate_status()
         self._validate_task_type()
         self._set_lifecycle_dates()
+        self._sync_blocked_fields()
         self._validate_and_clean_custom_fields()
         self._validate_recurrence()
         self._flag_unplanned_if_active_sprint()
@@ -151,6 +197,8 @@ class BPTask(Document):
 
             if self.status in completed and not self.completed_on:
                 self.completed_on = now_datetime()
+                if not self.completed_by:
+                    self.completed_by = frappe.session.user
 
             # Resolution mirrors completion: default to "Done" when entering a
             # completed status, clear it when reopened. An explicit resolution
@@ -160,7 +208,29 @@ class BPTask(Document):
 
             if self.status not in completed:
                 self.completed_on = None
+                self.completed_by = None
                 self.resolution = None
+
+    # ─── HUMAN BLOCK (outside formal task dependencies) ────────────────────
+
+    def _sync_blocked_fields(self):
+        """Maintain blocked_since/blocked_by as derived state of
+        blocked_reason — the one field a human actually edits. Setting a
+        reason (from none) stamps since+by; clearing wipes all three;
+        changing one reason to another keeps the original since (still
+        continuously blocked) but re-stamps who changed it."""
+        old = self.get_doc_before_save()
+        old_reason = (old.blocked_reason or "") if old else ""
+        new_reason = self.blocked_reason or ""
+
+        if new_reason and not old_reason:
+            self.blocked_since = now_datetime()
+            self.blocked_by = frappe.session.user
+        elif old_reason and not new_reason:
+            self.blocked_since = None
+            self.blocked_by = None
+        elif old_reason and new_reason and old_reason != new_reason:
+            self.blocked_by = frappe.session.user
 
     # ─── CUSTOM FIELDS ───────────────────────────────────────────────────────
 
@@ -260,6 +330,21 @@ class BPTask(Document):
         if str(old.start_date or "") != str(self.start_date or ""):
             self._log_activity("Field Edit", old.start_date, self.start_date, field_name="start_date")
             all_changes.append({"field": "start_date", "from": str(old.start_date or ""), "to": str(self.start_date or "")})
+
+        # Planned dates — the scheduling plan (Gantt drives these).
+        if str(old.planned_start or "") != str(self.planned_start or ""):
+            self._log_activity("Field Edit", old.planned_start, self.planned_start, field_name="planned_start")
+            all_changes.append({"field": "planned_start", "from": str(old.planned_start or ""), "to": str(self.planned_start or "")})
+
+        if str(old.planned_end or "") != str(self.planned_end or ""):
+            self._log_activity("Field Edit", old.planned_end, self.planned_end, field_name="planned_end")
+            all_changes.append({"field": "planned_end", "from": str(old.planned_end or ""), "to": str(self.planned_end or "")})
+
+        # Human block state (blocked_since/blocked_by are derived in
+        # _sync_blocked_fields — only the reason is worth a diff entry).
+        if (old.blocked_reason or "") != (self.blocked_reason or ""):
+            self._log_activity("Field Edit", old.blocked_reason, self.blocked_reason, field_name="blocked_reason")
+            all_changes.append({"field": "blocked_reason", "from": old.blocked_reason, "to": self.blocked_reason})
 
         # Story points
         if old.story_points != self.story_points:

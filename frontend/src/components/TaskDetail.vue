@@ -604,6 +604,30 @@
           </div></div>
         </div>
 
+        <!-- BLOCKED (human block, outside formal task dependencies) -->
+        <div class="jv-sb-field">
+          <div class="jv-sb-label">Blocked</div>
+          <div class="jv-sb-val"><div class="jv-sb-pill-wrap">
+          <FieldDropdown>
+            <template #trigger>
+              <button class="jv-sb-inline-btn">
+                <div class="jv-sb-inline-btn-content">
+                  <span v-if="issue.blocked_reason" class="jv-sb-chip jv-sb-chip--warn" :title="blockedMeta">{{ issue.blocked_reason }}</span>
+                  <span v-else class="jv-sb-unset">Not blocked</span>
+                </div>
+                <svg class="jv-sb-inline-btn-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+            </template>
+            <DropdownItem :active="!issue.blocked_reason" @click="setField('blocked_reason','')">
+              <span style="color:var(--muted)">Not blocked</span>
+            </DropdownItem>
+            <DropdownItem v-for="r in BLOCK_REASONS" :key="r" :active="issue.blocked_reason===r" @click="setField('blocked_reason',r)">
+              <span class="text-foreground">{{ r }}</span>
+            </DropdownItem>
+          </FieldDropdown>
+          </div></div>
+        </div>
+
         <div class="jv-sb-sep"/>
 
         <!-- ASSIGNEE -->
@@ -846,6 +870,20 @@
           </div>
         </div>
 
+        <!-- PLANNED DATES (the scheduling plan — Gantt reads these first) -->
+        <div class="jv-sb-field">
+          <div class="jv-sb-label">Planned start</div>
+          <div class="jv-sb-val jv-sb-val--date border rounded-md shadow-sm">
+            <DatePicker :modelValue="issue.planned_start||null" placeholder="Same as start" @update:modelValue="val=>setField('planned_start',val||null)"/>
+          </div>
+        </div>
+        <div class="jv-sb-field">
+          <div class="jv-sb-label">Planned end</div>
+          <div class="jv-sb-val jv-sb-val--date border rounded-md shadow-sm">
+            <DatePicker :modelValue="issue.planned_end||null" placeholder="Same as due" @update:modelValue="val=>setField('planned_end',val||null)"/>
+          </div>
+        </div>
+
         <!-- REPEATS -->
         <div class="jv-sb-sep"/>
         <div class="jv-sb-field">
@@ -1066,6 +1104,8 @@ import { updateTask, addComment, editComment, deleteComment, createTask, addTask
 import { getActiveFields, resolveMarkerColor } from '@/utils/customFields.js'
 import { PRIORITIES, avatarColor, initials } from '@/utils/constants.js'
 const RESOLUTIONS = ['Done', "Won't Do", 'Duplicate', 'Cannot Reproduce', 'Obsolete']
+// Must match BP Task.blocked_reason Select options (bp_task.json).
+const BLOCK_REASONS = ['Waiting for Client', 'Waiting for Vendor', 'Waiting for Approval', 'Technical Blocker', 'Resource Shortage']
 import DatePicker from '@/components/DatePicker.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import PriorityIcon from '@/components/PriorityIcon.vue'
@@ -1591,6 +1631,12 @@ const ini    = initials
 function wfColor(s) { return store.workflowStateMap?.[s]?.color|| 'var(--muted)' }
 function sprintLabel(n) { return store.sprints?.find(s=>s.name===n)?.sprint_name||n }
 const isOverdue = computed(() => { const d=issue.value?.due_date; return d&&new Date(d+'T00:00:00')<new Date()&&!isCompleted(issue.value?.status) })
+const blockedMeta = computed(() => {
+  if (!issue.value?.blocked_reason) return ''
+  const since = issue.value.blocked_since ? ` since ${fmtDate(issue.value.blocked_since)}` : ''
+  const by = issue.value.blocked_by ? ` by ${shortUser(issue.value.blocked_by)}` : ''
+  return `${issue.value.blocked_reason}${since}${by}`
+})
 function isCompleted(s) { return store.workflowStateMap?.[s]?.category==='completed' }
 
 // Assignees
@@ -1864,7 +1910,9 @@ const groupedHistory = computed(()=>{
 })
 const FIELD_LABELS = {
   priority:'priority', task_type:'type', title:'title', due_date:'due date',
-  start_date:'start date', story_points:'story points', description:'description', labels:'labels',
+  start_date:'start date', planned_start:'planned start', planned_end:'planned end',
+  story_points:'story points', description:'description', labels:'labels',
+  blocked_reason:'block state',
 }
 function fieldLabel(a){ return FIELD_LABELS[a.field_name] || (a.field_name ? a.field_name.replace(/_/g,' ') : 'field') }
 function activityText(a) {
