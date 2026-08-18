@@ -364,11 +364,69 @@ class TestBillingMixedCurrency(unittest.TestCase):
                     ["USD"],
                 )
 
+    def test_expected_amount_must_be_finite_before_project_load(self):
+        invalid = (
+            "nan",
+            "inf",
+            "-inf",
+            "not-a-number",
+            True,
+        )
+
+        for value in invalid:
+            with self.subTest(value=value):
+                with (
+                    patch.object(
+                        erp_link,
+                        "_check_permission",
+                    ),
+                    patch(
+                        "batch_projects.access.require_capability",
+                    ),
+                    patch.object(
+                        erp_link,
+                        "require_feature",
+                    ),
+                    patch.object(
+                        erp_link.frappe,
+                        "get_doc",
+                    ) as get_doc,
+                    patch.object(
+                        erp_link.frappe.db,
+                        "sql",
+                    ) as sql,
+                ):
+                    with self.assertRaisesRegex(
+                        frappe.ValidationError,
+                        "Expected received amount must be a finite number",
+                    ):
+                        erp_link.generate_invoice(
+                            "BP-USD",
+                            amount=value,
+                        )
+
+                get_doc.assert_not_called()
+                sql.assert_not_called()
+
+        self.assertEqual(
+            erp_link._validated_expected_amount(
+                "114.55"
+            ),
+            114.55,
+        )
+
+        self.assertIsNone(
+            erp_link._validated_expected_amount(
+                ""
+            )
+        )
+
     def test_explicit_conversion_rate_must_be_finite_and_positive(self):
         invalid = (
             0,
             "0",
             -1,
+            True,
             "-2.5",
             "nan",
             "inf",
@@ -437,6 +495,29 @@ class TestBillingMixedCurrency(unittest.TestCase):
         )
 
         exchange.assert_called_once()
+
+    def test_explicit_target_missing_erpnext_fx_fails_closed(self):
+        with (
+            patch.object(
+                erp_link.frappe,
+                "get_cached_value",
+                return_value="NPR",
+            ),
+            patch(
+                "erpnext.setup.utils.get_exchange_rate",
+                return_value=0,
+            ),
+        ):
+            with self.assertRaisesRegex(
+                frappe.ValidationError,
+                "no exchange rate is configured",
+            ):
+                erp_link._resolve_invoice_currency(
+                    "TEST-COMPANY",
+                    "TEST-CUSTOMER",
+                    "USD",
+                    None,
+                )
 
     def test_mixed_preview_exposes_currency_totals_without_fake_sum(self):
         projects = [
@@ -570,6 +651,17 @@ class TestBillingMixedCurrency(unittest.TestCase):
                     "currency": "USD",
                     "amount": 120.0,
                 },
+            ],
+        )
+
+        self.assertEqual(
+            [
+                p["bp_project"]
+                for p in entry["projects"]
+            ],
+            [
+                "BP-EUR",
+                "BP-USD",
             ],
         )
 

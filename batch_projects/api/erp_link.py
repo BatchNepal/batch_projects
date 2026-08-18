@@ -641,6 +641,11 @@ def _validated_conversion_rate(value, label="Conversion rate"):
     if isinstance(value, str) and not value.strip():
         return None
 
+    if isinstance(value, bool):
+        frappe.throw(
+            f"{label} must be a finite number greater than zero."
+        )
+
     try:
         rate = float(value)
     except (TypeError, ValueError):
@@ -654,6 +659,40 @@ def _validated_conversion_rate(value, label="Conversion rate"):
         )
 
     return rate
+
+
+def _validated_expected_amount(value):
+    """Normalize the optional payment-first amount assertion.
+
+    The amount is not used to alter pricing. It is only an assertion that the
+    independently computed invoice total equals money already received.
+    Non-finite / non-numeric input must therefore fail rather than weakening
+    that assertion.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, str) and not value.strip():
+        return None
+
+    if isinstance(value, bool):
+        frappe.throw(
+            "Expected received amount must be a finite number."
+        )
+
+    try:
+        expected = float(value)
+    except (TypeError, ValueError):
+        frappe.throw(
+            "Expected received amount must be a finite number."
+        )
+
+    if not math.isfinite(expected):
+        frappe.throw(
+            "Expected received amount must be a finite number."
+        )
+
+    return expected
 
 
 def _resolve_invoice_currency(
@@ -989,6 +1028,8 @@ def generate_invoice(project, period=None, tasks=None,
     # Financial selectors must never be accepted and then ignored. Validate
     # this before candidate SQL, source reservation, pricing or draft creation.
     _validate_invoice_period_contract(period)
+
+    expected_amount = _validated_expected_amount(amount)
 
     docs = [frappe.get_doc("BP Project", p) for p in project_names]
     doc = docs[0]
@@ -1327,16 +1368,15 @@ def generate_invoice(project, period=None, tasks=None,
     # total differs we refuse and show both numbers, so a human fixes the
     # rates/hours — rather than silently writing an invoice that reconciles
     # against nothing.
-    if amount not in (None, ""):
-        expected = flt(amount)
+    if expected_amount is not None:
         # From our own resolved rows, NOT si.items — item `amount` is only
         # populated by calculate_taxes_and_totals() during validate(), which
         # hasn't run yet at this point, so reading it here always yields 0.
         computed = round(sum(r.eff_amount for r in rows), 2)
-        if abs(computed - expected) > 0.01:
+        if abs(computed - expected_amount) > 0.01:
             frappe.throw(
                 f"Computed total {computed} {inv_currency} does not match the "
-                f"expected {expected} {inv_currency}. Nothing was created. "
+                f"expected {expected_amount} {inv_currency}. Nothing was created. "
                 "Adjust the hours or rates so the invoice matches the amount "
                 "actually received, then try again."
             )
@@ -1558,16 +1598,32 @@ def get_batch_invoice_candidates():
 
         mixed_currency = len(currencies) > 1
 
+        if mixed_currency:
+            sorted_projects = sorted(
+                entry["projects"],
+                key=lambda project_row: (
+                    project_row.get("currency") or "",
+                    project_row.get("project_name") or "",
+                    project_row.get("bp_project") or "",
+                ),
+            )
+        else:
+            sorted_projects = sorted(
+                entry["projects"],
+                key=lambda project_row: (
+                    -project_row["amount"],
+                    project_row.get("project_name") or "",
+                    project_row.get("bp_project") or "",
+                ),
+            )
+
         result.append({
             "client": client,
             "company": entry["company"],
             "currencies": currencies,
             "currency_totals": currency_totals,
             "mixed_currency": mixed_currency,
-            "projects": sorted(
-                entry["projects"],
-                key=lambda x: -x["amount"],
-            ),
+            "projects": sorted_projects,
             # A scalar sum across unlike currencies is not money.
             "total_amount": (
                 None
