@@ -117,6 +117,54 @@ class TestBillingReservation(unittest.TestCase):
         # Source lock + BP ownership lookup only. No live-claim query.
         self.assertEqual(db.sql.call_count, 2)
 
+    def test_duplicate_non_bp_native_invoice_is_untouched(self):
+        db = Mock()
+        db.sql.side_effect = [
+            [
+                source(
+                    "TSD-NATIVE",
+                    project="ERP-NATIVE",
+                    bp_task="",
+                )
+            ],
+            [],  # ERP project is not linked to BatchProjects
+        ]
+
+        result = (
+            billing_reservation._guard_timesheet_details_with_db(
+                db,
+                ["TSD-NATIVE", "TSD-NATIVE"],
+                enforce_all_sources=False,
+            )
+        )
+
+        self.assertEqual(result, [])
+        self.assertEqual(db.sql.call_count, 2)
+
+    def test_duplicate_bp_native_invoice_is_refused(self):
+        db = Mock()
+        db.sql.return_value = [
+            source(
+                "TSD-BP",
+                project="ERP-BP",
+                bp_task="BP-TASK-1",
+            )
+        ]
+
+        with self.assertRaisesRegex(
+            frappe.ValidationError,
+            "more than once",
+        ):
+            billing_reservation._guard_timesheet_details_with_db(
+                db,
+                ["TSD-BP", "TSD-BP"],
+                enforce_all_sources=False,
+            )
+
+        # Explicit BP task establishes ownership; no project lookup or live
+        # claim query should be needed before rejecting the duplicate.
+        self.assertEqual(db.sql.call_count, 1)
+
     def test_already_billed_source_is_refused(self):
         db = Mock()
         db.sql.return_value = [

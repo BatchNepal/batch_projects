@@ -27,8 +27,8 @@ def _validation_error(message):
     raise frappe.ValidationError(message)
 
 
-def _normalize_detail_names(detail_names):
-    """Return deterministic non-empty source names and reject duplicates."""
+def _clean_detail_names(detail_names):
+    """Return non-empty normalized names while preserving multiplicity."""
     cleaned = []
 
     for raw in detail_names or []:
@@ -38,17 +38,31 @@ def _normalize_detail_names(detail_names):
         if value:
             cleaned.append(value)
 
-    duplicates = sorted(
+    return cleaned
+
+
+def _duplicate_detail_names(cleaned):
+    return sorted(
         name
         for name, count in Counter(cleaned).items()
         if count > 1
     )
+
+
+def _raise_duplicate_sources(duplicates):
     if duplicates:
         _validation_error(
             "The same Timesheet Detail appears more than once on this "
             "Sales Invoice: " + ", ".join(duplicates)
         )
 
+
+def _normalize_detail_names(detail_names):
+    """Strict deterministic normalization for BP-owned billing sources."""
+    cleaned = _clean_detail_names(detail_names)
+    _raise_duplicate_sources(
+        _duplicate_detail_names(cleaned)
+    )
     return sorted(cleaned)
 
 
@@ -196,10 +210,20 @@ def _guard_timesheet_details_with_db(
     The Sales Invoice hook leaves it False so unrelated native ERPNext
     Timesheet invoicing remains untouched.
     """
-    names = _normalize_detail_names(detail_names)
-    if not names:
+    cleaned = _clean_detail_names(detail_names)
+    if not cleaned:
         return []
 
+    # BatchProjects' own generate_invoice() knows every source is BP-owned,
+    # so duplicate claims are invalid immediately. The native Sales Invoice
+    # hook must first determine BP ownership: unrelated ERPNext invoices must
+    # remain behaviorally untouched.
+    if enforce_all_sources:
+        _raise_duplicate_sources(
+            _duplicate_detail_names(cleaned)
+        )
+
+    names = sorted(set(cleaned))
     rows, missing = _lock_source_rows(db, names)
 
     if missing and enforce_all_sources:
@@ -213,6 +237,18 @@ def _guard_timesheet_details_with_db(
         guarded_rows = rows
     else:
         bp_names = _bp_linked_source_names(db, rows)
+
+        # Duplicate protection belongs only to BP-owned sources on the
+        # site-wide Sales Invoice hook. A duplicate ERPNext-only source is
+        # ERPNext's concern and must not become a BatchProjects validation
+        # failure merely because this app is installed.
+        bp_duplicates = [
+            name
+            for name in _duplicate_detail_names(cleaned)
+            if name in bp_names
+        ]
+        _raise_duplicate_sources(bp_duplicates)
+
         guarded_rows = [
             row
             for row in rows
