@@ -53,3 +53,9 @@ batch_projects.patches.backfill_watch_reason
 # Durable graph execution identity.  Runs after DocType sync so existing
 # workflows receive a stable revision/hash before Gateway can admit events.
 batch_projects.patches.backfill_workflow_definition_identity
+
+# P0 billing reservation (2026-08-18): Sales Invoice Timesheet.timesheet_detail
+# is stock ERPNext Data without search_index. The reservation guard needs a
+# narrow current/locking read on this field; persist search_index metadata and
+# create the index after DocType schema synchronization.
+batch_projects.patches.add_sales_invoice_timesheet_detail_index

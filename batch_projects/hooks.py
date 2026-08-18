@@ -166,6 +166,9 @@ doc_events = {
         "on_cancel": "batch_projects.timesheet_sync.on_timesheet_cancel",
     },
     "Sales Invoice": {
+        # P0 billing reservation: native ERPNext draft creation/editing must
+        # obey the same Timesheet Detail exclusivity as BatchProjects.
+        "validate": "batch_projects.billing_reservation.validate_sales_invoice_sources",
         "on_submit": "batch_projects.erp_triggers.on_sales_invoice_submit",
     },
     "Sales Order": {
