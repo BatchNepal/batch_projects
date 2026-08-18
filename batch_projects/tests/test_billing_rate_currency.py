@@ -127,6 +127,25 @@ class TestBillingRateCurrency(unittest.TestCase):
             places=6,
         )
 
+    def test_client_item_price_same_currency_is_identity(self):
+        rate = erp_link._effective_billing_rate(
+            row_rate=0,
+            row_currency=None,
+            project_rate=0,
+            project_currency="USD",
+            client_rate=frappe._dict({
+                "rate": 50,
+                "currency": "USD",
+            }),
+            company_currency="NPR",
+            target_currency="USD",
+            company="TEST-COMPANY",
+            customer="TEST-CUSTOMER",
+            target_to_company=137.5,
+        )
+
+        self.assertEqual(rate, 50)
+
     def test_client_item_price_converts_from_its_own_currency(self):
         with patch.object(
             erp_link,
