@@ -69,6 +69,24 @@ class TestBillingRateCurrency(unittest.TestCase):
             places=6,
         )
 
+    def test_nonzero_row_without_timesheet_currency_fails_closed(self):
+        with self.assertRaisesRegex(
+            frappe.ValidationError,
+            "no source currency",
+        ):
+            erp_link._effective_billing_rate(
+                row_rate=50,
+                row_currency=None,
+                project_rate=0,
+                project_currency="USD",
+                client_rate=None,
+                company_currency="NPR",
+                target_currency="USD",
+                company="TEST-COMPANY",
+                customer="TEST-CUSTOMER",
+                target_to_company=137.5,
+            )
+
     def test_project_rate_same_currency_is_identity(self):
         rate = erp_link._effective_billing_rate(
             row_rate=0,
@@ -151,6 +169,7 @@ class TestBillingRateCurrency(unittest.TestCase):
             ):
                 erp_link._effective_billing_rate(
                     row_rate=0,
+                    row_currency=None,
                     project_rate=50,
                     project_currency="EUR",
                     client_rate=None,
