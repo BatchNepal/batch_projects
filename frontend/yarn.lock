@@ -1505,10 +1505,10 @@ anymatch@~3.1.2:
     normalize-path "^3.0.0"
     picomatch "^2.0.4"
 
-apexcharts@^5.14.0:
-  version "5.14.0"
-  resolved "https://registry.yarnpkg.com/apexcharts/-/apexcharts-5.14.0.tgz#01bb15967627dec4638e8ffb516d8ad5eac0e39c"
-  integrity sha512-hBLz5Gd8B5ZuocEzNUwEeKdw9vd7uy4OnqbDjAYyvwiAEyHk3OnO9+tGzAznpM6pnyCqWjPXUKKYoNIwdskeuQ==
+apexcharts@^6.8.0:
+  version "6.8.0"
+  resolved "https://registry.yarnpkg.com/apexcharts/-/apexcharts-6.8.0.tgz#1e92c45cb76768ea666f95f358db1455e71e2226"
+  integrity sha512-ifEl3w/NAMsKQ60JNDD8nRCGdnGeuuKNvUzZTQpPr/3JNewoZv98H42VpXFB96sHle/8GDsHn/NQp785xsNh4A==
 
 arg@^5.0.2:
   version "5.0.2"
