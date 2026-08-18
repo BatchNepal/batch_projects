@@ -99,27 +99,48 @@ def stop_timer():
 
 
 def _rate_in_company_currency(rate, project_currency, company):
-    """Restate a BP-Project-denominated rate in company currency.
+    """Restate a BP Project rate into company currency without lying.
 
-    Returns the rate unchanged when there's nothing to convert (no rate, no
-    project currency, or it already matches the company's). If a conversion IS
-    needed and no exchange rate exists, we keep the number as-is rather than
-    throwing: a timer stop must never fail — losing someone's tracked time to
-    a missing Currency Exchange record is a far worse outcome than a rate that
-    needs correcting. generate_invoice() is where money actually gets
-    committed, and it refuses loudly there instead."""
-    if not rate or not project_currency or not company:
-        return rate
-    company_currency = frappe.get_cached_value("Company", company, "default_currency")
-    if not company_currency or project_currency == company_currency:
-        return rate
+    Timer stops must preserve worked time even when FX is unavailable.
+    Therefore an unresolvable foreign rate becomes 0/unpriced instead of
+    storing the project-currency number in a company-currency field.
+
+    A zero row rate is recoverable: invoice generation can later fall back to
+    the typed BP Project rate or ERPNext Item Price once valid FX exists.
+    A mislabeled non-zero rate is not recoverable because downstream code has
+    no way to discover that its unit was false.
+    """
+    value = flt(rate)
+    if not value:
+        return 0.0
+
+    source = (project_currency or "").strip()
+    if not source or not company:
+        return 0.0
+
+    company_currency = frappe.get_cached_value(
+        "Company", company, "default_currency"
+    )
+    if not company_currency:
+        return 0.0
+
+    if source == company_currency:
+        return value
+
     from erpnext.setup.utils import get_exchange_rate
-    try:
-        fx = get_exchange_rate(project_currency, company_currency, frappe.utils.nowdate())
-    except Exception:
-        fx = None
-    return flt(rate) * flt(fx) if fx else rate
 
+    try:
+        fx = flt(
+            get_exchange_rate(
+                source,
+                company_currency,
+                frappe.utils.nowdate(),
+            )
+        )
+    except Exception:
+        fx = 0.0
+
+    return flt(value * fx) if fx > 0 else 0.0
 
 def _resolve_employee(user):
     """Same Employee.user_id lookup the utilization code reads with
@@ -154,10 +175,17 @@ def _get_or_create_draft_timesheet(user, employee, company, erp_project):
     if name:
         return frappe.get_doc("Timesheet", name)
 
+    company_currency = (
+        frappe.get_cached_value("Company", company, "default_currency")
+        if company else None
+    )
+
     return frappe.get_doc({
         "doctype": "Timesheet",
         "employee": employee,
         "company": company,
+        "currency": company_currency,
+        "exchange_rate": 1.0,
         "parent_project": erp_project,
     })
 
