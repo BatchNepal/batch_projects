@@ -50,6 +50,35 @@ class TestBillingPeriodContract(unittest.TestCase):
             with self.subTest(period=period):
                 erp_link._validate_invoice_period_contract(period)
 
+    def test_blank_period_reaches_normal_invoice_path(self):
+        # Prove generate_invoice itself accepts the legacy blank value rather
+        # than testing only the helper. Stop deliberately at the first project
+        # load so this remains a focused contract test, not another large
+        # Sales Invoice fixture.
+        with (
+            patch.object(erp_link, "_check_permission"),
+            patch("batch_projects.access.require_capability"),
+            patch.object(erp_link, "require_feature"),
+            patch.object(
+                erp_link.frappe,
+                "get_doc",
+                side_effect=RuntimeError("normal invoice path reached"),
+            ) as get_doc,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "normal invoice path reached",
+            ):
+                erp_link.generate_invoice(
+                    "BP-PERIOD-TEST",
+                    period="   ",
+                )
+
+        get_doc.assert_called_once_with(
+            "BP Project",
+            "BP-PERIOD-TEST",
+        )
+
     def test_first_party_wrapper_has_no_period_argument(self):
         api = (
             APP_ROOT
@@ -79,6 +108,24 @@ class TestBillingPeriodContract(unittest.TestCase):
         self.assertNotIn(
             "\n    period,",
             block,
+        )
+
+    def test_project_money_uses_period_free_wrapper(self):
+        page = (
+            APP_ROOT
+            / "frontend"
+            / "src"
+            / "pages"
+            / "ProjectMoney.vue"
+        ).read_text()
+
+        self.assertIn(
+            "await generateInvoice(projectName.value)",
+            page,
+        )
+        self.assertNotIn(
+            "generateInvoice(projectName.value,",
+            page,
         )
 
     def test_batch_invoicing_uses_opts_as_second_argument(self):
