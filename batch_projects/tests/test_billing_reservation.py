@@ -14,6 +14,8 @@ def source(
     project="ERP-BP-TEST",
     bp_task="TASK-BP-TEST",
     sales_invoice="",
+    source_docstatus=1,
+    is_billable=1,
 ):
     return frappe._dict({
         "name": name,
@@ -21,6 +23,8 @@ def source(
         "project": project,
         "custom_bp_task": bp_task,
         "sales_invoice": sales_invoice,
+        "source_docstatus": source_docstatus,
+        "is_billable": is_billable,
     })
 
 
@@ -72,6 +76,14 @@ class TestBillingReservation(unittest.TestCase):
         params = db.sql.call_args_list[0].args[1]
 
         self.assertIn("ORDER BY tsd.name ASC", query)
+        self.assertIn(
+            "tsd.docstatus AS source_docstatus",
+            query,
+        )
+        self.assertIn(
+            "tsd.is_billable",
+            query,
+        )
         self.assertIn("FOR UPDATE", query)
         self.assertEqual(
             params["details"],
@@ -114,8 +126,13 @@ class TestBillingReservation(unittest.TestCase):
         )
 
         self.assertEqual(result, [])
-        # Source lock + BP ownership lookup only. No live-claim query.
+        # Scope-read + BP ownership lookup only. No reservation lock and no
+        # live-claim query for ERPNext-only financial sources.
         self.assertEqual(db.sql.call_count, 2)
+        self.assertNotIn(
+            "FOR UPDATE",
+            db.sql.call_args_list[0].args[0],
+        )
 
     def test_duplicate_non_bp_native_invoice_is_untouched(self):
         db = Mock()
@@ -140,6 +157,10 @@ class TestBillingReservation(unittest.TestCase):
 
         self.assertEqual(result, [])
         self.assertEqual(db.sql.call_count, 2)
+        self.assertNotIn(
+            "FOR UPDATE",
+            db.sql.call_args_list[0].args[0],
+        )
 
     def test_duplicate_bp_native_invoice_is_refused(self):
         db = Mock()
@@ -161,9 +182,122 @@ class TestBillingReservation(unittest.TestCase):
                 enforce_all_sources=False,
             )
 
-        # Explicit BP task establishes ownership; no project lookup or live
-        # claim query should be needed before rejecting the duplicate.
+        # Explicit BP task establishes ownership during the non-locking scope
+        # read; duplicate rejection happens before a reservation lock is needed.
         self.assertEqual(db.sql.call_count, 1)
+        self.assertNotIn(
+            "FOR UPDATE",
+            db.sql.call_args_list[0].args[0],
+        )
+
+    def test_native_hook_locks_only_bp_sources(self):
+        db = Mock()
+
+        db.sql.side_effect = [
+            # 1. native hook scope-read
+            [
+                source(
+                    "TSD-BP",
+                    project="ERP-BP",
+                    bp_task="BP-TASK-1",
+                ),
+                source(
+                    "TSD-NATIVE",
+                    project="ERP-NATIVE",
+                    bp_task="",
+                ),
+            ],
+            # 2. BP ownership query for unresolved native project
+            [],
+            # 3. authoritative lock: only BP source may appear here
+            [
+                source(
+                    "TSD-BP",
+                    project="ERP-BP",
+                    bp_task="BP-TASK-1",
+                )
+            ],
+            # 4. no competing live invoice claim
+            [],
+        ]
+
+        result = (
+            billing_reservation._guard_timesheet_details_with_db(
+                db,
+                ["TSD-NATIVE", "TSD-BP"],
+                enforce_all_sources=False,
+            )
+        )
+
+        self.assertEqual(
+            result,
+            ["TSD-BP"],
+        )
+
+        scope_query = db.sql.call_args_list[0].args[0]
+        lock_query = db.sql.call_args_list[2].args[0]
+        lock_params = db.sql.call_args_list[2].args[1]
+
+        self.assertNotIn(
+            "FOR UPDATE",
+            scope_query,
+        )
+        self.assertIn(
+            "FOR UPDATE",
+            lock_query,
+        )
+        self.assertEqual(
+            lock_params["details"],
+            ("TSD-BP",),
+        )
+
+    def test_cancelled_source_is_refused_after_lock(self):
+        db = Mock()
+        db.sql.return_value = [
+            source(
+                "TSD-CANCELLED",
+                source_docstatus=2,
+            )
+        ]
+
+        with self.assertRaisesRegex(
+            frappe.ValidationError,
+            "no longer submitted",
+        ):
+            billing_reservation._guard_timesheet_details_with_db(
+                db,
+                ["TSD-CANCELLED"],
+                enforce_all_sources=True,
+            )
+
+        self.assertEqual(
+            db.sql.call_count,
+            1,
+        )
+
+    def test_non_billable_source_is_refused_after_lock(self):
+        db = Mock()
+        db.sql.return_value = [
+            source(
+                "TSD-NON-BILLABLE",
+                is_billable=0,
+            )
+        ]
+
+        with self.assertRaisesRegex(
+            frappe.ValidationError,
+            "no longer billable",
+        ):
+            billing_reservation._guard_timesheet_details_with_db(
+                db,
+                ["TSD-NON-BILLABLE"],
+                enforce_all_sources=True,
+            )
+
+        self.assertEqual(
+            db.sql.call_count,
+            1,
+        )
 
     def test_already_billed_source_is_refused(self):
         db = Mock()

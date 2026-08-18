@@ -66,6 +66,41 @@ def _normalize_detail_names(detail_names):
     return sorted(cleaned)
 
 
+def _read_source_rows(db, names):
+    """Read source identity/state without taking financial row locks.
+
+    Used only by the site-wide Sales Invoice hook to determine which supplied
+    Timesheet Details belong to BatchProjects. ERPNext-only sources should not
+    acquire BP reservation locks merely because this app is installed.
+    """
+    if not names:
+        return [], []
+
+    rows = db.sql(
+        """
+        SELECT
+            tsd.name,
+            tsd.parent,
+            tsd.project,
+            tsd.custom_bp_task,
+            tsd.sales_invoice,
+            tsd.docstatus AS source_docstatus,
+            tsd.is_billable
+        FROM `tabTimesheet Detail` tsd
+        WHERE tsd.name IN %(details)s
+        ORDER BY tsd.name ASC
+        """,
+        {"details": tuple(names)},
+        as_dict=True,
+    )
+
+    by_name = {row.name: row for row in rows}
+    ordered = [by_name[name] for name in names if name in by_name]
+    missing = [name for name in names if name not in by_name]
+
+    return ordered, missing
+
+
 def _lock_source_rows(db, names):
     """Lock source rows using a current read in deterministic order."""
     if not names:
@@ -78,7 +113,9 @@ def _lock_source_rows(db, names):
             tsd.parent,
             tsd.project,
             tsd.custom_bp_task,
-            tsd.sales_invoice
+            tsd.sales_invoice,
+            tsd.docstatus AS source_docstatus,
+            tsd.is_billable
         FROM `tabTimesheet Detail` tsd
         WHERE tsd.name IN %(details)s
         ORDER BY tsd.name ASC
@@ -140,6 +177,38 @@ def _bp_linked_source_names(db, rows):
         )
 
     return linked
+
+
+def _validate_locked_source_state(rows):
+    """Fail if a locked source ceased to be invoiceable.
+
+    Frappe propagates the parent Timesheet docstatus onto its child rows.
+    Therefore Timesheet Detail.docstatus is the state we can safely re-check
+    while holding the Timesheet Detail row lock: a concurrent Timesheet cancel
+    either completes first and leaves docstatus=2 for us to observe, or waits
+    behind our reservation transaction.
+
+    is_billable is checked for the same reason. Candidate selection happened
+    earlier; reservation must prove that eligibility is still true now.
+    """
+    invalid = []
+
+    for row in rows:
+        if int(row.source_docstatus or 0) != 1:
+            invalid.append(
+                f"{row.name} (Timesheet is no longer submitted)"
+            )
+        elif int(row.is_billable or 0) != 1:
+            invalid.append(
+                f"{row.name} (time is no longer billable)"
+            )
+
+    if invalid:
+        _validation_error(
+            "These Timesheet Detail sources are no longer invoiceable: "
+            + ", ".join(invalid)
+            + ". Refresh the billing screen before creating the invoice."
+        )
 
 
 def _live_claims(db, detail_names, current_invoice=None):
@@ -224,24 +293,34 @@ def _guard_timesheet_details_with_db(
         )
 
     names = sorted(set(cleaned))
-    rows, missing = _lock_source_rows(db, names)
-
-    if missing and enforce_all_sources:
-        _validation_error(
-            "These Timesheet Detail sources no longer exist: "
-            + ", ".join(missing)
-            + ". Refresh the billing screen and try again."
-        )
 
     if enforce_all_sources:
-        guarded_rows = rows
-    else:
-        bp_names = _bp_linked_source_names(db, rows)
+        guarded_rows, missing = _lock_source_rows(
+            db,
+            names,
+        )
 
-        # Duplicate protection belongs only to BP-owned sources on the
-        # site-wide Sales Invoice hook. A duplicate ERPNext-only source is
-        # ERPNext's concern and must not become a BatchProjects validation
-        # failure merely because this app is installed.
+        if missing:
+            _validation_error(
+                "These Timesheet Detail sources no longer exist: "
+                + ", ".join(missing)
+                + ". Refresh the billing screen and try again."
+            )
+
+    else:
+        # Site-wide hook: discover BP ownership without locks first. This
+        # prevents an ordinary ERPNext-only Sales Invoice from taking BP
+        # financial row locks merely because BatchProjects is installed.
+        scope_rows, _scope_missing = _read_source_rows(
+            db,
+            names,
+        )
+
+        bp_names = _bp_linked_source_names(
+            db,
+            scope_rows,
+        )
+
         bp_duplicates = [
             name
             for name in _duplicate_detail_names(cleaned)
@@ -249,11 +328,28 @@ def _guard_timesheet_details_with_db(
         ]
         _raise_duplicate_sources(bp_duplicates)
 
-        guarded_rows = [
-            row
-            for row in rows
-            if row.name in bp_names
-        ]
+        if not bp_names:
+            return []
+
+        guarded_names = sorted(bp_names)
+        guarded_rows, missing = _lock_source_rows(
+            db,
+            guarded_names,
+        )
+
+        # A source classified as BP-owned disappeared between scope-read and
+        # row-lock acquisition. Do not silently turn that race into success.
+        if missing:
+            _validation_error(
+                "These BatchProjects Timesheet Detail sources changed while "
+                "the invoice was being validated: "
+                + ", ".join(missing)
+                + ". Refresh the invoice and try again."
+            )
+
+    _validate_locked_source_state(
+        guarded_rows
+    )
 
     if not guarded_rows:
         return []

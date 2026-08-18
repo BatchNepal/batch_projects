@@ -95,7 +95,8 @@ class TestBillingReservationConcurrency(unittest.TestCase):
                         parentfield,
                         parenttype,
                         custom_bp_task,
-                        sales_invoice
+                        sales_invoice,
+                        is_billable
                     )
                 VALUES
                     (
@@ -110,7 +111,8 @@ class TestBillingReservationConcurrency(unittest.TestCase):
                         'time_logs',
                         'Timesheet',
                         %(task)s,
-                        ''
+                        '',
+                        1
                     )
                 """,
                 {
