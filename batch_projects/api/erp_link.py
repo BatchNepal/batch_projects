@@ -546,6 +546,65 @@ def _resolve_project_list(project):
     return names
 
 
+def _effective_project_company(project):
+    """Return the ERPNext Company this BP Project actually bills through.
+
+    BP Project.company is optional in the schema, so billing historically fell
+    back to ERPNext's global default Company. Financial validation, preview and
+    invoice creation must all normalize that fallback identically; otherwise a
+    batch containing an explicit company and a blank company can become
+    order-dependent.
+    """
+    explicit = (
+        (project.get("company") if hasattr(project, "get")
+         else getattr(project, "company", None))
+        or ""
+    ).strip()
+
+    if explicit:
+        return explicit
+
+    default_company = (
+        frappe.defaults.get_global_default("company")
+        or ""
+    ).strip()
+
+    if default_company:
+        return default_company
+
+    project_name = (
+        (project.get("project_name") if hasattr(project, "get")
+         else getattr(project, "project_name", None))
+        or
+        (project.get("name") if hasattr(project, "get")
+         else getattr(project, "name", None))
+        or "this project"
+    )
+
+    frappe.throw(
+        f"Set a Company on '{project_name}', or configure ERPNext's "
+        "global default Company, before invoicing."
+    )
+
+
+def _validated_invoice_company(projects):
+    """Resolve and validate the one ledger company for an invoice batch."""
+    companies = sorted({
+        _effective_project_company(project)
+        for project in projects
+    })
+
+    if len(companies) > 1:
+        frappe.throw(
+            "These projects belong to different companies ("
+            + ", ".join(companies)
+            + ") — one invoice can only post to one company."
+        )
+
+    # projects is non-empty by generate_invoice contract.
+    return companies[0]
+
+
 def _authoritative_billing_hours(row):
     """Return persisted Timesheet Detail.billing_hours for financial use.
 
@@ -860,6 +919,12 @@ def generate_invoice(project, period=None, tasks=None,
             "These projects belong to different clients (" + ", ".join(clients) +
             ") — one invoice can only bill one client."
         )
+    # A Sales Invoice belongs to exactly one ERPNext ledger company.
+    # Normalize optional BP Project.company through the global default BEFORE
+    # candidate SQL so blank-company projects cannot make this choice depend
+    # on project order.
+    company = _validated_invoice_company(docs)
+
     # Rates are denominated in each project's own currency, so bundling
     # projects that disagree would put numbers in different units on the same
     # invoice with a single currency label — silently wrong money.
@@ -870,13 +935,6 @@ def generate_invoice(project, period=None, tasks=None,
             ", ".join(proj_currencies) + ") — one invoice can only be in one "
             "currency. Invoice them separately, or pass an explicit currency "
             "and conversion_rate."
-        )
-
-    companies = sorted({d.company for d in docs if d.company})
-    if len(companies) > 1:
-        frappe.throw(
-            "These projects belong to different companies (" + ", ".join(companies) +
-            ") — one invoice can only post to one company."
         )
 
     erp_projects = [d.erpnext_project for d in docs]
@@ -963,7 +1021,8 @@ def generate_invoice(project, period=None, tasks=None,
     # first. Decided explicitly, never defaulted silently — see
     # _resolve_invoice_currency() for why falling back to company currency
     # was actively wrong for foreign clients.
-    company = doc.company or frappe.defaults.get_global_default("company")
+    # `company` was normalized and validated across every selected project
+    # above. Never derive it again from the first project.
     company_currency, inv_currency, fx = _resolve_invoice_currency(
         company, doc.client, currency, conversion_rate,
         project_currency=(proj_currencies[0] if proj_currencies else None),
@@ -1249,6 +1308,7 @@ def get_batch_invoice_candidates():
 
     service_item = _service_item()
     client_rate_cache = {}
+    effective_company_cache = {}
     fx_cache = {}
     preview_currency_cache = {}
     totals = {}
@@ -1263,13 +1323,24 @@ def get_batch_invoice_candidates():
                 p.client, service_item
             )
 
+        if p.name not in effective_company_cache:
+            effective_company_cache[p.name] = (
+                _effective_project_company(p)
+            )
+
+        effective_company = effective_company_cache[p.name]
+
         project_currency = (p.currency or "").strip() or None
-        currency_key = (p.company, p.client, project_currency)
+        currency_key = (
+            effective_company,
+            p.client,
+            project_currency,
+        )
 
         if currency_key not in preview_currency_cache:
             company_currency, preview_currency, preview_fx = (
                 _resolve_invoice_currency(
-                    p.company,
+                    effective_company,
                     p.client,
                     None,
                     None,
@@ -1294,7 +1365,7 @@ def get_batch_invoice_candidates():
             client_rate=client_rate_cache[p.client],
             company_currency=company_currency,
             target_currency=preview_currency,
-            company=p.company,
+            company=effective_company,
             customer=p.client,
             target_to_company=preview_fx,
             fx_cache=fx_cache,
@@ -1315,9 +1386,15 @@ def get_batch_invoice_candidates():
     out = {}
     for erp, agg in totals.items():
         p = by_erp[erp]
-        entry = out.setdefault(p.client, {
+        effective_company = effective_company_cache[p.name]
+        group_key = (
+            p.client,
+            effective_company,
+        )
+
+        entry = out.setdefault(group_key, {
             "client": p.client,
-            "company": p.company,
+            "company": effective_company,
             "projects": [],
             "currencies": set(),
         })
@@ -1326,13 +1403,14 @@ def get_batch_invoice_candidates():
             "bp_project": p.name,
             "project_name": p.project_name,
             "erpnext_project": erp,
+            "company": effective_company,
             "currency": agg["currency"] or None,
             "hours": round(agg["hours"], 2),
             "amount": round(agg["amount"], 2),
         })
 
     result = []
-    for client, entry in out.items():
+    for (client, company), entry in out.items():
         currencies = sorted(c for c in entry["currencies"] if c)
         result.append({
             "client": client,
