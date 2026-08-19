@@ -77,8 +77,13 @@ class TestBPTask(FrappeTestCase):
 
     def test_delete_task(self):
         task = self._task()
-        delete_task(task["name"])
-        self.assertFalse(frappe.db.exists("BP Task", task["name"]))
+        result = delete_task(task["name"])
+        self.assertTrue(result.get("trashed"))
+        self.assertTrue(frappe.db.exists("BP Task", task["name"]))
+        self.assertEqual(
+            frappe.db.get_value("BP Task", task["name"], "is_deleted"),
+            1,
+        )
 
     # ── Milestones & risks (project-scoped, as shown on ProjectSummary) ──────
 
