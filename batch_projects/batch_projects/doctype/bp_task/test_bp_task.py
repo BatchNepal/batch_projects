@@ -23,6 +23,12 @@ from batch_projects.batch_projects.doctype.bp_project.test_bp_project import (
     make_project,
 )
 
+# These are BP Task lifecycle tests, not ERPNext fixture-integration tests.
+# Frappe otherwise follows every optional Link recursively and can walk from
+# task provenance fields into unrelated ERPNext/payment fixtures. Milestones
+# are created explicitly below; the ERP links are not fixtures for this module.
+test_ignore = ["BP Milestone", "Employee", "Sales Order", "Timesheet Detail"]
+
 TEST_KEY = "TBTSK"
 
 
@@ -71,8 +77,13 @@ class TestBPTask(FrappeTestCase):
 
     def test_delete_task(self):
         task = self._task()
-        delete_task(task["name"])
-        self.assertFalse(frappe.db.exists("BP Task", task["name"]))
+        result = delete_task(task["name"])
+        self.assertTrue(result.get("trashed"))
+        self.assertTrue(frappe.db.exists("BP Task", task["name"]))
+        self.assertEqual(
+            frappe.db.get_value("BP Task", task["name"], "is_deleted"),
+            1,
+        )
 
     # ── Milestones & risks (project-scoped, as shown on ProjectSummary) ──────
 
