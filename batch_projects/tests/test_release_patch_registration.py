@@ -2,11 +2,11 @@ import unittest
 from pathlib import Path
 
 
-PATCH = "batch_projects.patches.backfill_execution_metadata"
+PATCH = "batch_projects.patches.backfill_execution_metadata_release"
 
 
 class TestReleasePatchRegistration(unittest.TestCase):
-    def test_execution_metadata_backfill_is_registered(self):
+    def test_execution_metadata_release_backfill_is_registered(self):
         patches_file = Path(__file__).resolve().parents[1] / "patches.txt"
         lines = {
             line.strip()
@@ -17,7 +17,7 @@ class TestReleasePatchRegistration(unittest.TestCase):
         self.assertIn(
             PATCH,
             lines,
-            "Historical execution metadata backfill exists but is not registered "
-            "in patches.txt, so existing Automation/Workflow Run rows will never "
-            "receive their intended source/attempt/timestamp normalization.",
+            "The final execution-metadata release backfill must use a fresh "
+            "patch identity so pre-release sites that already logged the older "
+            "backfill still normalize rows created afterward.",
         )
