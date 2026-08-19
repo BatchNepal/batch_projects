@@ -224,7 +224,10 @@ def _claim_rows(
 
     Generation calls this with ``for_update=True`` after locking its source
     Timesheet Detail rows. That must remain a current locking read under
-    MariaDB/InnoDB Repeatable Read.
+    MariaDB/InnoDB Repeatable Read. The locking read is NOWAIT: waiting here
+    would invert ERPNext's Sales Invoice -> Timesheet update order during
+    submit/cancel and can deadlock with the already-held Timesheet Detail
+    mutex. Contention therefore fails closed and asks the caller to retry.
 
     Batch preview calls it with ``for_update=False``. Preview is read-only:
     it needs identical Draft/Submitted claimant semantics but must not take
@@ -248,31 +251,41 @@ def _claim_rows(
         )
 
     lock_clause = (
-        "FOR UPDATE"
+        "FOR UPDATE NOWAIT"
         if for_update
         else ""
     )
 
-    claims = db.sql(
-        f"""
-        SELECT
-            sit.timesheet_detail,
-            sit.parent,
-            si.docstatus
-        FROM `tabSales Invoice Timesheet` sit
-        INNER JOIN `tabSales Invoice` si
-            ON si.name = sit.parent
-        WHERE sit.timesheet_detail IN %(details)s
-          AND si.docstatus IN (0, 1)
-          {self_clause}
-        ORDER BY
-            sit.timesheet_detail ASC,
-            sit.parent ASC
-        {lock_clause}
-        """,
-        params,
-        as_dict=True,
-    )
+    try:
+        claims = db.sql(
+            f"""
+            SELECT
+                sit.timesheet_detail,
+                sit.parent,
+                si.docstatus
+            FROM `tabSales Invoice Timesheet` sit
+            INNER JOIN `tabSales Invoice` si
+                ON si.name = sit.parent
+            WHERE sit.timesheet_detail IN %(details)s
+              AND si.docstatus IN (0, 1)
+              {self_clause}
+            ORDER BY
+                sit.timesheet_detail ASC,
+                sit.parent ASC
+            {lock_clause}
+            """,
+            params,
+            as_dict=True,
+        )
+    except frappe.QueryTimeoutError:
+        if not for_update:
+            raise
+
+        _validation_error(
+            "These Timesheet Detail billing sources are being changed by "
+            "another Sales Invoice transaction. Nothing was created. "
+            "Retry after that transaction finishes."
+        )
 
     # Defence in depth if a mocked/custom DB adapter ignores the SQL
     # self-exclusion condition.
