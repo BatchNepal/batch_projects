@@ -53,9 +53,12 @@ batch_projects.patches.backfill_watch_reason
 # Durable graph execution identity.  Runs after DocType sync so existing
 # workflows receive a stable revision/hash before Gateway can admit events.
 batch_projects.patches.backfill_workflow_definition_identity
-# Execution trace metadata fields are synced on Automation/Workflow Run,
-# Activity and Audit Log before this backfill normalizes historical rows.
-batch_projects.patches.backfill_execution_metadata
+# Final v1.1 release fence for execution-source metadata. A pre-release site
+# may already have logged the older backfill identity and then created more
+# rows while write paths were still missing source; use a fresh patch name so
+# every upgrading site gets one last idempotent normalization after the
+# DocType-level write invariant is in place.
+batch_projects.patches.backfill_execution_metadata_release
 
 # P0 billing reservation (2026-08-18): Sales Invoice Timesheet.timesheet_detail
 # is stock ERPNext Data without search_index. The reservation guard needs a
