@@ -16,6 +16,8 @@ class TestProjectMoneyCurrencyContext(unittest.TestCase):
         currency="NPR",
         erpnext_project="ERP-P1",
         source_sales_order="",
+        hourly_rate=10,
+        budget_amount=100,
     ):
         return frappe._dict({
             "name": "BP-P1",
@@ -24,6 +26,8 @@ class TestProjectMoneyCurrencyContext(unittest.TestCase):
             "currency": currency,
             "erpnext_project": erpnext_project,
             "source_sales_order": source_sales_order,
+            "hourly_rate": hourly_rate,
+            "budget_amount": budget_amount,
         })
 
     def test_same_currency_is_identity_without_sales_order(self):
@@ -132,10 +136,34 @@ class TestProjectMoneyCurrencyContext(unittest.TestCase):
             ):
                 insights_data._project_money_currency_context(project)
 
+    def test_reporting_values_are_normalized_before_gateway(self):
+        project = self._project(
+            currency="USD",
+            hourly_rate=10,
+            budget_amount=100,
+        )
+
+        with patch.object(
+            insights_data,
+            "_project_money_currency_context",
+            return_value={
+                "company": "ACME",
+                "company_currency": "NPR",
+                "project_currency": "USD",
+                "project_currency_to_company_rate": 130.0,
+            },
+        ):
+            values = insights_data._project_money_reporting_values(project)
+
+        self.assertEqual(values["currency"], "NPR")
+        self.assertEqual(values["project_currency"], "USD")
+        self.assertEqual(values["hourly_rate"], 1300.0)
+        self.assertEqual(values["budget_amount"], 13000.0)
+
     def test_margin_rollup_rejects_multiple_company_currencies(self):
         projects = [
-            frappe._dict({"name": "BP-A"}),
-            frappe._dict({"name": "BP-B"}),
+            frappe._dict({"name": "BP-A", "hourly_rate": 0, "budget_amount": 0}),
+            frappe._dict({"name": "BP-B", "hourly_rate": 0, "budget_amount": 0}),
         ]
 
         with patch.object(
@@ -162,8 +190,15 @@ class TestProjectMoneyCurrencyContext(unittest.TestCase):
             ):
                 insights_data._prepare_margin_project_currencies(projects)
 
-    def test_margin_preparation_attaches_contract_fx(self):
-        projects = [frappe._dict({"name": "BP-A", "currency": "USD"})]
+    def test_margin_preparation_normalizes_project_money(self):
+        projects = [
+            frappe._dict({
+                "name": "BP-A",
+                "currency": "USD",
+                "hourly_rate": 10,
+                "budget_amount": 100,
+            })
+        ]
 
         with patch.object(
             insights_data,
@@ -178,11 +213,10 @@ class TestProjectMoneyCurrencyContext(unittest.TestCase):
             currency = insights_data._prepare_margin_project_currencies(projects)
 
         self.assertEqual(currency, "NPR")
-        self.assertEqual(projects[0]["currency"], "USD")
-        self.assertEqual(
-            projects[0]["project_currency_to_company_rate"],
-            130.0,
-        )
+        self.assertEqual(projects[0]["currency"], "NPR")
+        self.assertEqual(projects[0]["project_currency"], "USD")
+        self.assertEqual(projects[0]["hourly_rate"], 1300.0)
+        self.assertEqual(projects[0]["budget_amount"], 13000.0)
 
 
 if __name__ == "__main__":
