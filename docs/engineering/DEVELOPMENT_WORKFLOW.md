@@ -36,7 +36,16 @@ Priority is independent of type. A refactor can be P0 if it is required to remov
 
 ## Branches
 
-Release lines follow Frappe convention: `version-NN` targets the corresponding ERPNext/Frappe major.
+For the v15 line:
+
+`short-lived branch -> develop-15 -> tested release PR -> version-15`
+
+- `develop-15` is the integration branch. Normal fixes, features, engineering work, dependency updates, and release preparation start from and merge back into it.
+- `version-15` is the stable/default release branch. It receives only explicitly tested release candidates and minimal production hotfixes.
+- Short-lived implementation branches should describe one concern and are deleted after merge.
+- A production hotfix starts from `version-15`, lands there through a reviewed PR, and is immediately forward-ported to `develop-15` through a second reviewed PR. Stable-only fixes are release drift and must be reconciled.
+- Dependabot version-update PRs target `develop-15`. GitHub security-update PRs target the default branch (`version-15`) and therefore follow the hotfix/forward-port path.
+- Force-pushing or rewriting either long-lived branch is not part of the normal release process.
 
 Short-lived implementation branches should describe intent, for example:
 
@@ -86,6 +95,8 @@ Do not merge with failing required checks. Do not bypass protections for conveni
 
 A release is a product event, not only a tag.
 
+For v15, release preparation happens on `develop-15`. The exact release candidate must be identified and verified before a PR promotes it to `version-15`. Do not use `version-15` as a second integration branch, and do not assume independently accumulated commits are safe to combine without proving the release-candidate tree.
+
 Before release:
 
 - target issues are closed or explicitly deferred;
@@ -94,7 +105,9 @@ Before release:
 - public compatibility statements are current;
 - CHANGELOG is updated;
 - security-sensitive changes are reviewed;
-- the exact artifact/revision being released is identified.
+- the exact artifact/revision being released is identified;
+- meaningful stable-only drift has been forward-ported or deliberately reconciled;
+- the exact release-candidate tree has passed migration, targeted high-risk regressions, and release smoke verification.
 
 Patch releases contain compatible fixes. Minor releases may add backwards-compatible capability. Breaking application/Gateway requirements must be explicit in release notes and compatibility metadata.
 
