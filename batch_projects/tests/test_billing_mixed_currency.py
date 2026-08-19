@@ -233,22 +233,18 @@ class TestBillingMixedCurrency(unittest.TestCase):
                             137.5,
                         )
 
-                    if currency == "EUR":
-                        self.assertIsNone(
-                            conversion_rate
-                        )
-                        self.assertIsNone(
-                            project_currency
-                        )
-                        return (
-                            "NPR",
-                            "EUR",
-                            150.0,
-                        )
-
                     raise AssertionError(
                         f"unexpected currency resolution: {currency!r}"
                     )
+
+                def resolve_source_fx(
+                    company, currency, *, company_currency=None, fx_cache=None
+                ):
+                    self.assertEqual(company, "TEST-COMPANY")
+                    self.assertEqual(currency, "EUR")
+                    self.assertEqual(company_currency, "NPR")
+                    self.assertIsNotNone(fx_cache)
+                    return 150.0
 
                 with (
                     patch.object(
@@ -290,6 +286,11 @@ class TestBillingMixedCurrency(unittest.TestCase):
                         erp_link,
                         "_resolve_invoice_currency",
                         side_effect=resolve_currency,
+                    ),
+                    patch.object(
+                        erp_link,
+                        "_currency_to_company_fx",
+                        side_effect=resolve_source_fx,
                     ),
                     patch.object(
                         erp_link.frappe,
