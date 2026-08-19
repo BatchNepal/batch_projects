@@ -267,6 +267,13 @@ class TestInvoiceProjectAttribution(unittest.TestCase):
                 "_visible_money_projects",
                 return_value=projects,
             ),
+            # Currency provenance is covered by dedicated #41 tests. This
+            # regression owns invoice attribution/wire shape only.
+            patch.object(
+                insights_data,
+                "_prepare_margin_project_currencies",
+                return_value="NPR",
+            ),
             patch.object(
                 insights_data,
                 "_sales_invoice_project_revenue_rows",
@@ -349,9 +356,17 @@ class TestInvoiceProjectAttribution(unittest.TestCase):
                 "get_doc",
                 return_value=project,
             ),
-            patch(
-                "batch_projects.api.board._company_currency",
-                return_value="NPR",
+            # Currency normalization is covered by dedicated #41 tests. This
+            # regression owns the project-attributed invoice feed contract.
+            patch.object(
+                insights_data,
+                "_project_money_reporting_values",
+                return_value={
+                    "currency": "NPR",
+                    "project_currency": "USD",
+                    "hourly_rate": 0.0,
+                    "budget_amount": 0.0,
+                },
             ),
             patch.object(
                 insights_data,
