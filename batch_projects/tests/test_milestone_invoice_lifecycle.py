@@ -2,7 +2,7 @@
 
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import frappe
 
@@ -187,6 +187,48 @@ class TestMilestoneInvoiceLifecycle(unittest.TestCase):
                 60,
                 db=db,
             )
+
+    def test_percent_capacity_tolerates_binary_float_noise(self):
+        db = Mock()
+        db.sql.return_value = [
+            frappe._dict({
+                "name": "MS-FIRST",
+                "invoice_percent": 50,
+            })
+        ]
+
+        with patch.object(
+            milestone_billing,
+            "_percent_capacity_precision",
+            return_value=3,
+        ):
+            already = milestone_billing.assert_percent_capacity(
+                "BP-PROJECT", "MS-SECOND", 50.0004, db=db
+            )
+
+        self.assertEqual(already, 50)
+
+    def test_percent_capacity_still_rejects_material_overage(self):
+        db = Mock()
+        db.sql.return_value = [
+            frappe._dict({
+                "name": "MS-FIRST",
+                "invoice_percent": 50,
+            })
+        ]
+
+        with patch.object(
+            milestone_billing,
+            "_percent_capacity_precision",
+            return_value=3,
+        ):
+            with self.assertRaisesRegex(
+                frappe.ValidationError,
+                "over its 100% budget",
+            ):
+                milestone_billing.assert_percent_capacity(
+                    "BP-PROJECT", "MS-SECOND", 50.0006, db=db
+                )
 
     def test_submit_moves_current_invoice_to_invoiced(self):
         db = Mock()

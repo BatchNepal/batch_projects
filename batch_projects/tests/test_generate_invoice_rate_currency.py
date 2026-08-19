@@ -112,14 +112,18 @@ class TestGenerateInvoiceRateCurrency(unittest.TestCase):
                 self.assertEqual(project_currency, "EUR")
                 return "NPR", "USD", 137.5
 
-            if currency == "EUR":
-                self.assertIsNone(conversion_rate)
-                self.assertIsNone(project_currency)
-                return "NPR", "EUR", 150.0
-
             raise AssertionError(
                 f"unexpected currency resolution: {currency!r}, {conversion_rate!r}"
             )
+
+        def resolve_source_fx(
+            company, currency, *, company_currency=None, fx_cache=None
+        ):
+            self.assertEqual(company, "TEST-COMPANY")
+            self.assertEqual(currency, "EUR")
+            self.assertEqual(company_currency, "NPR")
+            self.assertIsNotNone(fx_cache)
+            return 150.0
 
         with (
             patch.object(erp_link, "_check_permission"),
@@ -142,6 +146,11 @@ class TestGenerateInvoiceRateCurrency(unittest.TestCase):
                 erp_link,
                 "_resolve_invoice_currency",
                 side_effect=resolve_currency,
+            ),
+            patch.object(
+                erp_link,
+                "_currency_to_company_fx",
+                side_effect=resolve_source_fx,
             ),
             patch.object(erp_link.frappe, "get_all", return_value=[]),
             patch.object(

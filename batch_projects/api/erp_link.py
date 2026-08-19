@@ -895,6 +895,64 @@ def _resolve_invoice_currency(
     )
 
 
+def _currency_to_company_fx(
+    company,
+    currency,
+    *,
+    company_currency=None,
+    fx_cache=None,
+):
+    """Resolve one currency -> company-currency FX rate.
+
+    This helper is deliberately independent of invoice-target selection.
+    """
+    source = _currency_code(currency)
+    company_currency = (
+        _currency_code(company_currency)
+        or _currency_code(
+            frappe.get_cached_value(
+                "Company", company, "default_currency"
+            )
+        )
+    )
+
+    if not company_currency:
+        frappe.throw(
+            f"Company '{company}' has no Default Currency configured."
+        )
+    if not source:
+        frappe.throw(
+            "Cannot resolve an exchange rate because the source currency is blank."
+        )
+    if source == company_currency:
+        return 1.0
+
+    key = (company, source)
+    if fx_cache is not None and key in fx_cache:
+        return fx_cache[key]
+
+    from erpnext.setup.utils import get_exchange_rate
+
+    try:
+        fx = get_exchange_rate(source, company_currency, nowdate())
+    except Exception:
+        fx = None
+
+    if fx in (None, "", 0, 0.0):
+        frappe.throw(
+            f"No exchange rate configured for {source} → {company_currency}. "
+            "Add a Currency Exchange record before billing."
+        )
+
+    resolved = _validated_conversion_rate(
+        fx,
+        f"Exchange rate {source} → {company_currency}",
+    )
+    if fx_cache is not None:
+        fx_cache[key] = resolved
+    return resolved
+
+
 def _convert_billing_rate(
     rate,
     source_currency,
@@ -963,28 +1021,12 @@ def _convert_billing_rate(
             if resolved > 0:
                 return resolved
 
-        key = (company, currency_code)
-        if fx_cache is not None and key in fx_cache:
-            return fx_cache[key]
-
-        cc, tc, resolved = _resolve_invoice_currency(
+        return _currency_to_company_fx(
             company,
-            customer,
             currency_code,
-            None,
+            company_currency=company_currency,
+            fx_cache=fx_cache,
         )
-        resolved = flt(resolved)
-
-        if cc != company_currency or tc != currency_code or resolved <= 0:
-            frappe.throw(
-                f"Could not resolve a valid exchange rate for "
-                f"{currency_code} → {company_currency}."
-            )
-
-        if fx_cache is not None:
-            fx_cache[key] = resolved
-
-        return resolved
 
     source_fx = to_company(source)
     target_fx = to_company(target)

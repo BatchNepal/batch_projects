@@ -387,6 +387,7 @@ class TestBillingReservation(unittest.TestCase):
         )
         self.assertIn("si.docstatus IN (0, 1)", query)
         self.assertIn("FOR UPDATE", query)
+        self.assertIn("NOWAIT", query)
 
     def test_same_draft_is_self_excluded(self):
         db = Mock()
