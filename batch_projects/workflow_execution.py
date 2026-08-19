@@ -203,15 +203,18 @@ def begin_external_step(execution_id, node_id, owner, generation):
     step = get_or_create_step(execution_id, node_id, "external", owner, generation)
     if step["status"] in TERMINAL_STEP_STATES:
         return step
+
+    # Global workflow row-lock order is Execution -> Step. The execution lease
+    # is the authority for this graph-walk attempt, so lock and validate it
+    # first; then mutate only the step row. A joined UPDATE lets MariaDB choose
+    # Step -> Execution and can deadlock against get_or_create_step().
+    _require_live_lease(execution_id, owner, generation, for_update=True)
     frappe.db.sql("""
-        UPDATE `tabBP Workflow Step` step
-        INNER JOIN `tabBP Workflow Execution` execution ON execution.name = step.execution
-        SET step.status = 'dispatching', step.dispatch_started_at = UTC_TIMESTAMP(6)
-        WHERE step.name = %(step)s AND step.status = 'claimed'
-          AND execution.name = %(execution)s AND execution.status = 'running'
-          AND execution.lease_owner = %(owner)s AND execution.lease_generation = %(generation)s
-          AND execution.lease_expires_at >= UTC_TIMESTAMP(6)
-    """, {"step": step["step_id"], "execution": execution_id, "owner": owner, "generation": int(generation)})
+        UPDATE `tabBP Workflow Step`
+        SET status = 'dispatching', dispatch_started_at = UTC_TIMESTAMP(6)
+        WHERE name = %(step)s AND execution = %(execution)s
+          AND status = 'claimed'
+    """, {"step": step["step_id"], "execution": execution_id})
     dispatch_confirmed = bool(_row_count())
     payload = _step_payload(frappe.get_doc("BP Workflow Step", step["step_id"]), created=step["created"])
     payload["dispatch_confirmed"] = dispatch_confirmed
@@ -222,18 +225,19 @@ def finish_step(execution_id, step_id, owner, generation, status, result=None,
                 error_code=None, error_message=None):
     if status not in TERMINAL_STEP_STATES:
         frappe.throw("Illegal terminal workflow step status")
+
+    # Preserve generation/expiry fencing while keeping the deterministic
+    # Execution -> Step order. Holding the execution row lock prevents a new
+    # lease holder from being admitted while this step transition completes.
+    _require_live_lease(execution_id, owner, generation, for_update=True)
     frappe.db.sql("""
-        UPDATE `tabBP Workflow Step` step
-        INNER JOIN `tabBP Workflow Execution` execution ON execution.name = step.execution
-        SET step.status = %(status)s, step.result_json = %(result)s,
-            step.error_code = %(error_code)s, step.error_message = %(error_message)s
-        WHERE step.name = %(step)s AND step.execution = %(execution)s
-          AND step.status IN ('claimed', 'dispatching')
-          AND execution.status = 'running' AND execution.lease_owner = %(owner)s
-          AND execution.lease_generation = %(generation)s
-          AND execution.lease_expires_at >= UTC_TIMESTAMP(6)
+        UPDATE `tabBP Workflow Step`
+        SET status = %(status)s, result_json = %(result)s,
+            error_code = %(error_code)s, error_message = %(error_message)s
+        WHERE name = %(step)s AND execution = %(execution)s
+          AND status IN ('claimed', 'dispatching')
     """, {
-        "step": step_id, "execution": execution_id, "owner": owner, "generation": int(generation),
+        "step": step_id, "execution": execution_id,
         "status": status, "result": _json(result) if result is not None else None,
         "error_code": (error_code or "")[:140] or None,
         "error_message": (error_message or "")[:500] or None,
