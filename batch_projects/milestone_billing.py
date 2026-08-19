@@ -35,9 +35,16 @@ INVOICED = "Invoiced"
 
 ACTIVE_STATUSES = frozenset({DRAFT, INVOICED})
 
-# Tolerate machine-level floating-point noise only. Material over-reservation
-# must still fail closed.
-PERCENT_CAPACITY_EPSILON = 1e-9
+
+def _percent_capacity_precision():
+    """Return Frappe's configured precision for milestone percentages."""
+    from frappe.model.meta import get_field_precision
+
+    field = frappe.get_meta("BP Milestone").get_field("invoice_percent")
+    if not field:
+        frappe.throw("BP Milestone.invoice_percent metadata is unavailable.")
+
+    return get_field_precision(field)
 
 
 def _database(db=None):
@@ -192,10 +199,12 @@ def assert_percent_capacity(
         db=db,
     )
 
-    requested = flt(invoice_percent)
-    total = already + requested
+    precision = _percent_capacity_precision()
+    already = flt(already, precision)
+    requested = flt(invoice_percent, precision)
+    total = flt(already + requested, precision)
 
-    if total > 100 + PERCENT_CAPACITY_EPSILON:
+    if total > flt(100, precision):
         frappe.throw(
             f"Invoicing this milestone at {requested}% would bring this "
             f"project's live milestone invoice reservations to {total}%, "

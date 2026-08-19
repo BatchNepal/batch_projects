@@ -2,7 +2,7 @@
 
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import frappe
 
@@ -197,9 +197,15 @@ class TestMilestoneInvoiceLifecycle(unittest.TestCase):
             })
         ]
 
-        already = milestone_billing.assert_percent_capacity(
-            "BP-PROJECT", "MS-SECOND", 50.00000000001, db=db
-        )
+        with patch.object(
+            milestone_billing,
+            "_percent_capacity_precision",
+            return_value=3,
+        ):
+            already = milestone_billing.assert_percent_capacity(
+                "BP-PROJECT", "MS-SECOND", 50.0004, db=db
+            )
+
         self.assertEqual(already, 50)
 
     def test_percent_capacity_still_rejects_material_overage(self):
@@ -211,13 +217,18 @@ class TestMilestoneInvoiceLifecycle(unittest.TestCase):
             })
         ]
 
-        with self.assertRaisesRegex(
-            frappe.ValidationError,
-            "over its 100% budget",
+        with patch.object(
+            milestone_billing,
+            "_percent_capacity_precision",
+            return_value=3,
         ):
-            milestone_billing.assert_percent_capacity(
-                "BP-PROJECT", "MS-SECOND", 50.000001, db=db
-            )
+            with self.assertRaisesRegex(
+                frappe.ValidationError,
+                "over its 100% budget",
+            ):
+                milestone_billing.assert_percent_capacity(
+                    "BP-PROJECT", "MS-SECOND", 50.0006, db=db
+                )
 
     def test_submit_moves_current_invoice_to_invoiced(self):
         db = Mock()
