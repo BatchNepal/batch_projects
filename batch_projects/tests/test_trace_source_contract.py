@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import frappe
 
@@ -13,10 +14,10 @@ class TestTraceSourceContract(unittest.TestCase):
         else:
             frappe.flags.bp_automation_depth = self._old_depth
 
-    def _activity(self, *, source=None):
+    def _activity(self, *, source=None, action_type="Comment"):
         doc = frappe.new_doc("BP Activity")
         doc.task = "TRACE-TASK"
-        doc.action_type = "Comment"
+        doc.action_type = action_type
         doc.user = frappe.session.user
         if source is not None:
             doc.source = source
@@ -40,6 +41,17 @@ class TestTraceSourceContract(unittest.TestCase):
         frappe.flags.bp_automation_depth = 2
         self.assertEqual(self._activity().source, "automation")
 
+    def test_recurring_task_creation_defaults_to_system_source(self):
+        frappe.flags.bp_automation_depth = 0
+        with patch(
+            "batch_projects.batch_projects.doctype.bp_activity.bp_activity.frappe.db.get_value",
+            return_value="BP-TASK-TEMPLATE",
+        ):
+            self.assertEqual(
+                self._activity(action_type="Created").source,
+                "system",
+            )
+
     def test_explicit_activity_source_is_preserved(self):
         frappe.flags.bp_automation_depth = 2
         self.assertEqual(self._activity(source="system").source, "system")
@@ -48,6 +60,7 @@ class TestTraceSourceContract(unittest.TestCase):
         cases = {
             "billing.checkout": "billing",
             "automation.rule_fired": "automation",
+            "system.reconcile": "system",
             "workspace.settings_updated": "gateway",
         }
         for event, expected in cases.items():
