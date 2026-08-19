@@ -23,6 +23,12 @@ from batch_projects.batch_projects.doctype.bp_project.test_bp_project import (
     make_project,
 )
 
+# BP Task.milestone is an optional Link. Frappe's full-app test bootstrap
+# otherwise recursively fabricates BP Milestone dependencies through ERPNext
+# finance into the optional payments app. These tests create their milestone
+# explicitly via create_milestone(), so no BP Milestone fixture is required.
+test_ignore = ["BP Milestone"]
+
 TEST_KEY = "TBTSK"
 
 
