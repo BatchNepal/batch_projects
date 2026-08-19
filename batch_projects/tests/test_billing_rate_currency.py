@@ -9,6 +9,50 @@ from batch_projects.api import erp_link, timers
 
 
 class TestBillingRateCurrency(unittest.TestCase):
+    def test_currency_to_company_fx_same_currency_is_identity(self):
+        with patch(
+            "erpnext.setup.utils.get_exchange_rate"
+        ) as get_exchange_rate:
+            result = erp_link._currency_to_company_fx(
+                "TEST-COMPANY", "NPR", company_currency="NPR"
+            )
+
+        self.assertEqual(result, 1.0)
+        get_exchange_rate.assert_not_called()
+
+    def test_currency_to_company_fx_uses_cache(self):
+        cache = {}
+        with patch(
+            "erpnext.setup.utils.get_exchange_rate",
+            return_value=150.0,
+        ) as get_exchange_rate:
+            first = erp_link._currency_to_company_fx(
+                "TEST-COMPANY", "EUR",
+                company_currency="NPR", fx_cache=cache,
+            )
+            second = erp_link._currency_to_company_fx(
+                "TEST-COMPANY", "EUR",
+                company_currency="NPR", fx_cache=cache,
+            )
+
+        self.assertEqual(first, 150.0)
+        self.assertEqual(second, 150.0)
+        self.assertEqual(cache[("TEST-COMPANY", "EUR")], 150.0)
+        get_exchange_rate.assert_called_once()
+
+    def test_currency_to_company_fx_missing_rate_fails_generically(self):
+        with patch(
+            "erpnext.setup.utils.get_exchange_rate",
+            return_value=0,
+        ):
+            with self.assertRaisesRegex(
+                frappe.ValidationError,
+                "No exchange rate configured for EUR → NPR",
+            ):
+                erp_link._currency_to_company_fx(
+                    "TEST-COMPANY", "EUR", company_currency="NPR"
+                )
+
     def test_price_list_rate_preserves_item_price_currency(self):
         with patch.object(
             erp_link.frappe.db,
@@ -47,8 +91,8 @@ class TestBillingRateCurrency(unittest.TestCase):
     def test_row_rate_uses_parent_timesheet_currency(self):
         with patch.object(
             erp_link,
-            "_resolve_invoice_currency",
-            return_value=("NPR", "EUR", 150.0),
+            "_currency_to_company_fx",
+            return_value=150.0,
         ):
             rate = erp_link._effective_billing_rate(
                 row_rate=50,
@@ -105,8 +149,8 @@ class TestBillingRateCurrency(unittest.TestCase):
     def test_project_rate_converts_for_explicit_invoice_override(self):
         with patch.object(
             erp_link,
-            "_resolve_invoice_currency",
-            return_value=("NPR", "EUR", 150.0),
+            "_currency_to_company_fx",
+            return_value=150.0,
         ):
             rate = erp_link._effective_billing_rate(
                 row_rate=0,
@@ -149,8 +193,8 @@ class TestBillingRateCurrency(unittest.TestCase):
     def test_client_item_price_converts_from_its_own_currency(self):
         with patch.object(
             erp_link,
-            "_resolve_invoice_currency",
-            return_value=("NPR", "EUR", 150.0),
+            "_currency_to_company_fx",
+            return_value=150.0,
         ):
             rate = erp_link._effective_billing_rate(
                 row_rate=0,
@@ -177,7 +221,7 @@ class TestBillingRateCurrency(unittest.TestCase):
     def test_missing_source_fx_fails_closed(self):
         with patch.object(
             erp_link,
-            "_resolve_invoice_currency",
+            "_currency_to_company_fx",
             side_effect=frappe.ValidationError(
                 "No exchange rate configured for EUR → NPR"
             ),
@@ -250,10 +294,12 @@ class TestBillingRateCurrency(unittest.TestCase):
             patch.object(
                 erp_link,
                 "_resolve_invoice_currency",
-                side_effect=[
-                    ("NPR", "USD", 137.5),
-                    ("NPR", "EUR", 150.0),
-                ],
+                return_value=("NPR", "USD", 137.5),
+            ),
+            patch.object(
+                erp_link,
+                "_currency_to_company_fx",
+                return_value=150.0,
             ),
         ):
             result = erp_link.get_batch_invoice_candidates()

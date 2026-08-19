@@ -35,6 +35,10 @@ INVOICED = "Invoiced"
 
 ACTIVE_STATUSES = frozenset({DRAFT, INVOICED})
 
+# Tolerate machine-level floating-point noise only. Material over-reservation
+# must still fail closed.
+PERCENT_CAPACITY_EPSILON = 1e-9
+
 
 def _database(db=None):
     return db or frappe.db
@@ -191,7 +195,7 @@ def assert_percent_capacity(
     requested = flt(invoice_percent)
     total = already + requested
 
-    if total > 100:
+    if total > 100 + PERCENT_CAPACITY_EPSILON:
         frappe.throw(
             f"Invoicing this milestone at {requested}% would bring this "
             f"project's live milestone invoice reservations to {total}%, "
