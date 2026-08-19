@@ -301,12 +301,14 @@ def get_margin_inputs(from_date, to_date, user):
     """, {"projects": erpnext_names, "from_dt": from_dt, "to_dt": to_dt})
 
     purchases = _query("Purchase Invoice Item", """
-        SELECT pii.project, SUM(pii.base_net_amount) AS amount
+        SELECT
+            COALESCE(NULLIF(pii.project, ''), pi.project) AS project,
+            SUM(pii.base_net_amount) AS amount
         FROM `tabPurchase Invoice Item` pii
         JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent AND pi.docstatus = 1
-        WHERE pii.project IN %(projects)s
+        WHERE COALESCE(NULLIF(pii.project, ''), pi.project) IN %(projects)s
           AND pi.posting_date >= %(from_date)s AND pi.posting_date <= %(to_date)s
-        GROUP BY pii.project
+        GROUP BY COALESCE(NULLIF(pii.project, ''), pi.project)
     """, {"projects": erpnext_names, "from_date": from_date, "to_date": to_date})
 
     expenses = _query("Expense Claim", """

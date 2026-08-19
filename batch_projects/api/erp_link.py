@@ -2261,7 +2261,9 @@ _DOC_SPECS = {
         "header": ["name", "status", "posting_date", "supplier", "currency", "grand_total"],
         "child_doctype": "Purchase Invoice Item",
         "child_key": "items",
-        "child_fields": _ITEM_FIELDS,
+        # Same security projection as Sales Invoice: item.project is
+        # authoritative, with header fallback for blank legacy rows.
+        "child_fields": _ITEM_FIELDS + ["project"],
     },
     "Sales Order": {
         "header": ["name", "status", "transaction_date", "delivery_date", "customer",
@@ -2320,6 +2322,35 @@ def _scope_sales_invoice_items(
     Blank item project inherits the header project for historical/single-project
     invoices. The internal `project` field is removed again from the curated
     response so the existing drawer wire shape stays stable.
+    """
+    scoped = []
+
+    for child in children:
+        item_project = (
+            child.get("project")
+            or header_project
+        )
+
+        if item_project != erp_project:
+            continue
+
+        row = dict(child)
+        row.pop("project", None)
+        scoped.append(row)
+
+    return scoped
+
+
+def _scope_purchase_invoice_items(
+    children,
+    header_project,
+    erp_project,
+):
+    """Return only Purchase Invoice Item rows attributable to `erp_project`.
+
+    ERPNext accounting uses item.project or the Purchase Invoice header
+    project. Mirror that exact precedence here, then remove the internal
+    project field so the existing curated Money Drawer wire shape is stable.
     """
     scoped = []
 
@@ -2402,6 +2433,27 @@ def _tenant_ok(doctype: str, name: str, erp_project: str) -> bool:
             },
         ))
 
+    if doctype == "Purchase Invoice":
+        header_project = frappe.db.get_value(
+            "Purchase Invoice",
+            name,
+            "project",
+        )
+
+        if header_project == erp_project:
+            return True
+
+        # ERPNext posts PI accounting dimensions as item.project or the
+        # header project. A project named explicitly on an item therefore owns
+        # that slice of a shared PI even when the header names another project.
+        return bool(frappe.db.exists(
+            "Purchase Invoice Item",
+            {
+                "parent": name,
+                "project": erp_project,
+            },
+        ))
+
     return (
         frappe.db.get_value(
             doctype,
@@ -2471,6 +2523,19 @@ def get_erp_doc_summary(project, doctype, name):
         )
 
         children = _scope_sales_invoice_items(
+            children,
+            header_project,
+            erp_project,
+        )
+
+    if doctype == "Purchase Invoice":
+        header_project = frappe.db.get_value(
+            "Purchase Invoice",
+            name,
+            "project",
+        )
+
+        children = _scope_purchase_invoice_items(
             children,
             header_project,
             erp_project,

@@ -15,6 +15,7 @@ check (see erp_link.py module docstring for why that boundary is sacred).
 """
 
 import frappe
+from frappe.utils import flt
 
 from batch_projects.api.erp_link import _tenant_ok
 
@@ -105,20 +106,106 @@ def _bp_project_for(doctype: str, name: str, erp_project: str):
     return bp_project
 
 
+def _row_value(row, field, default=None):
+    if isinstance(row, dict):
+        return row.get(field, default)
+    return getattr(row, field, default)
+
+
+def _sales_invoice_project_weights(name, header_project, items=None):
+    """Return stable (ERP Project, net-share) pairs for one Sales Invoice.
+
+    Sales Invoice Item.project is authoritative; blank item project inherits
+    the header for legacy/single-project invoices. Net-line share is the only
+    defensible basis for allocating invoice-level totals such as grand total,
+    outstanding and a later Payment Entry allocation across projects.
+    """
+    if items is None:
+        items = frappe.get_all(
+            "Sales Invoice Item",
+            filters={"parent": name},
+            fields=["project", "net_amount"],
+            order_by="idx asc",
+        )
+
+    totals = {}
+    order = []
+
+    for item in items or []:
+        erp_project = _row_value(item, "project") or header_project
+        if not erp_project:
+            continue
+        if erp_project not in totals:
+            totals[erp_project] = 0.0
+            order.append(erp_project)
+        totals[erp_project] += flt(_row_value(item, "net_amount") or 0)
+
+    if not totals:
+        return [(header_project, 1.0)] if header_project else []
+
+    denominator = sum(totals.values())
+    if abs(denominator) <= 1e-12:
+        # A zero-net mixed invoice has no financially meaningful denominator
+        # for fan-out. Preserve the historical header attribution rather than
+        # inventing an arbitrary split or duplicating the whole amount.
+        return [(header_project, 1.0)] if header_project else []
+
+    return [
+        (erp_project, totals[erp_project] / denominator)
+        for erp_project in order
+    ]
+
+
+def _apportion(total, project_weights):
+    """Allocate a currency total while preserving its rounded sum exactly."""
+    total = round(flt(total), 2)
+    if not project_weights:
+        return {}
+
+    allocated = {}
+    remaining = total
+
+    for idx, (erp_project, weight) in enumerate(project_weights):
+        if idx == len(project_weights) - 1:
+            value = remaining
+        else:
+            value = round(total * weight, 2)
+            remaining = round(remaining - value, 2)
+        allocated[erp_project] = value
+
+    return allocated
+
+
 def on_sales_invoice_submit(doc, method=None):
-    bp_project = _bp_project_for("Sales Invoice", doc.name, doc.project)
-    if not bp_project:
+    project_weights = _sales_invoice_project_weights(
+        doc.name,
+        doc.project,
+        items=doc.items,
+    )
+    if not project_weights:
         return
 
+    amounts = _apportion(doc.grand_total, project_weights)
+    outstanding = _apportion(doc.outstanding_amount, project_weights)
+
     from batch_projects.events import emit
-    emit("erp.invoice_submitted", {
-        "project": bp_project,
-        "invoice": doc.name,
-        "customer": doc.customer,
-        "amount": doc.grand_total,
-        "outstanding": doc.outstanding_amount,
-        "currency": doc.currency,
-    })
+    for erp_project, _weight in project_weights:
+        bp_project = _bp_project_for(
+            "Sales Invoice",
+            doc.name,
+            erp_project,
+        )
+        if not bp_project:
+            continue
+
+        emit("erp.invoice_submitted", {
+            "project": bp_project,
+            "invoice": doc.name,
+            "customer": doc.customer,
+            "amount": amounts.get(erp_project, 0.0),
+            "outstanding": outstanding.get(erp_project, 0.0),
+            "currency": doc.currency,
+        })
 
 
 def on_sales_order_submit(doc, method=None):
@@ -137,32 +224,68 @@ def on_sales_order_submit(doc, method=None):
 
 
 def on_payment_entry_submit(doc, method=None):
-    """Fires once per referenced Sales Invoice that resolves to a BP Project
-    (a payment can be allocated across several invoices/customers). Payload
-    carries the invoice's post-payment `outstanding` so a rule condition can
-    express "if outstanding = 0" with the existing matcher — no new op, no
-    separate "invoice_paid" event needed."""
-    invoice_refs = [r for r in (doc.references or []) if r.reference_doctype == "Sales Invoice"]
+    """Fan each Sales Invoice allocation out to its contributing BP Projects.
+
+    A shared invoice is one legal document but several project financial
+    claims. Payment Entry.references carries only the invoice-level allocation,
+    so use the same Sales Invoice Item net-share model as invoice submission to
+    avoid assigning the whole payment to the arbitrary header project.
+    """
+    invoice_refs = [
+        r for r in (doc.references or [])
+        if r.reference_doctype == "Sales Invoice"
+    ]
     if not invoice_refs:
         return
 
     from batch_projects.events import emit
+
     for ref in invoice_refs:
         si = frappe.db.get_value(
-            "Sales Invoice", ref.reference_name,
-            ["project", "customer", "currency", "outstanding_amount"], as_dict=True,
+            "Sales Invoice",
+            ref.reference_name,
+            [
+                "project",
+                "customer",
+                "currency",
+                "outstanding_amount",
+            ],
+            as_dict=True,
         )
         if not si:
             continue
-        bp_project = _bp_project_for("Sales Invoice", ref.reference_name, si.project)
-        if not bp_project:
+
+        project_weights = _sales_invoice_project_weights(
+            ref.reference_name,
+            si.project,
+        )
+        if not project_weights:
             continue
-        emit("erp.payment_received", {
-            "project": bp_project,
-            "invoice": ref.reference_name,
-            "payment_entry": doc.name,
-            "customer": si.customer,
-            "amount": ref.allocated_amount,
-            "outstanding": si.outstanding_amount,
-            "currency": si.currency,
-        })
+
+        amounts = _apportion(
+            ref.allocated_amount,
+            project_weights,
+        )
+        outstanding = _apportion(
+            si.outstanding_amount,
+            project_weights,
+        )
+
+        for erp_project, _weight in project_weights:
+            bp_project = _bp_project_for(
+                "Sales Invoice",
+                ref.reference_name,
+                erp_project,
+            )
+            if not bp_project:
+                continue
+
+            emit("erp.payment_received", {
+                "project": bp_project,
+                "invoice": ref.reference_name,
+                "payment_entry": doc.name,
+                "customer": si.customer,
+                "amount": amounts.get(erp_project, 0.0),
+                "outstanding": outstanding.get(erp_project, 0.0),
+                "currency": si.currency,
+            })
