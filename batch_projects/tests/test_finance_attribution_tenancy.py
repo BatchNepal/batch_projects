@@ -247,6 +247,14 @@ class TestPurchaseInvoiceProjectProjection(unittest.TestCase):
                 "_visible_money_projects",
                 return_value=projects,
             ),
+            # Currency provenance has its own dedicated #41 regressions. This
+            # test owns only the Purchase Invoice SQL attribution contract, so
+            # keep that unrelated prerequisite out of this fixture.
+            patch.object(
+                insights_data,
+                "_prepare_margin_project_currencies",
+                return_value="NPR",
+            ),
             patch.object(
                 insights_data,
                 "_sales_invoice_project_revenue_rows",
