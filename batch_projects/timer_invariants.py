@@ -128,14 +128,20 @@ def get_active_timer():
 
 @frappe.whitelist()
 def start_timer(task):
+    from batch_projects.api.timers import (
+        _require_system_user,
+        require_feature,
+        start_timer as original_start_timer,
+    )
+
+    # Authenticate and entitlement-gate before probing task existence/state.
+    _require_system_user()
+    require_feature("time_tracking")
     _require_live_task(task)
 
     # If this user carries a legacy ghost timer, close it at deleted_on before
     # the original start path can call its `_stop(existing)` helper with `now`.
     _repair_current_user_deleted_timer()
-
-    from batch_projects.api.timers import start_timer as original_start_timer
-
     return original_start_timer(task)
 
 
@@ -174,9 +180,15 @@ def stop_timer():
 
 @frappe.whitelist()
 def log_time(task, hours, date=None, description=None):
-    _require_live_task(task)
-    from batch_projects.api.timers import log_time as original_log_time
+    from batch_projects.api.timers import (
+        _require_system_user,
+        log_time as original_log_time,
+        require_feature,
+    )
 
+    _require_system_user()
+    require_feature("time_tracking")
+    _require_live_task(task)
     return original_log_time(task, hours, date=date, description=description)
 
 
