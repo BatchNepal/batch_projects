@@ -46,9 +46,6 @@ fixtures = [
 after_install = "batch_projects.setup.install.after_install"
 auth_hooks = ["batch_projects.gateway_guard.apply_gateway_identity"]
 
-# Frappe v15 has no composable pre-send Email Queue extension hook. This
-# narrowly-scoped subclass delegates every non-BP-Task email unchanged and
-# revalidates pending BP Task recipients immediately before SMTP delivery.
 override_doctype_class = {
     "Email Queue": "batch_projects.secure_email_queue.BPEmailQueue",
 }
@@ -72,8 +69,20 @@ override_whitelisted_methods = {
         "batch_projects.automation_surface.get_automation_options",
     "batch_projects.api.dashboards.get_column_widget_data":
         "batch_projects.dashboard_task_reads.get_column_widget_data",
+    "batch_projects.api.dashboards.get_widget_source_fields":
+        "batch_projects.dashboard_security.get_widget_source_fields",
+    "batch_projects.api.dashboards.get_widget_source_field_options":
+        "batch_projects.dashboard_security.get_widget_source_field_options",
     "batch_projects.api.dashboards.get_multi_source_count":
-        "batch_projects.dashboard_task_reads.get_multi_source_count",
+        "batch_projects.dashboard_security.get_multi_source_count",
+    "batch_projects.api.dashboards.get_doctype_group_data":
+        "batch_projects.dashboard_security.get_doctype_group_data",
+    "batch_projects.api.dashboards.get_doctype_column_data":
+        "batch_projects.dashboard_security.get_doctype_column_data",
+    "batch_projects.api.dashboards.update_widget_source_field":
+        "batch_projects.dashboard_security.update_widget_source_field",
+    "batch_projects.api.dashboards.get_widget_source_doc_quickview":
+        "batch_projects.dashboard_security.get_widget_source_doc_quickview",
     "batch_projects.api.board.get_notifications":
         "batch_projects.notification_reads.get_notifications",
     "batch_projects.api.board.get_notification_count":
