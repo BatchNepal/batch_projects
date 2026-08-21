@@ -206,18 +206,18 @@ scheduler_events = {
         "batch_projects.api.timers.send_timer_reminders",
     ],
     "daily": [
-        "batch_projects.events.send_due_date_reminders",
-        "batch_projects.events.run_due_soon_automations",
-        "batch_projects.events.run_overdue_automations",
+        "batch_projects.scheduler_live.send_due_date_reminders",
+        "batch_projects.scheduler_live.run_due_soon_automations",
+        "batch_projects.scheduler_live.run_overdue_automations",
         "batch_projects.api.erp_link.reconcile_erpnext_sync",
         "batch_projects.events.purge_expired_trash",
         "batch_projects.timesheet_sync.reconcile_actual_hours",
     ],
     "daily_long": [
-        "batch_projects.events.send_daily_digest",
+        "batch_projects.scheduler_live.send_daily_digest",
         "batch_projects.events.send_view_subscriptions_daily",
     ],
     "weekly_long": [
-        "batch_projects.events.send_weekly_project_summary",
+        "batch_projects.scheduler_live.send_weekly_project_summary",
     ],
 }
