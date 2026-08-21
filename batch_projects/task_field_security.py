@@ -19,8 +19,6 @@ import frappe
 from batch_projects import access
 
 
-# Fields a task-only assignee may directly change. Derived lifecycle fields
-# caused by status/blocked_reason are handled separately below.
 _TASK_ONLY_WRITABLE = frozenset({
     "title",
     "description",
@@ -30,9 +28,6 @@ _TASK_ONLY_WRITABLE = frozenset({
     "blocked_reason",
 })
 
-# These fields are integration/accounting/system authority, not ordinary task
-# edits. Instance admins and trusted system processes may update them; normal
-# project users must use the dedicated semantic action (where one exists).
 _SYSTEM_MANAGED = frozenset({
     "task_key",
     "sequence_no",
@@ -78,7 +73,6 @@ def changed_fields(doc, old) -> set[str]:
 
 
 def _allow_controller_derived(changed: set[str], doc, old) -> set[str]:
-    """Remove lifecycle fields that the controller derives from an allowed edit."""
     allowed = set(changed)
     if old and old.status != doc.status:
         allowed -= {"started_on", "completed_on", "completed_by", "resolution"}
@@ -90,9 +84,6 @@ def _allow_controller_derived(changed: set[str], doc, old) -> set[str]:
 def _validate_task_only_scope(doc, old, changed: set[str]) -> None:
     if not old or access.is_instance_admin():
         return
-
-    # A real project role uses the project's normal field/action policy. This
-    # guard only narrows the exceptional one-task assignment grant.
     if access.get_effective_role(old.project, frappe.session.user):
         return
     if not access.is_task_assignee(old.name, frappe.session.user):
@@ -123,7 +114,6 @@ def _validate_system_managed(changed: set[str]) -> None:
 
 
 def _validate_sensitive_project_fields(doc, old, changed: set[str]) -> None:
-    """Fields whose effect exceeds an ordinary Member task edit."""
     if access.is_instance_admin():
         return
 
@@ -131,9 +121,6 @@ def _validate_sensitive_project_fields(doc, old, changed: set[str]) -> None:
     if not project:
         return
 
-    # Billable classification affects invoicing/money surfaces. Keep the
-    # existing view_money capability as a second gate, but require Manager+
-    # for the mutation itself until manage_money becomes its own capability.
     if "billable" in changed:
         if not access.has_at_least(project, "Manager") or not access.has_capability(
             project, "view_money"
@@ -143,8 +130,6 @@ def _validate_sensitive_project_fields(doc, old, changed: set[str]) -> None:
                 frappe.PermissionError,
             )
 
-    # Recurrence creates future work and scheduler jobs. It is project
-    # administration, not a normal content edit.
     if changed & {"is_recurring", "recurrence_frequency", "recurrence_end_date"}:
         if not access.has_at_least(project, "Manager"):
             frappe.throw(
@@ -152,8 +137,6 @@ def _validate_sensitive_project_fields(doc, old, changed: set[str]) -> None:
                 frappe.PermissionError,
             )
 
-    # Resolution is lifecycle state. The controller may derive it while status
-    # changes; an unrelated save must not rewrite closure history directly.
     if "resolution" in changed and (not old or old.status == doc.status):
         frappe.throw(
             "Resolution can only change as part of a status transition.",
@@ -167,8 +150,6 @@ def _changed_custom_values(doc, old) -> dict:
     changed = {}
     for key in set(before) | set(after):
         if key.startswith("_"):
-            # Internal namespaces such as _checklist have their own endpoints
-            # and permission contract; they are not user-defined fields.
             continue
         if before.get(key) != after.get(key):
             changed[key] = after.get(key)
@@ -185,8 +166,6 @@ def _custom_field_policy(project: str, field_id: str):
     if not row:
         return None
 
-    # Edit authority must be a subset of view authority even for legacy field
-    # definitions that predate the schema save-time invariant.
     if not access.has_at_least(project, row.view_role or "Viewer"):
         frappe.throw(
             "You cannot edit one or more custom fields that are not visible to you.",
@@ -208,7 +187,7 @@ def _validate_link_target_readability(project: str, field_id: str, value, row=No
     if not row or row.field_type != "link":
         return
     if not isinstance(value, dict) or not value.get("name"):
-        return  # type validation reports the clean validation error later
+        return
 
     try:
         options = json.loads(row.options_json or "{}")
@@ -218,8 +197,6 @@ def _validate_link_target_readability(project: str, field_id: str, value, row=No
     if not doctype:
         return
 
-    # Never reveal whether a guessed record name exists. Permission failure and
-    # non-existence use the same message at this boundary.
     try:
         permitted = bool(
             frappe.has_permission(
@@ -245,8 +222,6 @@ def validate_custom_field_mutations(doc, old=None) -> None:
     if not changed:
         return
 
-    # This closes bulk-update / REST / ORM bypasses: every changed custom field
-    # is checked at the durable document boundary, not only in board.update_task.
     for field_id, value in changed.items():
         row = _custom_field_policy(doc.project, field_id)
         if row:
@@ -256,9 +231,6 @@ def validate_custom_field_mutations(doc, old=None) -> None:
 def validate_task_field_authority(doc, old=None) -> None:
     """Durable field authorization boundary for a BP Task save."""
     if not old:
-        # A Member may create a task, but billing classification is still a
-        # Manager+Money decision. Reporter is controller-derived unless an
-        # instance admin/import process intentionally supplies one.
         if not access.is_instance_admin():
             if doc.billable and (
                 not access.has_at_least(doc.project, "Manager")
@@ -272,7 +244,11 @@ def validate_task_field_authority(doc, old=None) -> None:
                 own_employee = frappe.db.get_value(
                     "Employee", {"user_id": frappe.session.user}, "name"
                 )
-                if own_employee and doc.reporter != own_employee:
+                # No Employee mapping is not a loophole: a caller may either
+                # omit reporter and let the controller derive it, or submit
+                # exactly their own Employee. They may never impersonate an
+                # arbitrary Employee id through REST/import.
+                if not own_employee or doc.reporter != own_employee:
                     frappe.throw(
                         "You cannot create a task on behalf of another reporter.",
                         frappe.PermissionError,
