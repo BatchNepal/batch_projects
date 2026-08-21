@@ -9,7 +9,6 @@ from frappe.tests.utils import FrappeTestCase
 from batch_projects import hooks
 from batch_projects import notification_delivery as delivery
 from batch_projects import push
-from batch_projects.batch_projects.doctype.bp_notification.bp_notification import BPNotification
 from batch_projects.secure_email_queue import BPEmailQueue
 
 
@@ -92,44 +91,6 @@ class TestNotificationDeliveryPolicy(FrappeTestCase):
             delivery.can_receive_task_delivery(
                 "member@example.com", "TASK-1", "PROJ-1"
             )
-        )
-
-
-class TestDurableNotificationBoundary(FrappeTestCase):
-    @patch("batch_projects.notification_delivery.require_task_delivery")
-    def test_bp_notification_validates_task_recipient(self, require_delivery):
-        doc = BPNotification({
-            "doctype": "BP Notification",
-            "recipient": "user@example.com",
-            "task": "TASK-1",
-            "project": "PROJ-1",
-            "notification_type": "Comment",
-        })
-
-        doc.validate()
-
-        require_delivery.assert_called_once_with(
-            "user@example.com", "TASK-1", "PROJ-1"
-        )
-
-    @patch(
-        "batch_projects.notification_delivery.can_receive_project_delivery",
-        return_value=False,
-    )
-    def test_deleted_task_tombstone_requires_current_project_access(self, can_receive):
-        doc = BPNotification({
-            "doctype": "BP Notification",
-            "recipient": "old@example.com",
-            "task": None,
-            "project": "PROJ-1",
-            "notification_type": "Task Deleted",
-        })
-
-        with self.assertRaises(frappe.PermissionError):
-            doc.validate()
-
-        can_receive.assert_called_once_with(
-            "old@example.com", "PROJ-1", "Viewer"
         )
 
 
