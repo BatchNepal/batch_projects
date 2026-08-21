@@ -211,6 +211,14 @@ override_whitelisted_methods = {
         "batch_projects.notification_reads.mark_notification_unread",
     "batch_projects.api.board.mark_all_notifications_read":
         "batch_projects.notification_reads.mark_all_notifications_read",
+    "batch_projects.api.workflows.list_workflows":
+        "batch_projects.workflow_security.list_workflows",
+    "batch_projects.api.workflows.test_workflow":
+        "batch_projects.workflow_security.test_workflow",
+    "batch_projects.api.automation.run_workflow_node":
+        "batch_projects.workflow_security.run_workflow_node",
+    "batch_projects.api.automation.run_local_workflow_step":
+        "batch_projects.workflow_security.run_local_workflow_step",
 }
 
 # actual_hours rollup — resync every BP Task a submitted/cancelled
@@ -287,6 +295,12 @@ doc_events = {
     # in, not what a saved rule is allowed to do. See automation_security.py.
     "BP Automation Rule": {
         "validate": "batch_projects.automation_security.validate_rule_authority",
+    },
+    # Same reasoning, for the graph-canvas surface — a workflow's action
+    # nodes carry the exact same {type, config} shape a rule's actions do.
+    # See workflow_security.py.
+    "BP Workflow": {
+        "validate": "batch_projects.workflow_security.validate_workflow_authority",
     },
 }
 
