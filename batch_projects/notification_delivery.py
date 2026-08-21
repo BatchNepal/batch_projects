@@ -15,9 +15,6 @@ from __future__ import annotations
 import frappe
 
 
-_RESERVED_USERS = {"Guest", "Administrator"}
-
-
 def resolve_system_user(identity: str | None) -> str | None:
     """Resolve a Frappe User name or email address to an enabled System User.
 
@@ -104,15 +101,3 @@ def can_receive_task_delivery(
     from batch_projects.task_invariants import _user_can_view_task
 
     return bool(_user_can_view_task(row.project, row.name, user))
-
-
-def require_task_delivery(
-    recipient: str | None, task: str | None, project: str | None = None
-) -> None:
-    """Fail closed for durable channel writes."""
-    if not can_receive_task_delivery(recipient, task, project):
-        frappe.throw(
-            "Notification recipient no longer has access to this task.",
-            frappe.PermissionError,
-            title="Notification delivery blocked",
-        )
