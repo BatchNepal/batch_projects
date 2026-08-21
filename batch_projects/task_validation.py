@@ -1,8 +1,8 @@
 """Composite BP Task validation entrypoint.
 
 Keeps the existing high-blast-radius invariants in task_invariants.py while
-allowing additional schema checks to be composed without growing api/board.py
-or relying on one write path.
+allowing additional schema/security checks to be composed without growing
+api/board.py or relying on one write path.
 """
 
 from __future__ import annotations
@@ -29,12 +29,7 @@ def _labels(raw) -> list[str]:
 
 
 def validate_task_labels(doc, old=None) -> None:
-    """New/changed task labels must exist in the project's label catalog.
-
-    Task label storage is currently name-backed. Unchanged historical values
-    are grandfathered; once the task's labels or project changes, the complete
-    submitted set must be valid and duplicate-free.
-    """
+    """New/changed task labels must exist in the project's label catalog."""
     if old and old.project == doc.project and _labels(old.labels) == _labels(doc.labels):
         return
 
@@ -63,10 +58,47 @@ def validate_task_labels(doc, old=None) -> None:
     unknown = sorted(set(labels) - valid_names)
     if unknown:
         frappe.throw(
-            "Unknown project label(s): " + ", ".join(unknown) + ". Create the label in project settings before assigning it to a task.",
+            "Unknown project label(s): " + ", ".join(unknown) +
+            ". Create the label in project settings before assigning it to a task.",
             frappe.ValidationError,
             title="Invalid task label",
         )
+
+
+def validate_link_visibility(doc, old=None) -> None:
+    """A new task link may point only at a task the actor can already view.
+
+    Cross-project links remain supported, but the link itself is not an access
+    grant and must never be usable as a metadata side-channel into a private
+    project. Historical unchanged links are grandfathered; the read adapter
+    filters those per caller.
+    """
+    old_signatures = {
+        task_invariants._link_signature(row)
+        for row in (old.get("links") or [])
+    } if old else set()
+
+    for row in (doc.get("links") or []):
+        signature = task_invariants._link_signature(row)
+        changed = not old or old.project != doc.project or signature not in old_signatures
+        if not changed or not row.linked_task:
+            continue
+
+        target = frappe.db.get_value(
+            "BP Task", row.linked_task, ["name", "project", "is_deleted"], as_dict=True
+        )
+        if not target or target.is_deleted:
+            # task_invariants produces the canonical integrity error.
+            continue
+        if not task_invariants._user_can_view_task(
+            target.project, target.name, frappe.session.user
+        ):
+            frappe.throw(
+                "You cannot link this task because you do not have access to the "
+                "linked task.",
+                frappe.PermissionError,
+                title="Linked task is not visible",
+            )
 
 
 def validate_task(doc, method=None):
@@ -74,3 +106,4 @@ def validate_task(doc, method=None):
     task_invariants.validate_task_assignees(doc, method=method)
     old = doc.get_doc_before_save() if hasattr(doc, "get_doc_before_save") else None
     validate_task_labels(doc, old)
+    validate_link_visibility(doc, old)
