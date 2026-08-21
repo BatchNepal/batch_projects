@@ -159,6 +159,10 @@ has_permission = {
 # a hardened replacement, without every existing caller (frontend, gateway)
 # needing to change what it calls.
 override_whitelisted_methods = {
+    "batch_projects.api.automation.apply_action":
+        "batch_projects.automation_security.apply_action",
+    "batch_projects.api.automation.run_scheduled_event":
+        "batch_projects.automation_security.run_scheduled_event",
     "batch_projects.api.board.update_project_members":
         "batch_projects.membership_invariants.update_project_members",
     "batch_projects.api.board.get_task":
@@ -277,6 +281,12 @@ doc_events = {
     },
     "BP Team Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
+    },
+    # Re-scopes rule authority at save time — a rule is a durable capability,
+    # and the gateway's own service-account identity only proves who called
+    # in, not what a saved rule is allowed to do. See automation_security.py.
+    "BP Automation Rule": {
+        "validate": "batch_projects.automation_security.validate_rule_authority",
     },
 }
 
