@@ -29,16 +29,13 @@ def _labels(raw) -> list[str]:
 
 
 def validate_task_labels(doc, old=None) -> None:
-    """New/changed task labels must exist in the project's label catalog."""
     if old and old.project == doc.project and _labels(old.labels) == _labels(doc.labels):
         return
-
     labels = _labels(doc.labels)
     if len(labels) != len(set(labels)):
         frappe.throw("A task cannot contain the same label more than once.", frappe.ValidationError)
     if not labels:
         return
-
     raw_catalog = frappe.db.get_value("BP Project", doc.project, "labels") or "[]"
     try:
         catalog = json.loads(raw_catalog) if isinstance(raw_catalog, str) else raw_catalog
@@ -49,7 +46,6 @@ def validate_task_labels(doc, old=None) -> None:
         )
     if not isinstance(catalog, list):
         frappe.throw("Project label schema must be a list.", frappe.ValidationError)
-
     valid_names = {
         str(row.get("label") or "").strip()
         for row in catalog
@@ -66,18 +62,15 @@ def validate_task_labels(doc, old=None) -> None:
 
 
 def validate_link_visibility(doc, old=None) -> None:
-    """A new task link may point only at a task the actor can already view."""
     old_signatures = {
         task_invariants._link_signature(row)
         for row in (old.get("links") or [])
     } if old else set()
-
     for row in (doc.get("links") or []):
         signature = task_invariants._link_signature(row)
         changed = not old or old.project != doc.project or signature not in old_signatures
         if not changed or not row.linked_task:
             continue
-
         target = frappe.db.get_value(
             "BP Task", row.linked_task, ["name", "project", "is_deleted"], as_dict=True
         )
@@ -101,23 +94,12 @@ def _force_dependency_override(doc) -> bool:
 
 
 def validate_completion_dependencies(doc, old=None) -> None:
-    """Refuse completion while an active predecessor remains unfinished.
-
-    The board endpoints already perform this check to return a richer blocked
-    response. Repeating the invariant here is intentional: REST, imports,
-    automations and direct ORM saves must not be able to bypass it. Trashed
-    predecessors are not active work and therefore do not block completion.
-    """
     if not old or old.project != doc.project or old.status == doc.status:
         return
-
     project = frappe.get_cached_doc("BP Project", doc.project)
     completed = set(project.get_completed_statuses())
-    if doc.status not in completed or old.status in completed:
+    if doc.status not in completed or old.status in completed or _force_dependency_override(doc):
         return
-    if _force_dependency_override(doc):
-        return
-
     blocker_names = {
         row.linked_task
         for row in (doc.get("links") or [])
@@ -125,7 +107,6 @@ def validate_completion_dependencies(doc, old=None) -> None:
     }
     if not blocker_names:
         return
-
     blockers = [
         row for row in frappe.get_all(
             "BP Task",
@@ -136,7 +117,6 @@ def validate_completion_dependencies(doc, old=None) -> None:
     ]
     if not blockers:
         return
-
     keys = ", ".join(row.task_key or row.name for row in blockers[:5])
     if len(blockers) > 5:
         keys += f" and {len(blockers) - 5} more"
@@ -147,6 +127,22 @@ def validate_completion_dependencies(doc, old=None) -> None:
     )
 
 
+def validate_trash_state(doc, old=None) -> None:
+    """Trash is a lifecycle operation, not an ordinary editable task field."""
+    new_deleted = int(doc.get("is_deleted") or 0)
+    if not old:
+        if new_deleted:
+            frappe.throw("Create the task first, then use the trash action.", frappe.ValidationError)
+        return
+    old_deleted = int(old.get("is_deleted") or 0)
+    if old_deleted != new_deleted:
+        frappe.throw(
+            "Task trash state can only be changed through the trash/restore actions.",
+            frappe.ValidationError,
+            title="Use task lifecycle action",
+        )
+
+
 def validate_task(doc, method=None):
     """One durable validation boundary for BP Task mutations."""
     task_invariants.validate_task_assignees(doc, method=method)
@@ -154,3 +150,4 @@ def validate_task(doc, method=None):
     validate_task_labels(doc, old)
     validate_link_visibility(doc, old)
     validate_completion_dependencies(doc, old)
+    validate_trash_state(doc, old)
