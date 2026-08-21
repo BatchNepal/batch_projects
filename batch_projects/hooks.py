@@ -74,6 +74,16 @@ override_whitelisted_methods = {
         "batch_projects.dashboard_task_reads.get_column_widget_data",
     "batch_projects.api.dashboards.get_multi_source_count":
         "batch_projects.dashboard_task_reads.get_multi_source_count",
+    "batch_projects.api.board.get_notifications":
+        "batch_projects.notification_reads.get_notifications",
+    "batch_projects.api.board.get_notification_count":
+        "batch_projects.notification_reads.get_notification_count",
+    "batch_projects.api.board.mark_notification_read":
+        "batch_projects.notification_reads.mark_notification_read",
+    "batch_projects.api.board.mark_notification_unread":
+        "batch_projects.notification_reads.mark_notification_unread",
+    "batch_projects.api.board.mark_all_notifications_read":
+        "batch_projects.notification_reads.mark_all_notifications_read",
     "batch_projects.api.board.delete_task":
         "batch_projects.task_lifecycle.delete_task",
     "batch_projects.api.board.restore_task":
@@ -101,7 +111,7 @@ permission_query_conditions = {
     "BP Milestone":       "batch_projects.permissions.bp_milestone_query_conditions",
     "BP Risk":            "batch_projects.permissions.bp_risk_query_conditions",
     "BP Automation Run":  "batch_projects.permissions.bp_automation_run_query_conditions",
-    "BP Notification":    "batch_projects.permissions.bp_notification_query_conditions",
+    "BP Notification":    "batch_projects.notification_permissions.query_conditions",
     "BP Webhook Token":   "batch_projects.permissions.bp_webhook_token_query_conditions",
     "BP Drawing":           "batch_projects.permissions.bp_drawing_query_conditions",
     "BP Intake Form":       "batch_projects.permissions.bp_intake_form_query_conditions",
@@ -130,7 +140,7 @@ has_permission = {
     "BP Milestone":       "batch_projects.permissions.bp_doc_has_permission",
     "BP Risk":            "batch_projects.permissions.bp_doc_has_permission",
     "BP Automation Run":  "batch_projects.permissions.bp_doc_has_permission",
-    "BP Notification":    "batch_projects.permissions.bp_notification_has_permission",
+    "BP Notification":    "batch_projects.notification_permissions.has_permission",
     "BP Webhook Token":   "batch_projects.permissions.bp_webhook_token_has_permission",
     "BP Drawing":           "batch_projects.permissions.bp_doc_has_permission",
     "BP Intake Form":       "batch_projects.permissions.bp_doc_has_permission",
