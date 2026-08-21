@@ -1,12 +1,14 @@
-"""Final business-data adapter for bp-gateway automation.
+"""Business-data adapter for bp-gateway automation.
 
-This module is intentionally NOT a workflow engine.  It accepts only already-
-resolved, already-validated business intent from the proprietary gateway and
-commits that intent transactionally through Frappe/ERPNext domain documents.
+This module is intentionally NOT a workflow engine. It exposes only:
+
+1. narrow read-only business context the gateway needs to resolve a final
+   automation decision itself; and
+2. already-resolved, already-validated final business mutations.
 
 It must never receive or interpret workflow ids, node types, rule configs,
 conditions, branches, retries, waits, schedules, provider responses, or other
-runtime state.  Those belong exclusively to bp-gateway.
+runtime state. Those belong exclusively to bp-gateway.
 """
 
 import json
@@ -32,10 +34,10 @@ _FORBIDDEN_RUNTIME_KEYS = {
 def _assert_gateway_service_caller():
     """Require API-token service authentication, not an interactive session.
 
-    This endpoint exposes only ordinary final data mutations, not premium
-    orchestration logic, so the monetization boundary does not depend on Python
-    authorization.  Still, browser sessions must not be able to drive this
-    privileged adapter accidentally.
+    This endpoint exposes only ordinary business data/read-write operations,
+    not premium orchestration logic, so monetization never depends on this
+    Python check. Still, a browser session must not accidentally drive this
+    privileged adapter.
     """
     auth = frappe.get_request_header("Authorization") or ""
     if not auth.lower().startswith("token "):
@@ -75,6 +77,62 @@ def _clean_strings(values, limit=100):
     if len(out) > limit:
         frappe.throw(f"Too many values (maximum {limit})")
     return out
+
+
+def _parse_labels(raw):
+    if isinstance(raw, list):
+        return _clean_strings(raw)
+    if isinstance(raw, str) and raw:
+        try:
+            decoded = json.loads(raw)
+        except json.JSONDecodeError:
+            decoded = []
+        return _clean_strings(decoded if isinstance(decoded, list) else [])
+    return []
+
+
+@frappe.whitelist()
+def get_context(kind=None, project=None, task=None, **_):
+    """Return raw current business facts; the gateway decides what they mean.
+
+    This endpoint deliberately avoids names such as "default_status" or
+    "notification_recipients": those would move automation decisions back to
+    Python. It returns ordered workflow states and raw task membership instead.
+    """
+    _assert_gateway_service_caller()
+
+    if kind == "site":
+        return {"timezone": frappe.utils.get_system_timezone()}
+
+    if kind == "project":
+        if not project or not frappe.db.exists("BP Project", project):
+            frappe.throw("Project not found")
+        from batch_projects.api.board import _normalize_workflow_states
+        doc = frappe.get_cached_doc("BP Project", project)
+        states = _normalize_workflow_states(doc.get_workflow_states())
+        return {
+            "workflow_states": [
+                state.get("name") for state in states
+                if isinstance(state, dict) and state.get("name")
+            ]
+        }
+
+    if kind == "task":
+        if not task or not frappe.db.exists("BP Task", task):
+            frappe.throw("Task not found")
+        doc = frappe.get_doc("BP Task", task)
+        from batch_projects.events import _get_watchers
+        reporter_user = ""
+        if doc.reporter:
+            reporter_user = frappe.db.get_value("Employee", doc.reporter, "user_id") or ""
+        return {
+            "assignees": [row.user for row in (doc.assignees or []) if row.user],
+            "labels": _parse_labels(doc.labels),
+            "watchers": list(_get_watchers(doc.name)),
+            "reporter_user": reporter_user,
+        }
+
+    frappe.throw(f"Unsupported automation data context {kind!r}")
 
 
 def _validate_envelope(mutation):
@@ -137,9 +195,6 @@ def _apply_task_update(mutation):
     for field in changed:
         task.set(field, fields[field])
     if "status" in changed:
-        # Gateway already made the automation decision. This bypasses the
-        # manual board transition graph while retaining BP Task validation,
-        # hooks, activity and emitted business events.
         task.flags.ignore_transition_check = True
     task.save(ignore_permissions=True)
     return "applied", {"doctype": "BP Task", "name": task.name, "changed": changed}
@@ -157,18 +212,6 @@ def _apply_task_assignees(mutation):
         task.append("assignees", {"user": user, "full_name": full_name})
     task.save(ignore_permissions=True)
     return "applied", {"doctype": "BP Task", "name": task.name, "assignees": users}
-
-
-def _parse_labels(raw):
-    if isinstance(raw, list):
-        return _clean_strings(raw)
-    if isinstance(raw, str) and raw:
-        try:
-            decoded = json.loads(raw)
-        except json.JSONDecodeError:
-            decoded = []
-        return _clean_strings(decoded if isinstance(decoded, list) else [])
-    return []
 
 
 def _apply_task_labels(mutation):
@@ -206,7 +249,6 @@ def _apply_task_create(mutation):
     if not isinstance(title, str) or not title.strip() or len(title) > 500:
         frappe.throw("task.create requires a bounded final title")
     if not isinstance(status, str) or not status:
-        # No Python-side project-default lookup. The gateway must resolve it.
         frappe.throw("task.create requires final status")
     assignees = _clean_strings(mutation.get("assignees") or [])
     doc = frappe.get_doc({
@@ -216,7 +258,10 @@ def _apply_task_create(mutation):
         "task_type": mutation.get("task_type") or "Task",
         "status": status,
         "priority": mutation.get("priority") or "Medium",
-        "assignees": [{"user": user, "full_name": frappe.db.get_value("User", user, "full_name") or user} for user in assignees],
+        "assignees": [
+            {"user": user, "full_name": frappe.db.get_value("User", user, "full_name") or user}
+            for user in assignees
+        ],
     }).insert(ignore_permissions=True)
     link_to_task = mutation.get("link_to_task")
     if link_to_task:
@@ -269,9 +314,7 @@ def _apply_notification(mutation):
     if not recipients or not isinstance(message, str) or not message.strip():
         frappe.throw("notification.send requires final recipients and message")
     from batch_projects.events import _create_notification
-    names = []
     for recipient in recipients:
-        before = frappe.db.get_value("BP Notification", {"recipient": recipient}, "name", order_by="creation desc")
         _create_notification(
             recipient=recipient,
             notification_type="Automation",
@@ -280,10 +323,7 @@ def _apply_notification(mutation):
             actor=frappe.session.user,
             message=message,
         )
-        after = frappe.db.get_value("BP Notification", {"recipient": recipient}, "name", order_by="creation desc")
-        if after and after != before:
-            names.append(after)
-    return "applied", {"notifications": names, "recipients": recipients}
+    return "applied", {"recipients": recipients}
 
 
 def _apply_email(mutation):
