@@ -2,8 +2,8 @@
 
 Soft deletion changes live visibility and the gateway authorization graph, so it
 cannot remain a raw ``is_deleted`` flag flip. These endpoints are wired through
-``override_whitelisted_methods`` and keep MariaDB, realtime clients, Redis and
-OpenFGA aligned.
+``override_whitelisted_methods`` and keep MariaDB, realtime clients, automation,
+notification rules, Redis and OpenFGA aligned.
 
 Cascade provenance uses one shared ``deleted_on`` timestamp for the parent and
 only the descendants deleted by that same operation. Restore therefore never
@@ -13,6 +13,10 @@ resurrects a child that had already been independently trashed.
 from __future__ import annotations
 
 import frappe
+
+
+TASK_TRASHED = "task.trashed"
+TASK_RESTORED = "task.restored"
 
 
 def _manager_task(issue: str):
@@ -30,6 +34,36 @@ def _assignees(issue: str) -> list[str]:
     )
 
 
+def _dispatch_after_commit(event: str, payload: dict) -> None:
+    """Run the durable event pipeline after the lifecycle transaction commits.
+
+    Calling events.emit() from an after_commit callback would schedule its
+    realtime broadcast onto after_commit *again*. Drive the same primitives
+    directly instead so automation/notification rules see the committed trash
+    state immediately and realtime is published in this callback.
+
+    ReBAC is explicit because task.trashed/task.restored carry a list of direct
+    assignee tuples and are intentionally outside events.py's compact
+    one-user relationship envelope.
+    """
+    from batch_projects import events
+
+    enriched = events._enrich(event, dict(payload))
+    events._invalidate_cache(event, enriched)
+    events._broadcast(event, enriched, after_commit=False)
+    events._evaluate_automations(event, enriched)
+    events._queue_notifications(event, enriched)
+
+    try:
+        from batch_projects import bridge
+        bridge.publish_rebac_event(enriched)
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"bp rebac {event} sync failed",
+        )
+
+
 def _schedule_lifecycle(event: str, doc, users: list[str]) -> None:
     payload = {
         "event": event,
@@ -40,30 +74,7 @@ def _schedule_lifecycle(event: str, doc, users: list[str]) -> None:
         "users": sorted(set(users)),
         "timestamp": frappe.utils.now(),
     }
-
-    def after_commit():
-        from batch_projects.cache import invalidate_project
-        invalidate_project(doc.project)
-
-        try:
-            from batch_projects import bridge
-            bridge.publish_rebac_event(payload)
-        except Exception:
-            frappe.log_error(
-                frappe.get_traceback(),
-                f"bp rebac {event} sync failed",
-            )
-
-        try:
-            from batch_projects.events import broadcast_only
-            broadcast_only(event, payload, after_commit=False)
-        except Exception:
-            frappe.log_error(
-                frappe.get_traceback(),
-                f"bp realtime {event} broadcast failed",
-            )
-
-    frappe.db.after_commit.add(after_commit)
+    frappe.db.after_commit.add(lambda: _dispatch_after_commit(event, payload))
 
 
 def _trash_tree(issue: str, deleted_on, actor: str) -> list[str]:
@@ -91,7 +102,7 @@ def _trash_tree(issue: str, deleted_on, actor: str) -> list[str]:
         },
         update_modified=False,
     )
-    _schedule_lifecycle("task.trashed", doc, users)
+    _schedule_lifecycle(TASK_TRASHED, doc, users)
     changed.append(doc.name)
     return changed
 
@@ -120,7 +131,7 @@ def _restore_tree(issue: str, cascade_stamp) -> list[str]:
         {"is_deleted": 0, "deleted_on": None, "deleted_by": None},
         update_modified=False,
     )
-    _schedule_lifecycle("task.restored", doc, _assignees(doc.name))
+    _schedule_lifecycle(TASK_RESTORED, doc, _assignees(doc.name))
     changed.append(doc.name)
 
     for child in children:
