@@ -127,6 +127,7 @@ def validate_task_assignees(doc, method=None):
 
     _validate_task_type(doc, old)
     _validate_project_relations(doc, old)
+    _validate_pending_approver(doc, old, new_users)
 
     _assert_new_mentions_authorized(
         project=doc.project,
@@ -166,13 +167,7 @@ def validate_task_assignees(doc, method=None):
 
 
 def _prune_watchers_for_project_move(doc, pending_assignees) -> None:
-    """Keep only watchers who can still view the task in its target project.
-
-    The task row still belongs to the old project while validate() is running,
-    so evaluate the target project explicitly and treat the new in-memory
-    assignee set as an access edge. All mutations occur in the same DB
-    transaction as the task move and roll back with it on failure.
-    """
+    """Keep only watchers who can still view the task in its target project."""
     rows = frappe.get_all(
         "BP Task Watcher", filters={"task": doc.name}, fields=["name", "user"]
     )
@@ -199,6 +194,36 @@ def _validate_task_type(doc, old=None) -> None:
             f"Choose one of: {', '.join(sorted(valid))}.",
             frappe.ValidationError,
             title="Invalid task type",
+        )
+
+
+def _validate_pending_approver(doc, old=None, pending_assignees=()) -> None:
+    """Pending approval can only be assigned to somebody who can open the task.
+
+    Approval is responsibility, not an implicit permission grant. Historical
+    unchanged pending approvals are grandfathered; new requests, approver
+    changes and project moves are checked strictly.
+    """
+    if (doc.approval_status or "") != "Pending":
+        return
+    changed = (
+        not old
+        or old.project != doc.project
+        or (old.approver or None) != (doc.approver or None)
+        or (old.approval_status or "") != (doc.approval_status or "")
+    )
+    if not changed:
+        return
+    if not doc.approver:
+        frappe.throw("Pending approval requires an approver.", frappe.ValidationError)
+    _assert_assignable_user(doc.approver)
+    task = None if doc.is_new() else doc.name
+    if not _user_can_view_task(doc.project, task, doc.approver, pending_assignees):
+        frappe.throw(
+            "The approver cannot view this task. Add them to the project or "
+            "assign them to the task before requesting approval.",
+            frappe.PermissionError,
+            title="Approver has no task access",
         )
 
 
