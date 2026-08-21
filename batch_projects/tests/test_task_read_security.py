@@ -1,6 +1,5 @@
 """Task-detail relationship visibility and hook regression coverage."""
 
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
@@ -18,11 +17,11 @@ class TestHookContracts(FrappeTestCase):
             "batch_projects.task_reads.get_task",
         )
 
-    def test_critical_daily_jobs_are_preserved(self):
+    def test_critical_daily_jobs_are_preserved_on_live_scheduler(self):
         daily = set(hooks.scheduler_events["daily"])
-        self.assertIn("batch_projects.events.send_due_date_reminders", daily)
-        self.assertIn("batch_projects.events.run_due_soon_automations", daily)
-        self.assertIn("batch_projects.events.run_overdue_automations", daily)
+        self.assertIn("batch_projects.scheduler_live.send_due_date_reminders", daily)
+        self.assertIn("batch_projects.scheduler_live.run_due_soon_automations", daily)
+        self.assertIn("batch_projects.scheduler_live.run_overdue_automations", daily)
         self.assertIn("batch_projects.events.purge_expired_trash", daily)
         self.assertIn("batch_projects.timesheet_sync.reconcile_actual_hours", daily)
 
@@ -46,13 +45,19 @@ class TestLinkedTaskReadSecurity(FrappeTestCase):
 
         self.assertEqual(visible, {"TASK-PUBLIC"})
 
+    @patch("batch_projects.task_invariants._user_can_view_task")
     @patch.object(task_reads.frappe, "get_all")
-    def test_trashed_subtask_is_removed_from_live_detail(self, get_all):
-        get_all.return_value = ["SUB-LIVE"]
-        live = task_reads._live_subtask_names([
-            {"name": "SUB-LIVE"}, {"name": "SUB-TRASH"}
+    def test_subtask_requires_its_own_task_visibility(self, get_all, can_view):
+        get_all.return_value = [
+            frappe._dict(name="SUB-LIVE", project="PROJ-A"),
+            frappe._dict(name="SUB-HIDDEN", project="PROJ-A"),
+        ]
+        can_view.side_effect = [True, False]
+        visible = task_reads._visible_subtask_names([
+            {"name": "SUB-LIVE"}, {"name": "SUB-HIDDEN"}, {"name": "SUB-TRASH"}
         ])
-        self.assertEqual(live, {"SUB-LIVE"})
+        self.assertEqual(visible, {"SUB-LIVE"})
+        self.assertEqual(get_all.call_args.kwargs["filters"]["is_deleted"], 0)
 
 
 class _LinkRow:
