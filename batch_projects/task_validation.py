@@ -155,6 +155,14 @@ def validate_task(doc, method=None):
         task_invariants.validate_task_assignees(doc, method=method)
 
     old = doc.get_doc_before_save() if hasattr(doc, "get_doc_before_save") else None
+
+    # Field-level authorization is deliberately before the remaining semantic
+    # validators: a caller who is not allowed to mutate a field should learn
+    # only that fact, not receive validation details about data they had no
+    # authority to change in the first place.
+    from batch_projects.task_field_security import validate_task_field_authority
+    validate_task_field_authority(doc, old)
+
     validate_task_labels(doc, old)
     validate_link_visibility(doc, old)
     validate_completion_dependencies(doc, old)
