@@ -176,7 +176,7 @@ doc_events = {
     },
     "BP Project Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
-        "on_trash": "batch_projects.membership_invariants.on_project_member_trash",
+        "after_delete": "batch_projects.membership_invariants.after_project_member_delete",
     },
     "BP Team Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
