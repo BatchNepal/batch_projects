@@ -148,13 +148,20 @@ class TestPruneStaleWatchersAndDelegation(FrappeTestCase):
 
     def _watch(self, user):
         _ensure_user(user)
-        return frappe.get_doc({
-            "doctype": "BP Task Watcher",
-            "task": self.task,
-            "project": self.project,
-            "user": user,
-            "watch_reason": "manual",
-        }).insert(ignore_permissions=True)
+        # BPTaskWatcher.validate() (added alongside notification_permissions.py)
+        # requires the watcher's own user to currently be able to view the
+        # task at creation time — a separate, later-added concern from the
+        # revocation-pruning behavior this test class exercises. Bypass just
+        # the creation-time gate here; test bodies still patch
+        # _user_can_view_task themselves to control pruning behavior.
+        with patch("batch_projects.task_invariants._user_can_view_task", return_value=True):
+            return frappe.get_doc({
+                "doctype": "BP Task Watcher",
+                "task": self.task,
+                "project": self.project,
+                "user": user,
+                "watch_reason": "manual",
+            }).insert(ignore_permissions=True)
 
     def test_watcher_removed_when_user_has_no_remaining_access(self):
         watcher = self._watch("revoked@example.com")
