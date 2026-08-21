@@ -22,17 +22,6 @@ class TestWatcherRevocationRoutes(FrappeTestCase):
 
 
 class TestWatcherRevocation(FrappeTestCase):
-    @patch.object(inv.frappe.db, "delete")
-    @patch.object(inv, "_user_can_view_task", create=True)
-    @patch.object(inv.frappe.db, "get_value")
-    @patch.object(inv.frappe, "get_all")
-    def test_revoked_user_watcher_is_deleted_when_no_access_remains(
-        self, get_all, get_value, can_view, delete
-    ):
-        # membership_invariants imports _user_can_view_task inside the function,
-        # so patch the source module instead below.
-        pass
-
     @patch("batch_projects.task_invariants._user_can_view_task", return_value=False)
     @patch.object(inv.frappe.db, "delete")
     @patch.object(inv.frappe.db, "get_value")
