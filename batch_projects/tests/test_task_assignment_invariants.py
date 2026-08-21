@@ -62,7 +62,7 @@ class TestTaskAssignmentInvariantHooks(FrappeTestCase):
         task_hooks = hooks.doc_events["BP Task"]
         self.assertEqual(
             task_hooks["validate"],
-            "batch_projects.task_invariants.validate_task_assignees",
+            "batch_projects.task_validation.validate_task",
         )
         self.assertEqual(
             task_hooks["after_insert"],
