@@ -145,7 +145,15 @@ def validate_trash_state(doc, old=None) -> None:
 
 def validate_task(doc, method=None):
     """One durable validation boundary for BP Task mutations."""
-    task_invariants.validate_task_assignees(doc, method=method)
+    # A configured project default is a manager-authored assignment policy,
+    # not a discretionary access grant by the Member creating this task. It
+    # therefore gets one narrowly-scoped insert validator that proves the
+    # complete assignee set equals the configured default. Every other write
+    # uses the ordinary actor-authority invariant unchanged.
+    from batch_projects.task_defaults import validate_materialized_default
+    if not validate_materialized_default(doc):
+        task_invariants.validate_task_assignees(doc, method=method)
+
     old = doc.get_doc_before_save() if hasattr(doc, "get_doc_before_save") else None
     validate_task_labels(doc, old)
     validate_link_visibility(doc, old)
