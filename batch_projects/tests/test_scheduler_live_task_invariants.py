@@ -114,6 +114,7 @@ class TestDailyDigestLiveTasks(FrappeTestCase):
         self.assertEqual(build_html.call_args.args[3], 4)
         sendmail.assert_called_once()
         self.assertEqual(sendmail.call_args.kwargs["recipients"], ["user@example.com"])
+        self.assertFalse(sendmail.call_args.kwargs["delayed"])
 
     @patch("batch_projects.events._has_outgoing_email", return_value=True)
     @patch.object(scheduler, "resolve_system_user", return_value=None)
