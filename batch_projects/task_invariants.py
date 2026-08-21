@@ -30,7 +30,6 @@ def _user_row(user: str):
 
 
 def _assert_assignable_user(user: str):
-    """Return the User row or fail closed when ``user`` cannot own task work."""
     row = _user_row(user)
     if (
         not row
@@ -60,12 +59,7 @@ def _mention_users(text) -> set[str]:
 
 
 def _user_can_view_task(project: str, task: str | None, user: str, pending_assignees=()) -> bool:
-    """Whether ``user`` already has authority to see this task.
-
-    Mentioning somebody is not an access-grant operation. A target qualifies
-    through normal project Viewer access, an already-durable task-assignee
-    edge, or an assignee edge being created in the same task save.
-    """
+    """Whether ``user`` already has authority to see this task."""
     from batch_projects import access
 
     row = _user_row(user)
@@ -107,7 +101,7 @@ def before_task_insert(doc, method=None):
 
 
 def validate_task_assignees(doc, method=None):
-    """Enforce assignment, relationship, mention and ReBAC move invariants."""
+    """Enforce assignment, schema, relationship, mention and ReBAC invariants."""
     old = doc.get_doc_before_save() if hasattr(doc, "get_doc_before_save") else None
     new_users = _assignee_users(doc)
     old_users = _assignee_users(old)
@@ -131,6 +125,7 @@ def validate_task_assignees(doc, method=None):
             row = _assert_assignable_user(user)
             assignee.full_name = row.full_name or user
 
+    _validate_task_type(doc, old)
     _validate_project_relations(doc, old)
 
     _assert_new_mentions_authorized(
@@ -168,12 +163,28 @@ def validate_task_assignees(doc, method=None):
         frappe.db.after_commit.add(_sync_project_move)
 
 
+def _validate_task_type(doc, old=None) -> None:
+    """New/changed task types must exist in the project's issue-type schema."""
+    if not doc.task_type:
+        return
+    if old and old.project == doc.project and old.task_type == doc.task_type:
+        return
+    project = frappe.get_cached_doc("BP Project", doc.project)
+    valid = {row.get("name") for row in (project.get_issue_types() or []) if row.get("name")}
+    if valid and doc.task_type not in valid:
+        frappe.throw(
+            f"Issue type '{doc.task_type}' is not defined in this project. "
+            f"Choose one of: {', '.join(sorted(valid))}.",
+            frappe.ValidationError,
+            title="Invalid task type",
+        )
+
+
 def _changed(doc, old, field: str) -> bool:
-    """True when a project-local relation needs fresh validation."""
     if not old:
         return True
     if old.project != doc.project:
-        return True  # project boundary changed: every surviving relation must fit the target
+        return True
     return (old.get(field) or None) != (doc.get(field) or None)
 
 
