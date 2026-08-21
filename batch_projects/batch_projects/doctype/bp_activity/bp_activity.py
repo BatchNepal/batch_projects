@@ -3,6 +3,16 @@ from frappe.model.document import Document
 
 
 class BPActivity(Document):
+    def validate(self):
+        # Comment mentions are an information-disclosure boundary: a mention
+        # must never become an implicit grant to a task the target could not
+        # otherwise see.  Keep this on BP Activity itself so create + edit,
+        # API + REST + ORM all share the same contract.
+        if self.action_type == "Comment" and self.task:
+            from batch_projects.task_invariants import validate_comment_mentions
+
+            validate_comment_mentions(self)
+
     def before_insert(self):
         """Every durable activity row must carry an origin.
 
