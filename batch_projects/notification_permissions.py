@@ -102,12 +102,16 @@ def has_permission(doc, user=None, permission_type=None):
     user = user or frappe.session.user
     if _is_admin(user):
         return True
+
+    # BP Notification is server-produced state. All legitimate producers use
+    # insert(ignore_permissions=True); an ordinary user's raw
+    # /api/resource/BP Notification POST must never become a way to spoof a
+    # notification to another user or forge activity-looking system messages.
+    if doc.get("__islocal"):
+        return False
+
     if doc.get("recipient") != user:
         return False
-    if doc.get("__islocal"):
-        # BPNotification.validate() applies the durable insertion check. This
-        # permits the normal server-side notification producer to create rows.
-        return True
 
     from batch_projects.notification_delivery import (
         can_receive_project_delivery,
