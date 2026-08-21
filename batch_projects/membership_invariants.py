@@ -1,0 +1,97 @@
+"""Authorization side effects of project membership changes.
+
+A BP Task Watcher row is a delivery subscription, never an access grant. If a
+user loses project membership, a stale watcher must not continue routing task
+notifications unless another authorization edge (task assignment or instance
+admin) still lets that user see the task.
+"""
+
+from __future__ import annotations
+
+import frappe
+
+
+def prune_stale_watchers(project: str, users=None) -> list[str]:
+    """Delete watcher rows whose user can no longer view their live task."""
+    filters = {"project": project}
+    if users is not None:
+        users = {u for u in users if u}
+        if not users:
+            return []
+        filters["user"] = ["in", sorted(users)]
+
+    rows = frappe.get_all(
+        "BP Task Watcher",
+        filters=filters,
+        fields=["name", "task", "user"],
+    )
+    if not rows:
+        return []
+
+    from batch_projects.task_invariants import _user_can_view_task
+
+    removed = []
+    for row in rows:
+        task = frappe.db.get_value(
+            "BP Task", row.task, ["name", "project", "is_deleted"], as_dict=True
+        )
+        if not task:
+            frappe.db.delete("BP Task Watcher", {"name": row.name})
+            removed.append(row.name)
+            continue
+
+        # Preserve subscriptions across soft trash so restore returns the task
+        # to the same followers. Revocation is evaluated against the live task
+        # only; task_lifecycle owns trash/restore visibility.
+        if task.is_deleted:
+            continue
+
+        if task.project != project or not _user_can_view_task(task.project, task.name, row.user):
+            frappe.db.delete("BP Task Watcher", {"name": row.name})
+            removed.append(row.name)
+    return removed
+
+
+@frappe.whitelist()
+def update_project_members(project, members):
+    """Preserve the existing API while applying revocation side effects."""
+    from batch_projects import access
+    access.require(project, "Admin")
+
+    before = set(
+        frappe.get_all("BP Project Member", filters={"parent": project}, pluck="user")
+    )
+
+    # Direct Python call intentionally bypasses override_whitelisted_methods and
+    # invokes the legacy implementation once. It remains authoritative for the
+    # membership mutation itself; this adapter owns only access-revocation
+    # cleanup around it.
+    from batch_projects.api import board
+    result = board.update_project_members(project, members)
+
+    after = set(
+        frappe.get_all("BP Project Member", filters={"parent": project}, pluck="user")
+    )
+    removed_users = before - after
+    if removed_users:
+        prune_stale_watchers(project, removed_users)
+        frappe.db.commit()
+    return result
+
+
+def on_project_member_trash(doc, method=None):
+    """Catch ORM/REST child-row deletion outside update_project_members."""
+    project = doc.parent
+    user = doc.user
+
+    def after_commit():
+        try:
+            prune_stale_watchers(project, {user})
+            frappe.db.commit()
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                "bp watcher revocation cleanup failed",
+            )
+
+    frappe.db.after_commit.add(after_commit)
