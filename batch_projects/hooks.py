@@ -184,6 +184,13 @@ doc_events = {
     "Payment Entry": {
         "on_submit": "batch_projects.erp_triggers.on_payment_entry_submit",
     },
+    # Assignment correctness belongs at the document boundary, not only in
+    # board.py. This catches SPA/API, generic REST, import and automation paths.
+    "BP Task": {
+        "before_insert": "batch_projects.task_invariants.before_task_insert",
+        "validate": "batch_projects.task_invariants.validate_task_assignees",
+        "after_insert": "batch_projects.task_invariants.after_task_insert",
+    },
     # Generic doc-event trigger — widens erp.* coverage beyond the 4
     # hardcoded doctypes above. "*" fires for EVERY doctype site-wide;
     # on_any_doctype_event() bails in ~microseconds via a cached "does any
