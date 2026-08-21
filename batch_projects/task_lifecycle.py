@@ -77,6 +77,51 @@ def _schedule_lifecycle(event: str, doc, users: list[str]) -> None:
     frappe.db.after_commit.add(lambda: _dispatch_after_commit(event, payload))
 
 
+def _stop_active_timers(doc, deleted_on) -> list[str]:
+    """Stop every running timer on ``doc`` at the exact trash timestamp.
+
+    A BP Active Timer is operational state, not historical accounting state. If
+    it survives soft-delete it keeps accumulating invisible hours and may later
+    create a wildly inflated Timesheet row. Preserve the work already done by
+    resolving the span through the same `_append_time_log` path as a normal
+    stop, then remove the timer inside the SAME transaction as trash.
+
+    Any failure to persist the elapsed work propagates and rolls the trash
+    transaction back. Silently deleting a timer, or trashing while losing its
+    worked time, would be worse than refusing the delete.
+    """
+    timers = frappe.get_all(
+        "BP Active Timer",
+        filters={"task": doc.name},
+        fields=["name", "user", "started_at"],
+    )
+    if not timers:
+        return []
+
+    from batch_projects.api.timers import _append_time_log
+
+    stopped = []
+    end_time = frappe.utils.get_datetime(deleted_on)
+    for timer in timers:
+        started_at = frappe.utils.get_datetime(timer.started_at)
+        hours = round(frappe.utils.time_diff_in_hours(end_time, started_at), 4)
+
+        # Remove the running-state row even for a sub-minute/clock-skew span;
+        # there is no meaningful time row to persist when the duration is <= 0.
+        frappe.delete_doc("BP Active Timer", timer.name, ignore_permissions=True)
+        if hours > 0:
+            _append_time_log(
+                doc,
+                timer.user,
+                started_at,
+                end_time,
+                hours,
+                description=f"Auto-stopped when {doc.task_key} was moved to Trash",
+            )
+        stopped.append(timer.name)
+    return stopped
+
+
 def _trash_tree(issue: str, deleted_on, actor: str) -> list[str]:
     doc = frappe.get_doc("BP Task", issue)
     if doc.is_deleted:
@@ -90,6 +135,10 @@ def _trash_tree(issue: str, deleted_on, actor: str) -> list[str]:
     )
     for child in children:
         changed.extend(_trash_tree(child, deleted_on, actor))
+
+    # A hidden timer must never outlive its task. Use the cascade's shared
+    # timestamp so parent/child timers all stop at one deterministic instant.
+    _stop_active_timers(doc, deleted_on)
 
     users = _assignees(doc.name)
     frappe.db.set_value(
