@@ -34,27 +34,17 @@ add_to_apps_screen = [
 
 # app_include_js = ["/assets/batch_projects/js/batch_projects.js"]
 
-# Website route rules — catch both /workspace and /workspace/<any path>
 website_route_rules = [
     {"from_route": "/workspace", "to_route": "workspace"},
     {"from_route": "/workspace/<path:app_path>", "to_route": "workspace"},
-    # Public, view-only share links — served by the same SPA bundle. The SPA
-    # router resolves /share/:token and renders the chrome-less read-only page.
     {"from_route": "/share/<path:app_path>", "to_route": "workspace"},
-    # Public intake forms — same shape, resolved by the SPA router's
-    # /intake/:token route (IntakeForm.vue). Without this entry the request
-    # never leaves Frappe's website-routing layer and 404s before reaching
-    # the SPA at all.
     {"from_route": "/intake/<path:app_path>", "to_route": "workspace"},
 ]
 
-# Fixtures for export — roles must match what board.py actually uses
 fixtures = [
     {"dt": "Role", "filters": [[
         "name", "in", ["BP Admin", "BP Manager", "BP Member", "BP Viewer", "BP Guest"]
     ]]},
-    # Custom fields on core ERPNext doctypes — NEVER edit erpnext JSON directly,
-    # these ship as fixtures. Filtered to exactly the fields we own.
     {"dt": "Custom Field", "filters": [[
         "name", "in", ["Timesheet Detail-custom_bp_task", "Sales Order-custom_bp_project",
                        "Expense Claim Detail-custom_is_billable",
@@ -64,28 +54,16 @@ fixtures = [
                        "Lead-custom_bp_project", "Opportunity-custom_bp_project",
                        "Quotation-custom_bp_project"]
     ]]},
-    # Client Script on Sales Order (8C) / Lead / Opportunity / Quotation —
-    # the "Create Batch Project" button, one per stage of the pipeline.
     {"dt": "Client Script", "filters": [[
         "name", "in", ["Sales Order Batch Project Button", "Lead Batch Project Button",
                        "Opportunity Batch Project Button", "Quotation Batch Project Button"]
     ]]},
 ]
 
-# Hooks
 after_install = "batch_projects.setup.install.after_install"
 
-# Runs inside frappe.auth.validate_auth() on every request. Re-scopes
-# frappe.session.user from the gateway's service account (what actually
-# authenticated a cross-origin browser call — Frappe has no notion of the
-# gateway's own JWTs) to the real user the gateway's signed X-BP-Acting-User
-# header asserts. No-ops for same-origin traffic and anything not proxied by
-# the gateway. See gateway_guard.py's module docstring.
 auth_hooks = ["batch_projects.gateway_guard.apply_gateway_identity"]
 
-# High-blast-radius project schema writes are routed out of api/board.py's
-# monolith without changing the public method names the SPA already calls.
-# Frappe resolves these overrides before invoking the whitelisted method.
 override_whitelisted_methods = {
     "batch_projects.api.board.update_project_workflow":
         "batch_projects.project_schema.update_project_workflow",
@@ -95,17 +73,6 @@ override_whitelisted_methods = {
         "batch_projects.project_schema.update_project_labels",
 }
 
-# Data-layer access control — closes the generic-REST bypass and enforces
-# project `visibility`. See batch_projects/permissions.py.
-#
-# BP Milestone / BP Risk / BP Automation Run are project-scoped but granted
-# to broad stock roles (Projects User/Manager) with no hook at all, so the
-# generic REST API bypasses project access entirely for them (including
-# BP Milestone's invoice_amount/sales_invoice billing fields). BP
-# Notification is scoped to `recipient`, not a project; it has `All: write`,
-# letting any user mark ANY other user's notification read/unread via raw
-# REST (mark_notification_read/_unread are the correct, redundant-but-
-# harmless whitelisted path for the SPA).
 permission_query_conditions = {
     "BP Task":            "batch_projects.permissions.bp_task_query_conditions",
     "BP Project":         "batch_projects.permissions.bp_project_query_conditions",
@@ -117,8 +84,6 @@ permission_query_conditions = {
     "BP Automation Run":  "batch_projects.permissions.bp_automation_run_query_conditions",
     "BP Notification":    "batch_projects.permissions.bp_notification_query_conditions",
     "BP Webhook Token":   "batch_projects.permissions.bp_webhook_token_query_conditions",
-    # Project-scoped doctypes with a `project` field but no hook without
-    # this (see permissions.py for the shared query-condition primitives).
     "BP Drawing":           "batch_projects.permissions.bp_drawing_query_conditions",
     "BP Intake Form":       "batch_projects.permissions.bp_intake_form_query_conditions",
     "BP Invitation":        "batch_projects.permissions.bp_invitation_query_conditions",
@@ -167,24 +132,13 @@ has_permission = {
     "BP Workflow":          "batch_projects.permissions.bp_doc_has_permission",
 }
 
-# actual_hours rollup — resync every BP Task a submitted/cancelled
-# Timesheet's rows point at (via the custom_bp_task fixture field).
-# erp.* automation triggers fire onto the same events.emit() bus every
-# task/comment/schedule trigger already rides. Tenancy-checked no-ops for
-# anything outside a BP Project.
 doc_events = {
     "Timesheet": {
         "on_submit": "batch_projects.timesheet_sync.on_timesheet_submit",
         "on_cancel": "batch_projects.timesheet_sync.on_timesheet_cancel",
     },
     "Sales Invoice": {
-        # P0 billing reservation: native ERPNext draft creation/editing must
-        # obey the same Timesheet Detail exclusivity as BatchProjects.
         "validate": "batch_projects.billing_reservation.validate_sales_invoice_sources",
-
-        # Milestone billing lifecycle. on_submit also delegates to the existing
-        # erp.invoice_submitted automation emitter so there remains exactly one
-        # specific Sales Invoice submit hook.
         "after_insert": "batch_projects.milestone_billing.on_sales_invoice_after_insert",
         "on_submit": "batch_projects.milestone_billing.on_sales_invoice_submit",
         "on_cancel": "batch_projects.milestone_billing.on_sales_invoice_cancel",
@@ -196,20 +150,11 @@ doc_events = {
     "Payment Entry": {
         "on_submit": "batch_projects.erp_triggers.on_payment_entry_submit",
     },
-    # Assignment correctness belongs at the document boundary, not only in
-    # board.py. This catches SPA/API, generic REST, import and automation paths.
     "BP Task": {
         "before_insert": "batch_projects.task_invariants.before_task_insert",
-        "validate": "batch_projects.task_invariants.validate_task_assignees",
+        "validate": "batch_projects.task_validation.validate_task",
         "after_insert": "batch_projects.task_invariants.after_task_insert",
     },
-    # Generic doc-event trigger — widens erp.* coverage beyond the 4
-    # hardcoded doctypes above. "*" fires for EVERY doctype site-wide;
-    # on_any_doctype_event() bails in ~microseconds via a cached "does any
-    # active rule even care" check before doing any real work, so this is
-    # near-zero overhead for the common case of zero erp.doc_event rules.
-    # The 4 specific handlers above stay as-is (real project-resolution
-    # logic worth keeping, and they predate/are unaffected by this).
     "*": {
         "after_insert": "batch_projects.erp_triggers.on_any_doctype_event",
         "on_update": "batch_projects.erp_triggers.on_any_doctype_event",
@@ -217,9 +162,6 @@ doc_events = {
         "on_cancel": "batch_projects.erp_triggers.on_any_doctype_event",
         "on_trash": "batch_projects.erp_triggers.on_any_doctype_event",
     },
-    # Seat-limit enforcement — catches EVERY insertion path for BP Project
-    # Member and BP Team Member, including the generic REST API, batch
-    # operations, and ORM saves. See entitlements.before_member_insert.
     "BP Project Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
     },
@@ -228,7 +170,6 @@ doc_events = {
     },
 }
 
-# Scheduled jobs
 scheduler_events = {
     "hourly": [
         "batch_projects.events.send_scheduled_reports",
@@ -240,11 +181,6 @@ scheduler_events = {
         "batch_projects.events.run_overdue_automations",
         "batch_projects.api.erp_link.reconcile_erpnext_sync",
         "batch_projects.events.purge_expired_trash",
-        # Repairs BP Task.actual_hours when it drifts from the submitted
-        # timesheets. The live rollup only fires on Timesheet submit/cancel,
-        # so anything that moves hours outside that path (failed hook, patch,
-        # import, direct row edit) silently desynced a field that feeds
-        # billing and margin.
         "batch_projects.timesheet_sync.reconcile_actual_hours",
     ],
     "daily_long": [
