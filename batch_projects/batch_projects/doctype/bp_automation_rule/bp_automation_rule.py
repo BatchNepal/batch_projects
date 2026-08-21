@@ -40,8 +40,6 @@ def _parse(value, default=None):
     if not isinstance(value, str):
         return default
     current = value
-    # Some older rows were double encoded. Decode a bounded number of layers so
-    # configuration remains readable without accepting an unbounded parser loop.
     for _ in range(4):
         if not isinstance(current, str):
             return current
@@ -64,6 +62,17 @@ def _get_actions(rule):
         config = _parse(rule.get("action_config"), {})
         return [{"type": action_type, "config": config if isinstance(config, dict) else {}}]
     return []
+
+
+# Temporary import-compatibility names for older public modules while their old
+# callback endpoints are removed. They contain deliberately no matcher/action
+# logic and must never become a fallback execution path.
+def run_for_event(*_args, **_kwargs):
+    return None
+
+
+def run_scheduled(*_args, **_kwargs):
+    return "Skipped", "Python automation runtime has been removed; bp-gateway owns execution"
 
 
 class BPAutomationRule(Document):
@@ -141,8 +150,6 @@ class BPAutomationRule(Document):
         return (self.trigger_event or "").startswith("schedule.")
 
     def on_update(self):
-        # Event-driven definitions require no registration: Frappe publishes
-        # business events and the gateway loads active configuration on admission.
         if not self._is_scheduled() and not self.bridge_job_id:
             return
         self._sync_schedule()
