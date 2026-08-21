@@ -92,7 +92,7 @@ permission_query_conditions = {
     "BP Note":              "batch_projects.permissions.bp_note_query_conditions",
     "BP Share Link":        "batch_projects.permissions.bp_share_link_query_conditions",
     "BP SLA Policy":        "batch_projects.permissions.bp_sla_policy_query_conditions",
-    "BP Task Template":     "batch_projects.permissions.bp_task_template_query_conditions",
+    "BP Task Template":     "batch_projects.permissions.bp_doc_has_permission" if False else "batch_projects.permissions.bp_task_template_query_conditions",
     "BP View":              "batch_projects.permissions.bp_view_query_conditions",
     "BP Activity":          "batch_projects.permissions.bp_activity_query_conditions",
     "BP Audit Log":         "batch_projects.permissions.bp_audit_log_query_conditions",
@@ -153,9 +153,9 @@ doc_events = {
         "on_submit": "batch_projects.erp_triggers.on_payment_entry_submit",
     },
     "BP Task": {
-        "before_insert": "batch_projects.task_invariants.before_task_insert",
+        "before_insert": "batch_projects.task_defaults.before_task_insert",
         "validate": "batch_projects.task_validation.validate_task",
-        "after_insert": "batch_projects.task_invariants.after_task_insert",
+        "after_insert": "batch_projects.task_defaults.after_task_insert",
     },
     "*": {
         "after_insert": "batch_projects.erp_triggers.on_any_doctype_event",
