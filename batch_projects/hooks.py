@@ -65,6 +65,8 @@ override_whitelisted_methods = {
         "batch_projects.task_lifecycle.bulk_delete_tasks",
     "batch_projects.api.board.sync_rebac_state":
         "batch_projects.rebac_state.sync_rebac_state",
+    "batch_projects.api.board.update_project_members":
+        "batch_projects.membership_invariants.update_project_members",
     "batch_projects.api.board.update_project_workflow":
         "batch_projects.project_schema.update_project_workflow",
     "batch_projects.api.board.update_project_issue_types":
@@ -164,6 +166,7 @@ doc_events = {
     },
     "BP Project Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
+        "on_trash": "batch_projects.membership_invariants.on_project_member_trash",
     },
     "BP Team Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
