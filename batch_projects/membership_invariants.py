@@ -79,19 +79,22 @@ def update_project_members(project, members):
     return result
 
 
-def on_project_member_trash(doc, method=None):
-    """Catch ORM/REST child-row deletion outside update_project_members."""
-    project = doc.parent
-    user = doc.user
+def after_project_member_delete(doc, method=None):
+    """Catch ORM/REST child-row deletion outside update_project_members.
 
-    def after_commit():
-        try:
-            prune_stale_watchers(project, {user})
-            frappe.db.commit()
-        except Exception:
-            frappe.log_error(
-                frappe.get_traceback(),
-                "bp watcher revocation cleanup failed",
-            )
-
-    frappe.db.after_commit.add(after_commit)
+    ``after_delete`` runs after the membership DELETE has been issued but before
+    the surrounding transaction commits. The access check therefore sees the
+    new membership graph immediately, and watcher cleanup commits atomically
+    with the revocation instead of opening a nested post-commit transaction.
+    """
+    try:
+        prune_stale_watchers(doc.parent, {doc.user})
+    except Exception:
+        # Do not silently commit a revocation while leaving a known stale
+        # delivery subscription behind. Propagate after logging so the caller's
+        # transaction rolls back and the graph remains internally consistent.
+        frappe.log_error(
+            frappe.get_traceback(),
+            "bp watcher revocation cleanup failed",
+        )
+        raise
