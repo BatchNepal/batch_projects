@@ -49,6 +49,8 @@ def dispatch(*, recipient, ntype, actor, title, body, task=None, task_key=None,
 
     Enqueued after commit so it only fires once the BP Notification record is
     durable, and so a slow/absent desktop pipeline never blocks the save.
+    Authorization is checked again in ``_deliver`` — not here — because access
+    can change while this job waits in the short queue.
     """
     try:
         frappe.enqueue(
@@ -63,9 +65,36 @@ def dispatch(*, recipient, ntype, actor, title, body, task=None, task_key=None,
 
 
 def _deliver(*, recipient, ntype, actor, title, body, task, task_key, project, deep_link):
-    """Worker side: hand the notification to erpdesktop_agent's producer, which
-    creates the durable Event + publishes agent:notification:new. Silent no-op if
-    the agent app isn't installed; never raises."""
+    """Worker side: authorize at the last possible point, then hand off.
+
+    A watcher/member may have lost access after the event was emitted but before
+    this queued job runs. Never let queue delay turn stale routing state into a
+    metadata side channel.
+    """
+    try:
+        from batch_projects.notification_delivery import (
+            can_receive_project_delivery,
+            can_receive_task_delivery,
+        )
+
+        if task:
+            if not can_receive_task_delivery(recipient, task, project):
+                frappe.logger("bp.push").info(
+                    "desktop task notification dropped after access revocation"
+                )
+                return
+        elif ntype == "Task Deleted" and project:
+            if not can_receive_project_delivery(recipient, project, "Viewer"):
+                frappe.logger("bp.push").info(
+                    "desktop task tombstone notification dropped after access revocation"
+                )
+                return
+    except Exception:
+        # Authorization failures must fail closed. A broken permission lookup is
+        # not a reason to disclose the notification.
+        frappe.log_error(frappe.get_traceback(), "bp desktop push authorization failed")
+        return
+
     try:
         from erpdesktop_agent.dispatch.fanout import push_notification
     except ImportError:
