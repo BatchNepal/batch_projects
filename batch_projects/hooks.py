@@ -181,6 +181,22 @@ override_whitelisted_methods = {
         "batch_projects.task_surfaces.complete_sprint",
     "batch_projects.api.board.get_project_files":
         "batch_projects.task_surfaces.get_project_files",
+    "batch_projects.api.dashboards.get_column_widget_data":
+        "batch_projects.dashboard_task_reads.get_column_widget_data",
+    "batch_projects.api.dashboards.get_widget_source_fields":
+        "batch_projects.dashboard_security.get_widget_source_fields",
+    "batch_projects.api.dashboards.get_widget_source_field_options":
+        "batch_projects.dashboard_security.get_widget_source_field_options",
+    "batch_projects.api.dashboards.get_multi_source_count":
+        "batch_projects.dashboard_security.get_multi_source_count",
+    "batch_projects.api.dashboards.get_doctype_group_data":
+        "batch_projects.dashboard_security.get_doctype_group_data",
+    "batch_projects.api.dashboards.get_doctype_column_data":
+        "batch_projects.dashboard_security.get_doctype_column_data",
+    "batch_projects.api.dashboards.update_widget_source_field":
+        "batch_projects.dashboard_security.update_widget_source_field",
+    "batch_projects.api.dashboards.get_widget_source_doc_quickview":
+        "batch_projects.dashboard_security.get_widget_source_doc_quickview",
 }
 
 # actual_hours rollup — resync every BP Task a submitted/cancelled
