@@ -20,12 +20,6 @@ let _es = null;
 let _reconnectTimer = null;
 let _reconnectDelay = 1000;
 const MAX_RECONNECT_DELAY = 30000;
-// Once a connection has failed several times in a row *immediately* (see
-// _connectStartedAt below), treat it as a standing gate rather than a
-// network blip — e.g. bp-gateway's 402 when the tenant's plan doesn't
-// include the "realtime" feature (Team+ only, internal/realtime.go). That
-// gate doesn't lift on its own, so retrying every ~30s forever just spams
-// the console for the lifetime of the tab. Back off to a slow poll instead.
 const HARD_GATE_RECONNECT_DELAY = 5 * 60 * 1000;
 const HARD_GATE_THRESHOLD = 3;
 let _consecutiveInstantFails = 0;
@@ -39,9 +33,20 @@ export function onRealtimeEvent(handler) {
 }
 
 function _dispatch(payload) {
+  // ProjectStore historically used comment.added as its generic "comments for
+  // this open task changed; refetch detail" signal. Backend now emits the
+  // precise lifecycle names comment.updated/comment.deleted. Preserve those
+  // semantics for future listeners while adapting the existing store through
+  // one compatibility projection instead of duplicating comment mutation
+  // handling across every component.
+  const delivered =
+    payload?.event === "comment.updated" || payload?.event === "comment.deleted"
+      ? { ...payload, comment_event: payload.event, event: "comment.added" }
+      : payload;
+
   for (const handler of _handlers) {
     try {
-      handler(payload);
+      handler(delivered);
     } catch (e) {
       console.error("[BP] realtime handler error:", e);
     }
@@ -78,21 +83,12 @@ export function connectRealtime() {
 
   es.onopen = () => {
     console.log("[BP] realtime connected");
-    _reconnectDelay = 1000; // reset backoff on a clean connect
+    _reconnectDelay = 1000;
     _consecutiveInstantFails = 0;
   };
 
   es.onerror = () => {
-    // A dropped connection auto-retries via the browser's native EventSource
-    // reconnect. A hard close (readyState CLOSED — e.g. a 401/402 from an
-    // expired/ungated token, which the browser treats as fatal and does NOT
-    // auto-retry) needs a manual reconnect with backoff, re-reading the
-    // token in case it rotated since we last connected.
     if (es.readyState === EventSource.CLOSED) {
-      // EventSource never exposes the failed response's status to JS, so
-      // fall back to timing: a rejection like a 402 entitlement gate closes
-      // near-instantly, while a genuine network drop closes after the
-      // connection has been live for a while.
       const failedFast = Date.now() - _connectStartedAt < 2000;
       teardownRealtime();
       if (failedFast) {
