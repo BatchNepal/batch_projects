@@ -107,6 +107,19 @@ def _visible_unread_count(user: str) -> int:
     return len(_visible_rows(user, unread_only=True))
 
 
+def visible_unread_count(user: str) -> int:
+    """Public scheduler-safe unread count using current notification access.
+
+    Scheduled emails are generated outside a browser session, so they cannot
+    call the whitelisted ``get_notification_count`` endpoint. Keep one public
+    server-side primitive instead of letting schedulers fall back to a raw
+    ``frappe.db.count`` that includes notifications the user can no longer read.
+    """
+    if not user:
+        return 0
+    return _visible_unread_count(user)
+
+
 def _visible_notification(notification: str, user: str):
     row = frappe.db.get_value(
         "BP Notification",
