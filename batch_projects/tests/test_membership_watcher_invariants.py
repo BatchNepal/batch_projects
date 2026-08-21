@@ -16,9 +16,10 @@ class TestWatcherRevocationRoutes(FrappeTestCase):
             "batch_projects.membership_invariants.update_project_members",
         )
         self.assertEqual(
-            hooks.doc_events["BP Project Member"]["on_trash"],
-            "batch_projects.membership_invariants.on_project_member_trash",
+            hooks.doc_events["BP Project Member"]["after_delete"],
+            "batch_projects.membership_invariants.after_project_member_delete",
         )
+        self.assertNotIn("on_trash", hooks.doc_events["BP Project Member"])
 
 
 class TestWatcherRevocation(FrappeTestCase):
@@ -77,3 +78,9 @@ class TestWatcherRevocation(FrappeTestCase):
 
         self.assertEqual(removed, ["WATCH-1"])
         delete.assert_called_once_with("BP Task Watcher", {"name": "WATCH-1"})
+
+    @patch.object(inv, "prune_stale_watchers")
+    def test_after_delete_prunes_inside_same_transaction(self, prune):
+        doc = frappe._dict(parent="PROJ-1", user="old@example.com")
+        inv.after_project_member_delete(doc)
+        prune.assert_called_once_with("PROJ-1", {"old@example.com"})
