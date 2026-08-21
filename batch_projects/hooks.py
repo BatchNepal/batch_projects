@@ -83,6 +83,18 @@ after_install = "batch_projects.setup.install.after_install"
 # the gateway. See gateway_guard.py's module docstring.
 auth_hooks = ["batch_projects.gateway_guard.apply_gateway_identity"]
 
+# High-blast-radius project schema writes are routed out of api/board.py's
+# monolith without changing the public method names the SPA already calls.
+# Frappe resolves these overrides before invoking the whitelisted method.
+override_whitelisted_methods = {
+    "batch_projects.api.board.update_project_workflow":
+        "batch_projects.project_schema.update_project_workflow",
+    "batch_projects.api.board.update_project_issue_types":
+        "batch_projects.project_schema.update_project_issue_types",
+    "batch_projects.api.board.update_project_labels":
+        "batch_projects.project_schema.update_project_labels",
+}
+
 # Data-layer access control — closes the generic-REST bypass and enforces
 # project `visibility`. See batch_projects/permissions.py.
 #
