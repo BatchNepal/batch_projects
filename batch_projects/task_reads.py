@@ -1,12 +1,8 @@
-"""Permission-aware task-detail read adapters.
+"""Permission-aware task read adapters.
 
-The legacy board.get_task implementation resolves linked-task metadata with
-frappe.get_all(), which intentionally bypasses permission query conditions.
-That is fine for the task the caller already opened, but unsafe for links into
-other private projects. This adapter is wired through
-``override_whitelisted_methods`` and strips linked records the caller cannot
-actually view. It also removes trashed subtasks from the normal live detail
-surface.
+Legacy board.py contains several read paths that predate the shared task query
+engine and use ``frappe.get_all`` directly. These adapters keep public method
+names stable while applying task visibility/trash invariants at the boundary.
 """
 
 from __future__ import annotations
@@ -18,14 +14,12 @@ def _visible_link_names(links) -> set[str]:
     names = {row.get("linked_task") for row in (links or []) if row.get("linked_task")}
     if not names:
         return set()
-
     rows = frappe.get_all(
         "BP Task",
         filters={"name": ["in", list(names)]},
         fields=["name", "project", "is_deleted"],
     )
     from batch_projects.task_invariants import _user_can_view_task
-
     user = frappe.session.user
     visible = set()
     for row in rows:
@@ -53,7 +47,6 @@ def _live_subtask_names(subtasks) -> set[str]:
 def get_task(issue):
     """Return task detail without leaking inaccessible linked-task metadata."""
     from batch_projects.api import board
-
     data = board.get_task(issue)
 
     links = data.get("links") or []
@@ -63,5 +56,22 @@ def get_task(issue):
     subtasks = data.get("subtasks") or []
     live = _live_subtask_names(subtasks)
     data["subtasks"] = [row for row in subtasks if row.get("name") in live]
-
     return data
+
+
+@frappe.whitelist()
+def get_export_data(project, view=None):
+    """Preserve the gateway export shape while excluding soft-deleted tasks."""
+    from batch_projects.api import board
+    rows = board.get_export_data(project, view=view)
+    if not rows:
+        return rows
+
+    live_keys = set(
+        frappe.get_all(
+            "BP Task",
+            filters={"project": project, "is_deleted": 0},
+            pluck="task_key",
+        )
+    )
+    return [row for row in rows if row.get("key") in live_keys]
