@@ -1,0 +1,178 @@
+"""Authoritative soft-trash / restore lifecycle for BP Task.
+
+Soft deletion changes live visibility and the gateway authorization graph, so it
+cannot remain a raw ``is_deleted`` flag flip. These endpoints are wired through
+``override_whitelisted_methods`` and keep MariaDB, realtime clients, Redis and
+OpenFGA aligned.
+
+Cascade provenance uses one shared ``deleted_on`` timestamp for the parent and
+only the descendants deleted by that same operation. Restore therefore never
+resurrects a child that had already been independently trashed.
+"""
+
+from __future__ import annotations
+
+import frappe
+
+
+def _manager_task(issue: str):
+    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects import access
+    access.require(doc.project, "Manager")
+    return doc
+
+
+def _assignees(issue: str) -> list[str]:
+    return frappe.get_all(
+        "BP Task Assignee",
+        filters={"parent": issue, "parenttype": "BP Task"},
+        pluck="user",
+    )
+
+
+def _schedule_lifecycle(event: str, doc, users: list[str]) -> None:
+    payload = {
+        "event": event,
+        "project": doc.project,
+        "task": doc.name,
+        "task_key": doc.task_key,
+        "title": doc.title,
+        "users": sorted(set(users)),
+        "timestamp": frappe.utils.now(),
+    }
+
+    def after_commit():
+        from batch_projects.cache import invalidate_project
+        invalidate_project(doc.project)
+
+        try:
+            from batch_projects import bridge
+            bridge.publish_rebac_event(payload)
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"bp rebac {event} sync failed",
+            )
+
+        try:
+            from batch_projects.events import broadcast_only
+            broadcast_only(event, payload, after_commit=False)
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"bp realtime {event} broadcast failed",
+            )
+
+    frappe.db.after_commit.add(after_commit)
+
+
+def _trash_tree(issue: str, deleted_on, actor: str) -> list[str]:
+    doc = frappe.get_doc("BP Task", issue)
+    if doc.is_deleted:
+        return []
+
+    changed = []
+    children = frappe.get_all(
+        "BP Task",
+        filters={"parent_task": issue, "is_deleted": 0},
+        pluck="name",
+    )
+    for child in children:
+        changed.extend(_trash_tree(child, deleted_on, actor))
+
+    users = _assignees(doc.name)
+    frappe.db.set_value(
+        "BP Task",
+        doc.name,
+        {
+            "is_deleted": 1,
+            "deleted_on": deleted_on,
+            "deleted_by": actor,
+        },
+        update_modified=False,
+    )
+    _schedule_lifecycle("task.trashed", doc, users)
+    changed.append(doc.name)
+    return changed
+
+
+def _restore_tree(issue: str, cascade_stamp) -> list[str]:
+    doc = frappe.get_doc("BP Task", issue)
+    if not doc.is_deleted:
+        return []
+
+    changed = []
+    # Restore only descendants deleted by the exact same cascade. A child with
+    # an older independent deletion timestamp remains in trash.
+    children = frappe.get_all(
+        "BP Task",
+        filters={
+            "parent_task": issue,
+            "is_deleted": 1,
+            "deleted_on": cascade_stamp,
+        },
+        pluck="name",
+    )
+
+    frappe.db.set_value(
+        "BP Task",
+        doc.name,
+        {"is_deleted": 0, "deleted_on": None, "deleted_by": None},
+        update_modified=False,
+    )
+    _schedule_lifecycle("task.restored", doc, _assignees(doc.name))
+    changed.append(doc.name)
+
+    for child in children:
+        changed.extend(_restore_tree(child, cascade_stamp))
+    return changed
+
+
+@frappe.whitelist()
+def delete_task(issue):
+    """Move one task subtree to trash without destroying history."""
+    doc = _manager_task(issue)
+    if doc.is_deleted:
+        return {"ok": True, "trashed": True, "tasks": []}
+
+    stamp = frappe.utils.now_datetime()
+    changed = _trash_tree(doc.name, stamp, frappe.session.user)
+    frappe.db.commit()
+    return {"ok": True, "trashed": True, "tasks": changed}
+
+
+@frappe.whitelist()
+def restore_task(issue):
+    """Restore exactly the subtree removed by this task's trash operation."""
+    doc = _manager_task(issue)
+    if not doc.is_deleted:
+        return {"ok": True, "restored": True, "tasks": []}
+
+    stamp = doc.deleted_on
+    changed = _restore_tree(doc.name, stamp)
+    frappe.db.commit()
+    return {"ok": True, "restored": True, "tasks": changed}
+
+
+@frappe.whitelist()
+def bulk_delete_tasks(issues):
+    if isinstance(issues, str):
+        issues = frappe.parse_json(issues)
+    if not isinstance(issues, list):
+        frappe.throw("issues must be a list", frappe.ValidationError)
+
+    deleted, failed = [], []
+    for issue in issues:
+        try:
+            result = delete_task(issue)
+            deleted.extend(result.get("tasks") or ([issue] if result.get("trashed") else []))
+        except frappe.PermissionError:
+            failed.append({"name": issue, "reason": "permission"})
+        except Exception as exc:
+            frappe.log_error(frappe.get_traceback(), "bulk task trash failed")
+            failed.append({"name": issue, "reason": str(exc)[:200]})
+
+    # Preserve one result per requested root even though ``tasks`` above also
+    # contains cascade descendants.
+    roots = [issue for issue in issues if issue in set(deleted)]
+    return {"deleted": roots, "failed": failed}
