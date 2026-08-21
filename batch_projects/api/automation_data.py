@@ -18,6 +18,7 @@ import frappe
 
 _ERPNEXT_UPDATE_DOCTYPES = {"Sales Invoice", "Sales Order", "Timesheet", "ToDo"}
 _TASK_UPDATE_FIELDS = {"status", "priority", "due_date"}
+_MAX_IDEMPOTENCY_KEY_LEN = 128
 _ALLOWED_KEYS = {
     "operation", "idempotency_key", "task", "project", "fields", "users", "labels",
     "comment", "target_doctype", "target_name", "recipients", "subject", "message",
@@ -136,14 +137,14 @@ def get_context(kind=None, project=None, task=None, **_):
 
 
 def _validate_envelope(mutation):
-    unknown = set(mutation) - _ALLOWED_KEYS
-    if unknown:
-        frappe.throw("Final mutation contains unsupported field(s): " + ", ".join(sorted(unknown)))
     leaked = set(mutation) & _FORBIDDEN_RUNTIME_KEYS
     if leaked:
         frappe.throw("Workflow runtime data is forbidden in final mutations: " + ", ".join(sorted(leaked)))
+    unknown = set(mutation) - _ALLOWED_KEYS
+    if unknown:
+        frappe.throw("Final mutation contains unsupported field(s): " + ", ".join(sorted(unknown)))
     key = mutation.get("idempotency_key")
-    if not isinstance(key, str) or not key.strip() or len(key) > 160:
+    if not isinstance(key, str) or not key.strip() or len(key) > _MAX_IDEMPOTENCY_KEY_LEN:
         frappe.throw("A bounded idempotency_key is required")
     operation = mutation.get("operation")
     if operation not in {
@@ -244,20 +245,26 @@ def _apply_task_create(mutation):
     project = mutation.get("project")
     title = mutation.get("title")
     status = mutation.get("status")
+    task_type = mutation.get("task_type")
+    priority = mutation.get("priority")
     if not project or not frappe.db.exists("BP Project", project):
         frappe.throw("task.create requires an existing final project")
     if not isinstance(title, str) or not title.strip() or len(title) > 500:
         frappe.throw("task.create requires a bounded final title")
     if not isinstance(status, str) or not status:
         frappe.throw("task.create requires final status")
+    if not isinstance(task_type, str) or not task_type:
+        frappe.throw("task.create requires final task_type")
+    if not isinstance(priority, str) or not priority:
+        frappe.throw("task.create requires final priority")
     assignees = _clean_strings(mutation.get("assignees") or [])
     doc = frappe.get_doc({
         "doctype": "BP Task",
         "project": project,
         "title": title.strip(),
-        "task_type": mutation.get("task_type") or "Task",
+        "task_type": task_type,
         "status": status,
-        "priority": mutation.get("priority") or "Medium",
+        "priority": priority,
         "assignees": [
             {"user": user, "full_name": frappe.db.get_value("User", user, "full_name") or user}
             for user in assignees
@@ -265,12 +272,15 @@ def _apply_task_create(mutation):
     }).insert(ignore_permissions=True)
     link_to_task = mutation.get("link_to_task")
     if link_to_task:
+        link_to_task_key = mutation.get("link_to_task_key")
         if not frappe.db.exists("BP Task", link_to_task):
             frappe.throw("task.create link_to_task does not exist")
+        if not isinstance(link_to_task_key, str) or not link_to_task_key:
+            frappe.throw("task.create relation requires final link_to_task_key")
         doc.append("links", {
             "link_type": "relates to",
             "linked_task": link_to_task,
-            "linked_task_key": mutation.get("link_to_task_key") or frappe.db.get_value("BP Task", link_to_task, "task_key"),
+            "linked_task_key": link_to_task_key,
         })
         doc.save(ignore_permissions=True)
     return "applied", {"doctype": "BP Task", "name": doc.name, "task_key": doc.get("task_key")}
@@ -328,11 +338,13 @@ def _apply_notification(mutation):
 
 def _apply_email(mutation):
     recipients = _clean_strings(mutation.get("recipients") or [])
-    subject = mutation.get("subject") or "Automation notification"
+    subject = mutation.get("subject")
     message = mutation.get("message")
     if not recipients or not isinstance(message, str) or not message.strip():
         frappe.throw("email.send requires final recipients and message")
-    if not isinstance(subject, str) or len(subject) > 500 or len(message) > 1000000:
+    if not isinstance(subject, str) or not subject.strip():
+        frappe.throw("email.send requires final subject")
+    if len(subject) > 500 or len(message) > 1000000:
         frappe.throw("email.send payload exceeds limits")
     frappe.sendmail(recipients=recipients, subject=subject, message=message)
     return "applied", {"recipients": recipients, "subject": subject}
