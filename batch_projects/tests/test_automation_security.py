@@ -194,6 +194,27 @@ class TestRuleAuthority(FrappeTestCase):
         with patch.object(access, "is_instance_admin", return_value=True):
             automation_security.validate_rule_authority(_rule(actions=action))
 
+    def test_message_template_rejects_internal_bookkeeping_field_tokens(self):
+        """Regression: _INTERNAL_TASK_FIELDS/_MONEY_TASK_FIELDS used to be
+        inlined here as a stale 2-field copy (sequence_no/bridge_job_id only)
+        from before task_reads.py existed — task_reads.py's real, current
+        set has 8 fields, so 6 of them (recurrence_source, deleted_by,
+        deleted_on, is_deleted, submitted_via_intake, timesheet_detail) were
+        never blocked as outbound tokens even though task_reads.py's own
+        read path redacts all 8 from the general task-detail response. Now
+        imported directly, so this must reject every field task_reads.py
+        itself considers internal, not just the two the old copy knew about.
+        """
+        from batch_projects.task_reads import _INTERNAL_TASK_FIELDS
+
+        for field in _INTERNAL_TASK_FIELDS:
+            action = json.dumps([{
+                "type": "Notify", "config": {"message": f"Value: {{{{ task.{field} }}}}"}
+            }])
+            with patch.object(access, "is_instance_admin", return_value=True):
+                with self.assertRaises(frappe.PermissionError):
+                    automation_security.validate_rule_authority(_rule(actions=action))
+
     def test_project_filter_rejected_on_project_scope_rule(self):
         with (
             patch.object(access, "is_instance_admin", return_value=False),
