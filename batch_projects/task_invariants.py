@@ -15,6 +15,7 @@ import frappe
 
 _RESERVED_ASSIGNEES = {"Guest", "Administrator"}
 _MENTION_RE = re.compile(r"@\[[^\]]+\]\(([^)]+)\)")
+_BLOCKING_LINK_TYPES = {"blocks", "is blocked by"}
 _PROJECT_RELATIONS = {
     "epic": ("BP Epic", "project", "Epic"),
     "milestone": ("BP Milestone", "project", "Milestone"),
@@ -127,6 +128,7 @@ def validate_task_assignees(doc, method=None):
 
     _validate_task_type(doc, old)
     _validate_project_relations(doc, old)
+    _validate_task_links(doc, old)
     _validate_pending_approver(doc, old, new_users)
 
     _assert_new_mentions_authorized(
@@ -301,6 +303,99 @@ def _validate_project_relations(doc, old=None) -> None:
                     "Team sprint does not belong to this project's team.",
                     frappe.ValidationError,
                 )
+
+
+def _link_signature(row):
+    return (
+        row.link_type,
+        row.linked_task,
+        row.get("dep_type") or "FS",
+        int(row.get("lag_days") or 0),
+    )
+
+
+def _validate_task_links(doc, old=None) -> None:
+    """Validate newly-created/changed task relationship edges.
+
+    The normal add_task_link endpoint already checks cycles, but a BP Task can
+    also be written through REST/import/ORM. New edges therefore receive the
+    same integrity checks at the durable task boundary. Unchanged legacy rows
+    are grandfathered so unrelated edits remain possible.
+    """
+    links = list(doc.get("links") or [])
+    old_signatures = {_link_signature(row) for row in (old.get("links") or [])} if old else set()
+    seen_pairs = set()
+
+    for row in links:
+        pair = (row.link_type, row.linked_task)
+        if pair in seen_pairs:
+            frappe.throw(
+                f"Duplicate task link: {row.link_type} {row.linked_task}.",
+                frappe.ValidationError,
+                title="Duplicate task relationship",
+            )
+        seen_pairs.add(pair)
+
+        signature = _link_signature(row)
+        changed = not old or old.project != doc.project or signature not in old_signatures
+        if not changed:
+            continue
+
+        if not row.linked_task:
+            frappe.throw("Linked task is required.", frappe.ValidationError)
+        if row.linked_task == doc.name:
+            frappe.throw("A task cannot be linked to itself.", frappe.ValidationError)
+
+        target = frappe.db.get_value(
+            "BP Task", row.linked_task, ["name", "project", "is_deleted"], as_dict=True
+        )
+        if not target or target.is_deleted:
+            frappe.throw(
+                "Linked task does not exist or is in trash.",
+                frappe.ValidationError,
+            )
+
+        # Keep the stored snapshot aligned for consumers that cannot live-read
+        # the target immediately. get_task() still resolves title/status live.
+        row.linked_task_project = target.project
+
+        if row.link_type in _BLOCKING_LINK_TYPES:
+            pred, succ = (
+                (doc.name, row.linked_task)
+                if row.link_type == "blocks"
+                else (row.linked_task, doc.name)
+            )
+            if pred and succ and _dependency_reaches(succ, pred):
+                frappe.throw(
+                    "This dependency would create a circular blocking chain.",
+                    frappe.ValidationError,
+                    title="Circular dependency",
+                )
+
+
+def _dependency_reaches(start: str, target: str) -> bool:
+    """Whether canonical predecessor→successor `blocks` edges reach target."""
+    if not start or not target:
+        return False
+    adjacency = {}
+    for row in frappe.get_all(
+        "BP Task Link",
+        filters={"parenttype": "BP Task", "link_type": "blocks"},
+        fields=["parent", "linked_task"],
+    ):
+        adjacency.setdefault(row.parent, set()).add(row.linked_task)
+
+    seen = set()
+    stack = [start]
+    while stack:
+        node = stack.pop()
+        if node == target:
+            return True
+        if node in seen:
+            continue
+        seen.add(node)
+        stack.extend(adjacency.get(node, ()))
+    return False
 
 
 def validate_comment_mentions(activity) -> None:
