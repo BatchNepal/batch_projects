@@ -104,7 +104,21 @@ def send_daily_digest():
         return
 
     today = frappe.utils.getdate()
-    candidates = set(frappe.get_all("BP Task Assignee", pluck="user"))
+    # Derive candidates from live assignments at the database boundary. A
+    # soft-deleted task retains child assignee rows for restore/audit, so a
+    # bare scan of BP Task Assignee grows forever with trash history and keeps
+    # waking users who no longer have any current work.
+    candidates = set(
+        frappe.db.sql_list(
+            """
+            select distinct a.user
+            from `tabBP Task Assignee` a
+            inner join `tabBP Task` t on t.name = a.parent
+            where a.parenttype = 'BP Task'
+              and t.is_deleted = 0
+            """
+        )
+    )
     completed_cache = {}
 
     for candidate in candidates:
