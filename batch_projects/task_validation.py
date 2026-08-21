@@ -66,13 +66,7 @@ def validate_task_labels(doc, old=None) -> None:
 
 
 def validate_link_visibility(doc, old=None) -> None:
-    """A new task link may point only at a task the actor can already view.
-
-    Cross-project links remain supported, but the link itself is not an access
-    grant and must never be usable as a metadata side-channel into a private
-    project. Historical unchanged links are grandfathered; the read adapter
-    filters those per caller.
-    """
+    """A new task link may point only at a task the actor can already view."""
     old_signatures = {
         task_invariants._link_signature(row)
         for row in (old.get("links") or [])
@@ -88,17 +82,69 @@ def validate_link_visibility(doc, old=None) -> None:
             "BP Task", row.linked_task, ["name", "project", "is_deleted"], as_dict=True
         )
         if not target or target.is_deleted:
-            # task_invariants produces the canonical integrity error.
             continue
         if not task_invariants._user_can_view_task(
             target.project, target.name, frappe.session.user
         ):
             frappe.throw(
-                "You cannot link this task because you do not have access to the "
-                "linked task.",
+                "You cannot link this task because you do not have access to the linked task.",
                 frappe.PermissionError,
                 title="Linked task is not visible",
             )
+
+
+def _force_dependency_override(doc) -> bool:
+    if getattr(doc, "flags", None) and doc.flags.get("ignore_dependency_blockers"):
+        return True
+    value = getattr(frappe, "form_dict", {}).get("force") if getattr(frappe, "form_dict", None) else None
+    return value in (True, 1, "1", "true", "True", "yes")
+
+
+def validate_completion_dependencies(doc, old=None) -> None:
+    """Refuse completion while an active predecessor remains unfinished.
+
+    The board endpoints already perform this check to return a richer blocked
+    response. Repeating the invariant here is intentional: REST, imports,
+    automations and direct ORM saves must not be able to bypass it. Trashed
+    predecessors are not active work and therefore do not block completion.
+    """
+    if not old or old.project != doc.project or old.status == doc.status:
+        return
+
+    project = frappe.get_cached_doc("BP Project", doc.project)
+    completed = set(project.get_completed_statuses())
+    if doc.status not in completed or old.status in completed:
+        return
+    if _force_dependency_override(doc):
+        return
+
+    blocker_names = {
+        row.linked_task
+        for row in (doc.get("links") or [])
+        if row.link_type == "is blocked by" and row.linked_task
+    }
+    if not blocker_names:
+        return
+
+    blockers = [
+        row for row in frappe.get_all(
+            "BP Task",
+            filters={"name": ["in", list(blocker_names)], "is_deleted": 0},
+            fields=["name", "task_key", "title", "status"],
+        )
+        if row.status not in completed
+    ]
+    if not blockers:
+        return
+
+    keys = ", ".join(row.task_key or row.name for row in blockers[:5])
+    if len(blockers) > 5:
+        keys += f" and {len(blockers) - 5} more"
+    frappe.throw(
+        f"This task cannot be completed while it is blocked by unfinished task(s): {keys}.",
+        frappe.ValidationError,
+        title="Task is still blocked",
+    )
 
 
 def validate_task(doc, method=None):
@@ -107,3 +153,4 @@ def validate_task(doc, method=None):
     old = doc.get_doc_before_save() if hasattr(doc, "get_doc_before_save") else None
     validate_task_labels(doc, old)
     validate_link_visibility(doc, old)
+    validate_completion_dependencies(doc, old)
