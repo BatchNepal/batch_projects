@@ -14,7 +14,12 @@
 // gateway-issued JWT (api.js's getGatewayJWT(), set by bootstrapBridge())
 // goes in a ?token= query param — a route added specifically for this on
 // the gateway side (session.go resolve()), scoped to this one endpoint.
-import { bridgeBase, getGatewayJWT, onGatewayJWTChange } from "./api";
+import {
+  bridgeBase,
+  getGatewayJWT,
+  getNotificationCount,
+  onGatewayJWTChange,
+} from "./api";
 
 let _es = null;
 let _reconnectTimer = null;
@@ -38,7 +43,7 @@ export function onRealtimeEvent(handler) {
   return () => _handlers.delete(handler);
 }
 
-function _dispatch(payload) {
+function _deliver(payload) {
   for (const handler of _handlers) {
     try {
       handler(payload);
@@ -46,6 +51,39 @@ function _dispatch(payload) {
       console.error("[BP] realtime handler error:", e);
     }
   }
+}
+
+function _dispatch(payload) {
+  // `notification.badge` is an INVALIDATION signal, not an authority for the
+  // count it happens to carry. Backend event fan-out historically computed a
+  // raw recipient unread count without re-checking whether old task-backed
+  // notifications were still visible after membership/assignment revocation.
+  // Refetch through get_notification_count, whose server-side adapter applies
+  // the current task authorization contract, before any listener sees a number.
+  if (payload?.event === "notification.badge") {
+    getNotificationCount()
+      .then((result) => {
+        _deliver({
+          ...payload,
+          unread_count: result?.unread_count ?? 0,
+          count_authoritative: true,
+        });
+      })
+      .catch((err) => {
+        // Never fall back to the raw SSE count: stale count metadata is itself
+        // an information leak. Keep the existing UI count until a later secure
+        // fetch succeeds.
+        console.warn("[BP] notification badge refresh failed", err);
+        _deliver({
+          ...payload,
+          unread_count: undefined,
+          count_authoritative: false,
+        });
+      });
+    return;
+  }
+
+  _deliver(payload);
 }
 
 /** Open the connection (no-op if already open/connecting). Call once, after
