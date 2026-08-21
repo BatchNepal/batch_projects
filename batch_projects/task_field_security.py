@@ -175,15 +175,36 @@ def _changed_custom_values(doc, old) -> dict:
     return changed
 
 
-def _validate_link_target_readability(project: str, field_id: str, value) -> None:
-    if value in (None, "", []):
-        return
+def _custom_field_policy(project: str, field_id: str):
     row = frappe.db.get_value(
         "BP Custom Field",
         field_id,
-        ["field_label", "field_type", "options_json"],
+        ["field_label", "view_role", "edit_role", "field_type", "options_json"],
         as_dict=True,
     )
+    if not row:
+        return None
+
+    # Edit authority must be a subset of view authority even for legacy field
+    # definitions that predate the schema save-time invariant.
+    if not access.has_at_least(project, row.view_role or "Viewer"):
+        frappe.throw(
+            "You cannot edit one or more custom fields that are not visible to you.",
+            frappe.PermissionError,
+            title="Custom-field permission denied",
+        )
+    if not access.has_at_least(project, row.edit_role or "Member"):
+        frappe.throw(
+            f"You need at least {row.edit_role or 'Member'} access to edit '{row.field_label}'.",
+            frappe.PermissionError,
+        )
+    return row
+
+
+def _validate_link_target_readability(project: str, field_id: str, value, row=None) -> None:
+    if value in (None, "", []):
+        return
+    row = row or _custom_field_policy(project, field_id)
     if not row or row.field_type != "link":
         return
     if not isinstance(value, dict) or not value.get("name"):
@@ -224,13 +245,12 @@ def validate_custom_field_mutations(doc, old=None) -> None:
     if not changed:
         return
 
-    from batch_projects.api import custom_fields
-
     # This closes bulk-update / REST / ORM bypasses: every changed custom field
     # is checked at the durable document boundary, not only in board.update_task.
-    custom_fields.assert_can_edit_field_values(doc.project, changed)
     for field_id, value in changed.items():
-        _validate_link_target_readability(doc.project, field_id, value)
+        row = _custom_field_policy(doc.project, field_id)
+        if row:
+            _validate_link_target_readability(doc.project, field_id, value, row=row)
 
 
 def validate_task_field_authority(doc, old=None) -> None:
