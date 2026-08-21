@@ -4,23 +4,8 @@ app_publisher = "BatchNepal Consultancy"
 app_description = "Enterprise Grade Project Management for ERPNext"
 app_email = "info@batchnepal.com"
 app_license = "AGPL-3.0"
-# Single source of truth is __init__.py's __version__ — the same thing
-# pyproject.toml resolves (dynamic = ["version"], flit reads it) and the same
-# thing frappe.utils.get_app_version() returns. Hardcoding the number a second
-# time here is what let the two drift silently; frappe's own hooks.py imports
-# it exactly this way for the same reason.
 from . import __version__ as app_version
 
-# Minimum bp-gateway release this batch_projects version requires. Read by
-# the gateway itself at boot (via get_session_info) to refuse starting
-# against an incompatible batch_projects, and by the gateway installer to
-# resolve which gateway version to install/update to.
-#
-# 1.0.23 is the first release carrying the /v1/insights/* plane. This app no
-# longer computes the margin report, the portfolio rollup or the Money tab —
-# it asks the gateway to. Against 1.0.22 or older those three pages get a 404
-# from a gateway that has no such routes, so the floor has to move with them:
-# a version mismatch must fail loudly at boot, not as three broken pages.
 gateway_min_version = "1.0.23"
 
 add_to_apps_screen = [
@@ -31,8 +16,6 @@ add_to_apps_screen = [
         "route": "/workspace",
     }
 ]
-
-# app_include_js = ["/assets/batch_projects/js/batch_projects.js"]
 
 website_route_rules = [
     {"from_route": "/workspace", "to_route": "workspace"},
@@ -65,6 +48,8 @@ after_install = "batch_projects.setup.install.after_install"
 auth_hooks = ["batch_projects.gateway_guard.apply_gateway_identity"]
 
 override_whitelisted_methods = {
+    "batch_projects.api.board.get_task":
+        "batch_projects.task_reads.get_task",
     "batch_projects.api.board.update_project_workflow":
         "batch_projects.project_schema.update_project_workflow",
     "batch_projects.api.board.update_project_issue_types":
@@ -178,7 +163,6 @@ scheduler_events = {
     "daily": [
         "batch_projects.events.send_due_date_reminders",
         "batch_projects.events.run_due_soon_automations",
-        "batch_projects.events.run_overdue_automations",
         "batch_projects.api.erp_link.reconcile_erpnext_sync",
         "batch_projects.events.purge_expired_trash",
         "batch_projects.timesheet_sync.reconcile_actual_hours",
