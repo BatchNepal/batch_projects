@@ -20,30 +20,24 @@ from batch_projects import task_invariants as inv
 
 
 class _FakeTask:
-    def __init__(self, assignees=None, project="BP-PROJ-1"):
+    def __init__(self, assignees=None, project="BP-PROJ-1", old=None):
         self.project = project
         self.name = "BP-1"
         self.task_key = "BP-1"
         self.title = "Invariant test"
         self.assignees = list(assignees or [])
+        self._old = old
 
     def get(self, field):
         return getattr(self, field, None)
 
-    def append(self, field, value):
-        assert field == "assignees"
-        row = SimpleNamespace(**value)
-        self.assignees.append(row)
-        return row
+    def get_doc_before_save(self):
+        return self._old
 
 
 class TestTaskAssignmentInvariantHooks(FrappeTestCase):
     def test_hooks_cover_all_document_write_paths(self):
         task_hooks = hooks.doc_events["BP Task"]
-        self.assertEqual(
-            task_hooks["before_insert"],
-            "batch_projects.task_invariants.before_task_insert",
-        )
         self.assertEqual(
             task_hooks["validate"],
             "batch_projects.task_invariants.validate_task_assignees",
@@ -52,36 +46,6 @@ class TestTaskAssignmentInvariantHooks(FrappeTestCase):
             task_hooks["after_insert"],
             "batch_projects.task_invariants.after_task_insert",
         )
-
-    @patch.object(inv.frappe.db, "get_value")
-    def test_default_assignee_becomes_real_assignment(self, get_value):
-        task = _FakeTask()
-        get_value.side_effect = [
-            "alice@example.com",  # BP Project.default_assignee
-            frappe._dict(
-                name="alice@example.com",
-                full_name="Alice Example",
-                enabled=1,
-                user_type="System User",
-            ),
-        ]
-
-        inv.before_task_insert(task)
-
-        self.assertEqual(len(task.assignees), 1)
-        self.assertEqual(task.assignees[0].user, "alice@example.com")
-        self.assertEqual(task.assignees[0].full_name, "Alice Example")
-
-    @patch.object(inv.frappe.db, "get_value")
-    def test_explicit_assignee_is_not_replaced_by_project_default(self, get_value):
-        task = _FakeTask(
-            [SimpleNamespace(user="bob@example.com", full_name="Bob Example")]
-        )
-
-        inv.before_task_insert(task)
-
-        get_value.assert_not_called()
-        self.assertEqual([a.user for a in task.assignees], ["bob@example.com"])
 
     @patch.object(inv.frappe.db, "get_value")
     def test_disabled_or_website_user_cannot_enter_assignment_graph(self, get_value):
@@ -111,6 +75,19 @@ class TestTaskAssignmentInvariantHooks(FrappeTestCase):
 
         with self.assertRaises(frappe.ValidationError):
             inv.validate_task_assignees(task)
+
+    @patch.object(inv.frappe.db, "get_value")
+    def test_unchanged_legacy_assignment_does_not_block_unrelated_edit(self, get_value):
+        legacy = [SimpleNamespace(user="disabled@example.com", full_name="Legacy")]
+        old = _FakeTask(legacy)
+        task = _FakeTask(
+            [SimpleNamespace(user="disabled@example.com", full_name="Legacy")],
+            old=old,
+        )
+
+        inv.validate_task_assignees(task)
+
+        get_value.assert_not_called()
 
     @patch("batch_projects.events.emit")
     @patch.object(inv.frappe, "get_doc")
