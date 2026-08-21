@@ -24,6 +24,7 @@ class _FakeTask:
         *,
         name="BP-1",
         description="",
+        task_type=None,
         epic=None,
         milestone=None,
         parent_task=None,
@@ -34,6 +35,7 @@ class _FakeTask:
         self.task_key = name
         self.title = "Invariant test"
         self.description = description
+        self.task_type = task_type
         self.epic = epic
         self.milestone = milestone
         self.parent_task = parent_task
@@ -128,63 +130,80 @@ class TestTaskAssignmentInvariantHooks(FrappeTestCase):
         self.assertTrue(payload["initial_assignment"])
 
 
+class TestTaskTypeInvariant(FrappeTestCase):
+    @patch.object(inv.frappe, "get_cached_doc")
+    def test_changed_invalid_task_type_fails_closed(self, get_project):
+        project = MagicMock()
+        project.get_issue_types.return_value = [{"name": "Task"}, {"name": "Bug"}]
+        get_project.return_value = project
+        old = _FakeTask(task_type="Task")
+        task = _FakeTask(task_type="Unknown", old=old)
+
+        with self.assertRaises(frappe.ValidationError):
+            inv._validate_task_type(task, old)
+
+    @patch.object(inv.frappe, "get_cached_doc")
+    def test_unchanged_legacy_task_type_is_grandfathered(self, get_project):
+        old = _FakeTask(task_type="Legacy")
+        task = _FakeTask(task_type="Legacy", old=old)
+
+        inv._validate_task_type(task, old)
+        get_project.assert_not_called()
+
+
 class TestTaskRelationshipInvariants(FrappeTestCase):
     @patch.object(inv.frappe.db, "get_value")
     def test_cross_project_epic_is_rejected(self, get_value):
         get_value.return_value = "BP-PROJ-2"
         task = _FakeTask(epic="EPIC-OTHER")
-
         with self.assertRaises(frappe.ValidationError):
             inv._validate_project_relations(task)
 
     @patch.object(inv.frappe.db, "get_value")
     def test_same_project_epic_is_allowed(self, get_value):
         get_value.return_value = "BP-PROJ-1"
-        task = _FakeTask(epic="EPIC-OK")
+        inv._validate_project_relations(_FakeTask(epic="EPIC-OK"))
 
-        inv._validate_project_relations(task)
+    @patch.object(inv.frappe.db, "get_value")
+    def test_unchanged_legacy_cross_project_epic_is_grandfathered(self, get_value):
+        old = _FakeTask(epic="EPIC-LEGACY")
+        task = _FakeTask(epic="EPIC-LEGACY", old=old)
+        inv._validate_project_relations(task, old)
+        get_value.assert_not_called()
 
     @patch.object(inv.frappe.db, "get_value")
     def test_cross_project_parent_is_rejected(self, get_value):
         get_value.return_value = frappe._dict(
             project="BP-PROJ-2", parent_task=None, is_deleted=0
         )
-        task = _FakeTask(parent_task="BP-PARENT")
-
         with self.assertRaises(frappe.ValidationError):
-            inv._validate_project_relations(task)
+            inv._validate_project_relations(_FakeTask(parent_task="BP-PARENT"))
 
     @patch.object(inv.frappe.db, "get_value")
     def test_parent_cycle_is_rejected(self, get_value):
         get_value.side_effect = [
             frappe._dict(project="BP-PROJ-1", parent_task="BP-GRAND", is_deleted=0),
-            "BP-1",  # BP-GRAND.parent_task points back to current task
+            "BP-1",
         ]
-        task = _FakeTask(parent_task="BP-PARENT")
-
         with self.assertRaises(frappe.ValidationError):
-            inv._validate_project_relations(task)
+            inv._validate_project_relations(_FakeTask(parent_task="BP-PARENT"))
 
     @patch.object(inv.frappe.db, "get_value")
     def test_team_sprint_requires_same_project_team(self, get_value):
-        task = _FakeTask(sprint="SPRINT-TEAM")
         get_value.side_effect = [
             frappe._dict(project=None, team="TEAM-A", sprint_type="Team"),
             "TEAM-B",
         ]
-
         with self.assertRaises(frappe.ValidationError):
-            inv._validate_project_relations(task)
+            inv._validate_project_relations(_FakeTask(sprint="SPRINT-TEAM"))
 
     @patch.object(inv.frappe.db, "get_value")
     def test_team_sprint_on_same_team_is_allowed(self, get_value):
-        task = _FakeTask(sprint="SPRINT-TEAM")
         get_value.side_effect = [
             frappe._dict(project=None, team="TEAM-A", sprint_type="Team"),
             "TEAM-A",
         ]
-
-        inv._validate_project_relations(task)
+        inv._validate_project_relations(_FakeTask(sprint="SPRINT-TEAM"))
 
 
 class TestMentionAuthorization(FrappeTestCase):
