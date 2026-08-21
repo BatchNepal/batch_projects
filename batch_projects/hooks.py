@@ -44,12 +44,21 @@ fixtures = [
 ]
 
 after_install = "batch_projects.setup.install.after_install"
-
 auth_hooks = ["batch_projects.gateway_guard.apply_gateway_identity"]
 
 override_whitelisted_methods = {
     "batch_projects.api.board.get_task":
         "batch_projects.task_reads.get_task",
+    "batch_projects.api.board.get_export_data":
+        "batch_projects.task_reads.get_export_data",
+    "batch_projects.api.board.delete_task":
+        "batch_projects.task_lifecycle.delete_task",
+    "batch_projects.api.board.restore_task":
+        "batch_projects.task_lifecycle.restore_task",
+    "batch_projects.api.board.bulk_delete_tasks":
+        "batch_projects.task_lifecycle.bulk_delete_tasks",
+    "batch_projects.api.board.sync_rebac_state":
+        "batch_projects.rebac_state.sync_rebac_state",
     "batch_projects.api.board.update_project_workflow":
         "batch_projects.project_schema.update_project_workflow",
     "batch_projects.api.board.update_project_issue_types":
