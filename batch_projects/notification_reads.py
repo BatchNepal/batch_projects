@@ -15,10 +15,7 @@ from __future__ import annotations
 
 import frappe
 
-from batch_projects.notification_delivery import (
-    can_receive_project_delivery,
-    can_receive_task_delivery,
-)
+from batch_projects.notification_delivery import is_notification_visible
 
 _DISPLAY_FIELDS = [
     "name", "notification_type", "task", "task_key", "task_title",
@@ -36,18 +33,7 @@ def _require_system_user() -> None:
 
 def _is_visible(row, user: str) -> bool:
     """Current read authority for one persisted notification row."""
-    if row.get("task"):
-        return can_receive_task_delivery(user, row.task, row.get("project"))
-
-    # Permanent deletion/purge leaves a tombstone notification without a live
-    # BP Task row. Current project visibility is the only remaining authority.
-    if row.get("notification_type") == "Task Deleted" and row.get("project"):
-        return can_receive_project_delivery(user, row.project, "Viewer")
-
-    # Task-less events (project role changes, sprint/finance summaries, etc.)
-    # have their own routing contracts and are outside this task-delivery
-    # invariant. Do not silently redefine those product semantics here.
-    return True
+    return is_notification_visible(row, user)
 
 
 def _candidate_rows(user: str, *, unread_only=False, on_date=None):

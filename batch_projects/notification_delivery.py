@@ -60,6 +60,31 @@ def can_receive_project_delivery(
     return bool(access.has_at_least(project, minimum_role, user))
 
 
+def is_notification_visible(row, user: str) -> bool:
+    """Current read authority for one persisted BP Notification row.
+
+    Shared by notification_permissions.has_permission (the generic REST/
+    ListView/report path) and notification_reads._is_visible (the
+    notification center's own endpoints) so the two surfaces stay identical
+    by construction instead of by two independently-maintained copies.
+    ``row`` needs only .get("task")/.get("notification_type")/.get("project")
+    — a Document or a frappe._dict both satisfy that.
+    """
+    task = row.get("task")
+    if task:
+        return can_receive_task_delivery(user, task, row.get("project"))
+
+    # Permanent deletion/purge leaves a tombstone notification without a live
+    # BP Task row. Current project visibility is the only remaining authority.
+    if row.get("notification_type") == "Task Deleted" and row.get("project"):
+        return can_receive_project_delivery(user, row.get("project"), "Viewer")
+
+    # Task-less events (project role changes, sprint/finance summaries, etc.)
+    # have their own routing contracts and are outside this task-delivery
+    # invariant. Do not silently redefine those product semantics here.
+    return True
+
+
 def can_receive_task_delivery(
     recipient: str | None, task: str | None, project: str | None = None
 ) -> bool:

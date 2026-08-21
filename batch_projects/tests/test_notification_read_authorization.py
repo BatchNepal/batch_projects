@@ -39,7 +39,7 @@ class TestNotificationReadRoutes(FrappeTestCase):
 
 
 class TestNotificationVisibility(FrappeTestCase):
-    @patch.object(reads, "can_receive_task_delivery")
+    @patch("batch_projects.notification_delivery.can_receive_task_delivery")
     def test_revoked_task_notification_is_removed_retroactively(self, can_receive):
         can_receive.return_value = False
         row = frappe._dict(
@@ -51,7 +51,7 @@ class TestNotificationVisibility(FrappeTestCase):
             "old@example.com", "TASK-1", "PROJ-1"
         )
 
-    @patch.object(reads, "can_receive_project_delivery", return_value=False)
+    @patch("batch_projects.notification_delivery.can_receive_project_delivery", return_value=False)
     def test_deleted_tombstone_is_hidden_after_project_revocation(self, can_receive):
         row = frappe._dict(
             name="N-1", notification_type="Task Deleted", task=None,
@@ -62,7 +62,7 @@ class TestNotificationVisibility(FrappeTestCase):
             "old@example.com", "PROJ-1", "Viewer"
         )
 
-    @patch.object(reads, "can_receive_task_delivery")
+    @patch("batch_projects.notification_delivery.can_receive_task_delivery")
     def test_taskless_non_task_notification_keeps_its_own_contract(self, can_receive):
         row = frappe._dict(
             name="N-1", notification_type="Role Changed", task=None,

@@ -113,13 +113,5 @@ def has_permission(doc, user=None, permission_type=None):
     if doc.get("recipient") != user:
         return False
 
-    from batch_projects.notification_delivery import (
-        can_receive_project_delivery,
-        can_receive_task_delivery,
-    )
-
-    if doc.get("task"):
-        return can_receive_task_delivery(user, doc.get("task"), doc.get("project"))
-    if doc.get("notification_type") == "Task Deleted" and doc.get("project"):
-        return can_receive_project_delivery(user, doc.get("project"), "Viewer")
-    return True
+    from batch_projects.notification_delivery import is_notification_visible
+    return is_notification_visible(doc, user)

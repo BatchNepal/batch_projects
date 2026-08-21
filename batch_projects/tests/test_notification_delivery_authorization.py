@@ -85,6 +85,28 @@ class TestNotificationDeliveryPolicy(FrappeTestCase):
         )
 
 
+class TestIsNotificationVisible(FrappeTestCase):
+    """Direct coverage of the shared 3-branch decision — notification_permissions
+    and notification_reads both delegate here rather than each carrying their
+    own copy."""
+
+    @patch.object(delivery, "can_receive_task_delivery", return_value=False)
+    def test_task_backed_row_defers_to_task_delivery_check(self, can_receive):
+        row = frappe._dict(task="TASK-1", project="PROJ-1", notification_type="Comment")
+        self.assertFalse(delivery.is_notification_visible(row, "user@example.com"))
+        can_receive.assert_called_once_with("user@example.com", "TASK-1", "PROJ-1")
+
+    @patch.object(delivery, "can_receive_project_delivery", return_value=False)
+    def test_deleted_tombstone_defers_to_project_delivery_check(self, can_receive):
+        row = frappe._dict(task=None, project="PROJ-1", notification_type="Task Deleted")
+        self.assertFalse(delivery.is_notification_visible(row, "user@example.com"))
+        can_receive.assert_called_once_with("user@example.com", "PROJ-1", "Viewer")
+
+    def test_taskless_non_tombstone_row_passes_through(self):
+        row = frappe._dict(task=None, project="PROJ-1", notification_type="Role Changed")
+        self.assertTrue(delivery.is_notification_visible(row, "user@example.com"))
+
+
 if __name__ == "__main__":
     import unittest
     unittest.main()
