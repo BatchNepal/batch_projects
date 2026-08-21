@@ -108,6 +108,32 @@ def assert_referenced_names_survive(
         )
 
 
+def assert_workflow_categories_safe(project: str, current: list[dict], incoming: list[dict]) -> None:
+    """A lifecycle-category change is a migration for tasks using that state."""
+    old = {
+        row.get("name"): str(row.get("category") or "unstarted").lower()
+        for row in current if row.get("name")
+    }
+    new = {
+        row.get("name"): str(row.get("category") or "unstarted").lower()
+        for row in incoming if row.get("name")
+    }
+    changed = {name for name in old.keys() & new.keys() if old[name] != new[name]}
+    if not changed:
+        return
+    used = active_task_values(project, "status")
+    blocked = sorted(changed & used)
+    if blocked:
+        frappe.throw(
+            "Cannot change the lifecycle category of in-use workflow state(s): "
+            + ", ".join(blocked)
+            + ". Existing tasks carry lifecycle timestamps/resolution derived from "
+              "the old category. Migrate those tasks before changing the category.",
+            frappe.ValidationError,
+            title="Workflow category migration required",
+        )
+
+
 def _finish(project: str) -> None:
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
@@ -174,6 +200,7 @@ def update_project_workflow(project, workflow_states):
     current = frappe.get_cached_doc("BP Project", project).get_workflow_states()
     old_names = {row.get("name") for row in current if row.get("name")}
     assert_referenced_names_survive(project, "status", old_names, names, "workflow state")
+    assert_workflow_categories_safe(project, current, rows)
 
     frappe.db.set_value(
         "BP Project",
@@ -214,12 +241,7 @@ def update_project_issue_types(project, issue_types):
 
 @frappe.whitelist()
 def update_project_labels(project, labels):
-    """Protect the current name-backed label catalog from orphaning tasks.
-
-    BP Task stores label names today, despite the DocType description saying
-    IDs. Until that storage migration lands, a rename/delete of a referenced
-    label must be refused rather than silently leaving an orphan string.
-    """
+    """Protect the current name-backed label catalog from orphaning tasks."""
     require_admin(project)
     incoming = parse_list(labels, "labels")
 
