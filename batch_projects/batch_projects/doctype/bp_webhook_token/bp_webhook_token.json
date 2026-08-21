@@ -6,7 +6,7 @@
   "autoname": "hash",
   "naming_rule": "Random",
   "creation": "2026-07-18 00:00:00",
-  "modified": "2026-07-18 00:00:00",
+  "modified": "2026-08-21 00:00:00",
   "owner": "Administrator",
   "modified_by": "Administrator",
   "sort_field": "creation",
@@ -27,7 +27,16 @@
       "unique": 1,
       "read_only": 1,
       "in_standard_filter": 1,
-      "description": "The URL path segment: bp-gateway routes POST /v1/hooks/<token> here. Auto-generated on create, never editable — rotate by revoking and creating a new one."
+      "description": "Opaque routing key used in POST /v1/hooks/<token>. Rotate by revoking and creating a new token."
+    },
+    {
+      "fieldname": "signing_secret",
+      "fieldtype": "Password",
+      "label": "Signing Secret",
+      "read_only": 1,
+      "hidden": 1,
+      "no_copy": 1,
+      "description": "Per-webhook HMAC secret. Returned only when the token is created or explicitly rotated; the gateway reads it only through the service-only data adapter."
     },
     {
       "fieldname": "scope",
@@ -36,7 +45,7 @@
       "options": "workspace\nproject",
       "default": "project",
       "reqd": 1,
-      "description": "project: this hook's events are scoped to one BP Project (only that project's rules can match). workspace: events carry no project — only workspace-scope automation rules with an empty project filter can match."
+      "description": "project: only that project's automation definitions can match. workspace: only workspace-scope definitions can match."
     },
     {
       "fieldname": "project",
@@ -75,7 +84,7 @@
       "fieldtype": "Data",
       "label": "Last Event Name",
       "read_only": 1,
-      "description": "The X-BP-Event value from the most recent call — for debugging what a third party is actually sending."
+      "description": "The X-BP-Event value from the most recent verified call."
     }
   ],
   "permissions": [
