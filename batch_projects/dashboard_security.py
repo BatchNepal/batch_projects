@@ -29,8 +29,6 @@ def _entry(doctype: str):
 
 def _permitted_names(doctype: str, permission_type: str = "read") -> set[str]:
     if doctype == "BP Task":
-        # BP Task uses BatchProjects' project authorization rather than native
-        # ERP DocPerm. Its field policy is handled by dashboard_task_reads.
         return {row["fieldname"] for row in _dashboard_module()._readable_field_rows(doctype)}
 
     if not frappe.has_permission(
@@ -52,10 +50,7 @@ def _field_rows(doctype: str, permission_type: str = "read") -> list[dict]:
     allowed = _permitted_names(doctype, permission_type)
     if not allowed:
         return []
-    return [
-        row for row in d._readable_field_rows(doctype)
-        if row["fieldname"] in allowed
-    ]
+    return [row for row in d._readable_field_rows(doctype) if row["fieldname"] in allowed]
 
 
 def _parse_filters(filters):
@@ -116,9 +111,6 @@ def _link_labels(target_dt: str, values) -> dict:
         limit_page_length=0,
     )
     labels = {row.name: row.get(title_field) or row.name for row in rows}
-    # A source document may legitimately expose a Link's stored document name
-    # even when the linked record itself is outside the user's row scope. Do
-    # not bypass target permission merely to obtain a prettier title.
     return {v: labels.get(v, v) for v in values}
 
 
@@ -131,7 +123,6 @@ def _read_rows(doctype: str, *, filters=None, fields=None, order_by=None, limit=
     }
     if order_by:
         kwargs["order_by"] = order_by
-    # get_list (not get_all) applies row-level permissions/User Permissions.
     return frappe.get_list(doctype, **kwargs)
 
 
@@ -141,8 +132,6 @@ def get_widget_source_fields(doctype):
     _entry(doctype)
     d = _dashboard_module()
     if doctype == "BP Task":
-        # Task-specific sensitive fields are filtered by the BP adapter. Keep
-        # this picker conservative because this API has no project/scope arg.
         from batch_projects.task_reads import _INTERNAL_TASK_FIELDS, _MONEY_TASK_FIELDS
         rows = [
             row for row in d._readable_field_rows(doctype)
@@ -198,10 +187,7 @@ def get_widget_source_field_options(doctype, fieldname, query=None, limit=20):
         limit_page_length=min(max(int(limit or 20), 1), 100),
         order_by="modified desc",
     )
-    return [
-        {"value": row.name, "label": row.get(title_field) or row.name}
-        for row in rows
-    ]
+    return [{"value": row.name, "label": row.get(title_field) or row.name} for row in rows]
 
 
 @frappe.whitelist()
@@ -215,6 +201,9 @@ def get_multi_source_count(sources, scope=None):
         if not doctype:
             continue
         entry = _entry(doctype)
+        if doctype == "BP Task":
+            from batch_projects.dashboard_task_reads import assert_dashboard_task_fields
+            assert_dashboard_task_fields(scope=scope or "all", filters=source.get("filters"))
         db_filters = _filters(doctype, source.get("filters"))
         if doctype == "BP Task":
             scope_filters, _, _ = d._resolve_scope(scope or "all")
@@ -236,7 +225,6 @@ def get_doctype_group_data(doctype, group_by, filters=None, scope=None):
     if doctype == "BP Task":
         frappe.throw("Use the BP Task dashboard endpoint for task grouping.")
     _entry(doctype)
-    d = _dashboard_module()
     fields_meta = {row["fieldname"]: row for row in _field_rows(doctype, "read")}
     meta = fields_meta.get(group_by)
     if not meta or meta["fieldtype"] not in ("Select", "Link"):
@@ -252,11 +240,7 @@ def get_doctype_group_data(doctype, group_by, filters=None, scope=None):
         counts[value] = counts.get(value, 0) + 1
     labels = _link_labels(meta.get("options"), counts) if meta["fieldtype"] == "Link" else {}
     items = [
-        {
-            "key": key or "__none__",
-            "label": labels.get(key, key) if key else "None",
-            "value": value,
-        }
+        {"key": key or "__none__", "label": labels.get(key, key) if key else "None", "value": value}
         for key, value in counts.items()
     ]
     items.sort(key=lambda item: -item["value"])
@@ -285,32 +269,21 @@ def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=N
         date_field = default_date if default_date in allowed else None
     date_field = date_field or None
     if date_field and fields_meta.get(date_field, {}).get("fieldtype") not in ("Date", "Datetime"):
-        frappe.throw(
-            f"You don't have permission to use '{date_field}' as a date field.",
-            frappe.PermissionError,
-        )
+        frappe.throw(f"You don't have permission to use '{date_field}' as a date field.", frappe.PermissionError)
 
     labels_raw = d._parse_json(label_fields, []) if isinstance(label_fields, str) else (label_fields or [])
     labels_wanted = [field for field in labels_raw if field in allowed]
-    denied_labels = [field for field in labels_raw if field and field not in allowed]
-    if denied_labels:
+    if any(field for field in labels_raw if field and field not in allowed):
         frappe.throw("One or more dashboard label fields are not permitted.", frappe.PermissionError)
 
     group_by = (group_by or "date").strip()
     if group_by not in ("date", "none") and group_by not in allowed:
-        frappe.throw(
-            f"You don't have permission to group {doctype} by '{group_by}'.",
-            frappe.PermissionError,
-        )
+        frappe.throw(f"You don't have permission to group {doctype} by '{group_by}'.", frappe.PermissionError)
 
     extras = d._parse_json(extra_fields, []) if isinstance(extra_fields, str) else (extra_fields or [])
-    denied_extras = [field for field in extras if field and field not in allowed]
-    if denied_extras:
+    if any(field for field in extras if field and field not in allowed):
         frappe.throw("One or more dashboard row fields are not permitted.", frappe.PermissionError)
-    template_fields = []
-    for field in extras:
-        if field in allowed and field not in template_fields:
-            template_fields.append(field)
+    template_fields = list(dict.fromkeys(field for field in extras if field in allowed))
 
     wanted = ["name", "modified"]
     for field in (title_field, status_field, owner_field, date_field, *labels_wanted, *template_fields):
@@ -324,20 +297,14 @@ def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=N
         frappe.throw("You don't have permission to sort by that field.", frappe.PermissionError)
     order_by = f"{date_field} asc" if date_field else (f"{sort} desc" if sort else "modified desc")
     rows = _read_rows(
-        doctype,
-        filters=db_filters,
-        fields=wanted,
-        order_by=order_by,
+        doctype, filters=db_filters, fields=wanted, order_by=order_by,
         limit=min(max(int(limit or 200), 1), 500),
     )
     raw_by_name = {row.name: row for row in rows}
 
     status_labels = {}
     if status_field and fields_meta[status_field]["fieldtype"] == "Link":
-        status_labels = _link_labels(
-            fields_meta[status_field].get("options"),
-            [row.get(status_field) for row in rows],
-        )
+        status_labels = _link_labels(fields_meta[status_field].get("options"), [row.get(status_field) for row in rows])
 
     owner_names = {}
     if owner_field:
@@ -380,10 +347,7 @@ def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=N
             "owner": owner_names.get(source.get(owner_field)) if owner_field else None,
             "date": str(date_value) if date_value else None,
             "labels": [
-                {
-                    "label": fields_meta[field]["label"],
-                    "value": label_links.get(field, {}).get(source.get(field), source.get(field)),
-                }
+                {"label": fields_meta[field]["label"], "value": label_links.get(field, {}).get(source.get(field), source.get(field))}
                 for field in labels_wanted if source.get(field) not in (None, "")
             ],
         }
@@ -414,18 +378,11 @@ def get_doctype_column_data(doctype, filters=None, sort=None, limit=200, scope=N
             grouped.setdefault(d._bucket_for(row["date"], today), []).append(row)
         no_date_label = f"No {(fields_meta.get(date_field, {}).get('label') or 'date').lower()}"
         buckets = [
-            {
-                "key": bucket,
-                "label": no_date_label if bucket == "no_date" else d._BUCKET_LABEL[bucket],
-                "tasks": grouped[bucket],
-            }
+            {"key": bucket, "label": no_date_label if bucket == "no_date" else d._BUCKET_LABEL[bucket], "tasks": grouped[bucket]}
             for bucket in d._BUCKET_ORDER if grouped.get(bucket)
         ]
 
-    return {
-        "rows": out, "buckets": buckets, "total": len(out),
-        "doctype": doctype, "date_field": date_field, "group_by": group_by,
-    }
+    return {"rows": out, "buckets": buckets, "total": len(out), "doctype": doctype, "date_field": date_field, "group_by": group_by}
 
 
 @frappe.whitelist()
@@ -435,10 +392,7 @@ def update_widget_source_field(doctype, name, fieldname, value):
         frappe.throw("Use the task workflow/status APIs for BP Task.")
     _entry(doctype)
     if fieldname not in _permitted_names(doctype, "write"):
-        frappe.throw(
-            f"You don't have permission to modify field '{fieldname}' on {doctype}.",
-            frappe.PermissionError,
-        )
+        frappe.throw(f"You don't have permission to modify field '{fieldname}' on {doctype}.", frappe.PermissionError)
     if not frappe.has_permission(
         doctype, "write", doc=name, user=frappe.session.user, raise_exception=False
     ):
@@ -450,8 +404,6 @@ def update_widget_source_field(doctype, name, fieldname, value):
     if doc.get(fieldname) == value:
         return {"ok": True, "changed": False}
     doc.set(fieldname, value)
-    # Do not use ignore_permissions=True here: this is an interactive ERP write
-    # and ERPNext's own controller/User Permission model remains authoritative.
     doc.save()
     frappe.db.commit()
     return {"ok": True, "changed": True}
@@ -476,9 +428,7 @@ def get_widget_source_doc_quickview(doctype, name):
     names = ["name"] + [row["fieldname"] for row in fields]
     if title_field not in names:
         names.append(title_field)
-    rows = _read_rows(
-        doctype, filters={"name": name}, fields=list(dict.fromkeys(names)), limit=1
-    )
+    rows = _read_rows(doctype, filters={"name": name}, fields=list(dict.fromkeys(names)), limit=1)
     if not rows:
         frappe.throw("Not found.", frappe.DoesNotExistError)
     source = rows[0]
@@ -494,9 +444,4 @@ def get_widget_source_doc_quickview(doctype, name):
             "label": field["label"], "value": value,
             "fieldname": field["fieldname"], "fieldtype": field["fieldtype"],
         })
-    return {
-        "doctype": doctype,
-        "name": name,
-        "title": source.get(title_field) or name,
-        "fields": out_fields,
-    }
+    return {"doctype": doctype, "name": name, "title": source.get(title_field) or name, "fields": out_fields}
