@@ -161,6 +161,16 @@ has_permission = {
 override_whitelisted_methods = {
     "batch_projects.api.board.update_project_members":
         "batch_projects.membership_invariants.update_project_members",
+    "batch_projects.api.board.get_task":
+        "batch_projects.task_reads.get_task",
+    "batch_projects.api.board.get_export_data":
+        "batch_projects.task_reads.get_export_data",
+    "batch_projects.api.board.delete_task":
+        "batch_projects.task_lifecycle.delete_task",
+    "batch_projects.api.board.restore_task":
+        "batch_projects.task_lifecycle.restore_task",
+    "batch_projects.api.board.bulk_delete_tasks":
+        "batch_projects.task_lifecycle.bulk_delete_tasks",
 }
 
 # actual_hours rollup — resync every BP Task a submitted/cancelled
@@ -191,6 +201,14 @@ doc_events = {
     },
     "Payment Entry": {
         "on_submit": "batch_projects.erp_triggers.on_payment_entry_submit",
+    },
+    # Single authority model for task creation/read/update validation —
+    # applies on every save path (whitelisted API, generic REST, import, ORM),
+    # not just the SPA's own endpoints.
+    "BP Task": {
+        "before_insert": "batch_projects.task_defaults.before_task_insert",
+        "validate": "batch_projects.task_validation.validate_task",
+        "after_insert": "batch_projects.task_defaults.after_task_insert",
     },
     # Generic doc-event trigger — widens erp.* coverage beyond the 4
     # hardcoded doctypes above. "*" fires for EVERY doctype site-wide;
