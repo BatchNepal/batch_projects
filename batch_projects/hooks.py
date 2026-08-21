@@ -100,6 +100,14 @@ override_whitelisted_methods = {
         "batch_projects.project_schema.update_project_issue_types",
     "batch_projects.api.board.update_project_labels":
         "batch_projects.project_schema.update_project_labels",
+    "batch_projects.api.timers.get_active_timer":
+        "batch_projects.timer_invariants.get_active_timer",
+    "batch_projects.api.timers.start_timer":
+        "batch_projects.timer_invariants.start_timer",
+    "batch_projects.api.timers.stop_timer":
+        "batch_projects.timer_invariants.stop_timer",
+    "batch_projects.api.timers.log_time":
+        "batch_projects.timer_invariants.log_time",
 }
 
 permission_query_conditions = {
@@ -203,7 +211,7 @@ doc_events = {
 scheduler_events = {
     "hourly": [
         "batch_projects.events.send_scheduled_reports",
-        "batch_projects.api.timers.send_timer_reminders",
+        "batch_projects.timer_invariants.send_timer_reminders",
     ],
     "daily": [
         "batch_projects.scheduler_live.send_due_date_reminders",
