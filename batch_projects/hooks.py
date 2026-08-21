@@ -51,6 +51,12 @@ override_whitelisted_methods = {
         "batch_projects.task_reads.get_task",
     "batch_projects.api.board.get_export_data":
         "batch_projects.task_reads.get_export_data",
+    "batch_projects.api.board.get_milestone_report":
+        "batch_projects.task_aggregates.get_milestone_report",
+    "batch_projects.api.board.get_sprint_capacity":
+        "batch_projects.task_aggregates.get_sprint_capacity",
+    "batch_projects.api.board.get_reports":
+        "batch_projects.task_aggregates.get_reports",
     "batch_projects.api.board.delete_task":
         "batch_projects.task_lifecycle.delete_task",
     "batch_projects.api.board.restore_task":
