@@ -171,6 +171,16 @@ override_whitelisted_methods = {
         "batch_projects.task_lifecycle.restore_task",
     "batch_projects.api.board.bulk_delete_tasks":
         "batch_projects.task_lifecycle.bulk_delete_tasks",
+    "batch_projects.api.board.get_milestone_report":
+        "batch_projects.task_aggregates.get_milestone_report",
+    "batch_projects.api.board.get_sprint_capacity":
+        "batch_projects.task_aggregates.get_sprint_capacity",
+    "batch_projects.api.board.get_reports":
+        "batch_projects.task_aggregates.get_reports",
+    "batch_projects.api.board.complete_sprint":
+        "batch_projects.task_surfaces.complete_sprint",
+    "batch_projects.api.board.get_project_files":
+        "batch_projects.task_surfaces.get_project_files",
 }
 
 # actual_hours rollup — resync every BP Task a submitted/cancelled
