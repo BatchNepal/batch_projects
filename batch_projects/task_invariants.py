@@ -49,6 +49,18 @@ def _assignee_users(doc) -> list[str]:
     return [row.user for row in (doc.get("assignees") or []) if row.user]
 
 
+def before_task_insert(doc, method=None):
+    """Reserved insertion boundary for the default-assignee cutover.
+
+    Intentionally a no-op in this commit. The legacy ``task.created`` handler
+    still sends its own default-assignee notification, so materializing a
+    default assignee here before that event-layer behavior is removed would
+    double-notify the same user. Keeping the hook present lets the next patch
+    switch both sides atomically without moving the document-boundary contract.
+    """
+    return None
+
+
 def validate_task_assignees(doc, method=None):
     """Validate every newly-created assignment edge at the DocType boundary.
 
@@ -89,11 +101,6 @@ def after_task_insert(doc, method=None):
     changes, but there is no old document to diff during insert. Without this
     hook, creating an already-assigned task skips assignment notification,
     watcher subscription, automation and the gateway ReBAC assignee edge.
-
-    Project ``default_assignee`` is deliberately NOT materialized here yet.
-    The existing ``task.created`` notification path has its own legacy default-
-    assignee behavior; changing both must happen atomically in the event-layer
-    patch or the user would receive duplicate Assignment notifications.
     """
     if not doc.get("assignees"):
         return
