@@ -21,15 +21,23 @@ class BPEmailQueue(EmailQueue):
     """EmailQueue with a last-mile BP Task authorization check."""
 
     def validate(self):
+        # Preserve any parent validation a future Frappe v15 patch may add.
+        parent_validate = getattr(super(), "validate", None)
+        if callable(parent_validate):
+            parent_validate()
+
         # Prevent knowingly unauthorized task mail from being stored in the
         # queue in the first place. The send() check below is still mandatory:
-        # authorization can change after this insert.
+        # authorization can change after this insert. Already-sent recipient
+        # rows are immutable delivery history and are never pruned by a later
+        # save/retry merely because access changed after delivery.
         if self.reference_doctype == "BP Task" and self.reference_name:
-            allowed = [
-                row
-                for row in (self.recipients or [])
-                if can_receive_task_delivery(row.recipient, self.reference_name)
-            ]
+            allowed = []
+            for row in (self.recipients or []):
+                if row.is_mail_sent() or can_receive_task_delivery(
+                    row.recipient, self.reference_name
+                ):
+                    allowed.append(row)
             self.recipients = allowed
             if not allowed:
                 frappe.throw(
