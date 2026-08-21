@@ -198,9 +198,15 @@ doc_events = {
         "on_cancel": "batch_projects.erp_triggers.on_any_doctype_event",
         "on_trash": "batch_projects.erp_triggers.on_any_doctype_event",
     },
-    # Seat-limit enforcement — catches EVERY insertion path for BP Project
-    # Member and BP Team Member, including the generic REST API, batch
-    # operations, and ORM saves. See entitlements.before_member_insert.
+    # Seat-limit enforcement for BP Project Member and BP Team Member. Since
+    # both are child tables, `before_insert` only fires for a direct
+    # frappe.get_doc(...).insert() on the child doctype itself — it does NOT
+    # fire when a row is added by appending to the parent's child table and
+    # saving the parent (the generic REST/ORM insert path for child rows), so
+    # this hook cannot be the only gate on either doctype. BP Project's own
+    # validate() carries the authority check for BP Project Member role
+    # mutations (see bp_project.py:_validate_members_mutation_authority) —
+    # BP Team Member has no equivalent yet.
     "BP Project Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
     },

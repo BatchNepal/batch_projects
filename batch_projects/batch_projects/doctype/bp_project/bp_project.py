@@ -44,6 +44,8 @@ class BPProject(Document):
             if len(self.key) > 6:
                 frappe.throw("Project key must be 6 characters or less")
 
+        self._validate_members_mutation_authority()
+
         # Ensure JSON-config fields hold valid JSON of the expected shape
         self._validate_json_field("workflow_states", list)
         self._validate_json_field("issue_types", list)
@@ -114,6 +116,40 @@ class BPProject(Document):
             )
         finally:
             frappe.flags.in_bp_project_sync = False
+
+    def _validate_members_mutation_authority(self):
+        """BP Project Member is a child table, so Frappe's own permission
+        system (has_child_permission -> has_permission on the parent) can
+        only ever authorize "write access to this BP Project" in general —
+        it has no way to see that a specific write is adding/upgrading a
+        member row, so it can't gate that on its own. Every legitimate
+        member-mutation path in this app writes BP Project Member with raw
+        SQL, never through this document's save(), so any change visible in
+        self.members here can only be a generic insert/import/API path
+        instead — require the same Admin bar update_project_members already
+        enforces before letting it through.
+        """
+        from batch_projects import access
+
+        after = {m.user: access.normalize_role(m.role) for m in (self.members or [])}
+        before = {} if self.is_new() else {
+            r.user: access.normalize_role(r.role)
+            for r in frappe.get_all(
+                "BP Project Member", filters={"parent": self.name}, fields=["user", "role"]
+            )
+        }
+
+        if after == before:
+            return
+
+        if self.is_new():
+            if access.is_instance_admin() or after == {frappe.session.user: "Admin"}:
+                return
+            frappe.throw(
+                "Project members can't be set this way.", frappe.PermissionError
+            )
+
+        access.require(self.name, "Admin")
 
     def _validate_json_field(self, fieldname, expected_type):
         val = getattr(self, fieldname, None)
