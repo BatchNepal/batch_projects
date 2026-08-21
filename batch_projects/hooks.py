@@ -46,6 +46,13 @@ fixtures = [
 after_install = "batch_projects.setup.install.after_install"
 auth_hooks = ["batch_projects.gateway_guard.apply_gateway_identity"]
 
+# Frappe v15 has no composable pre-send Email Queue extension hook. This
+# narrowly-scoped subclass delegates every non-BP-Task email unchanged and
+# revalidates pending BP Task recipients immediately before SMTP delivery.
+override_doctype_class = {
+    "Email Queue": "batch_projects.secure_email_queue.BPEmailQueue",
+}
+
 override_whitelisted_methods = {
     "batch_projects.api.board.get_task":
         "batch_projects.task_reads.get_task",
