@@ -14,7 +14,12 @@
 // gateway-issued JWT (api.js's getGatewayJWT(), set by bootstrapBridge())
 // goes in a ?token= query param — a route added specifically for this on
 // the gateway side (session.go resolve()), scoped to this one endpoint.
-import { bridgeBase, getGatewayJWT, onGatewayJWTChange } from "./api";
+import {
+  bridgeBase,
+  getGatewayJWT,
+  getNotificationCount,
+  onGatewayJWTChange,
+} from "./api";
 
 let _es = null;
 let _reconnectTimer = null;
@@ -32,7 +37,46 @@ export function onRealtimeEvent(handler) {
   return () => _handlers.delete(handler);
 }
 
+function _deliver(payload) {
+  for (const handler of _handlers) {
+    try {
+      handler(payload);
+    } catch (e) {
+      console.error("[BP] realtime handler error:", e);
+    }
+  }
+}
+
 function _dispatch(payload) {
+  // `notification.badge` is an INVALIDATION signal, not an authority for the
+  // count it happens to carry. Backend event fan-out historically computed a
+  // raw recipient unread count without re-checking whether old task-backed
+  // notifications were still visible after membership/assignment revocation.
+  // Refetch through get_notification_count, whose server-side adapter applies
+  // the current task authorization contract, before any listener sees a number.
+  if (payload?.event === "notification.badge") {
+    getNotificationCount()
+      .then((result) => {
+        _deliver({
+          ...payload,
+          unread_count: result?.unread_count ?? 0,
+          count_authoritative: true,
+        });
+      })
+      .catch((err) => {
+        // Never fall back to the raw SSE count: stale count metadata is itself
+        // an information leak. Keep the existing UI count until a later secure
+        // fetch succeeds.
+        console.warn("[BP] notification badge refresh failed", err);
+        _deliver({
+          ...payload,
+          unread_count: undefined,
+          count_authoritative: false,
+        });
+      });
+    return;
+  }
+
   // ProjectStore historically used comment.added as its generic "comments for
   // this open task changed; refetch detail" signal. Backend now emits the
   // precise lifecycle names comment.updated/comment.deleted. Preserve those
@@ -44,13 +88,7 @@ function _dispatch(payload) {
       ? { ...payload, comment_event: payload.event, event: "comment.added" }
       : payload;
 
-  for (const handler of _handlers) {
-    try {
-      handler(delivered);
-    } catch (e) {
-      console.error("[BP] realtime handler error:", e);
-    }
-  }
+  _deliver(delivered);
 }
 
 /** Open the connection (no-op if already open/connecting). Call once, after
