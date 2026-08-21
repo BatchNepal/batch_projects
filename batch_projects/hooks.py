@@ -92,7 +92,7 @@ permission_query_conditions = {
     "BP Note":              "batch_projects.permissions.bp_note_query_conditions",
     "BP Share Link":        "batch_projects.permissions.bp_share_link_query_conditions",
     "BP SLA Policy":        "batch_projects.permissions.bp_sla_policy_query_conditions",
-    "BP Task Template":     "batch_projects.permissions.bp_doc_has_permission" if False else "batch_projects.permissions.bp_task_template_query_conditions",
+    "BP Task Template":     "batch_projects.permissions.bp_task_template_query_conditions",
     "BP View":              "batch_projects.permissions.bp_view_query_conditions",
     "BP Activity":          "batch_projects.permissions.bp_activity_query_conditions",
     "BP Audit Log":         "batch_projects.permissions.bp_audit_log_query_conditions",
