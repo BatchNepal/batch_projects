@@ -725,6 +725,19 @@ def _create_notification(recipient, notification_type, task, project, actor, mes
         }).insert(ignore_permissions=True)
         notif_name = notif_doc.name
 
+    # Push and email deliver immediately and have no read-time gate the way the
+    # in-app list does (notification_permissions.py / notification_reads.py
+    # re-check notification_delivery.is_notification_visible on every read).
+    # Recipient selection above (watchers, static automation recipients, etc.)
+    # is advisory and can go stale after membership/assignment changes — apply
+    # the SAME authorization decision here before either channel fires, so all
+    # three channels agree instead of push/email trusting stale selection.
+    from batch_projects.notification_delivery import is_notification_visible
+    if not is_notification_visible(
+        {"task": task, "project": project, "notification_type": notification_type}, recipient
+    ):
+        return
+
     # Desktop push channel — native OS toast via erpdesktop's existing client
     # (Socket.IO agent:notification:new → dispatcher). Fire-and-forget and fully
     # decoupled: a silent no-op when erpdesktop_agent isn't installed, so the
