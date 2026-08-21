@@ -49,6 +49,73 @@ class TestTrashFlagInvariant(FrappeTestCase):
         task_validation.validate_trash_state(frappe._dict(is_deleted=0), old)
 
 
+class TestActiveTimerTrashInvariant(FrappeTestCase):
+    @patch("batch_projects.api.timers._append_time_log")
+    @patch.object(task_lifecycle.frappe, "delete_doc")
+    @patch.object(task_lifecycle.frappe, "get_all")
+    def test_trash_stops_timer_at_exact_delete_timestamp(
+        self, get_all, delete_doc, append_time_log
+    ):
+        get_all.return_value = [
+            frappe._dict(
+                name="TIMER-1",
+                user="alice@example.com",
+                started_at="2026-08-21 07:30:00",
+            )
+        ]
+        doc = SimpleNamespace(
+            name="TASK-1",
+            task_key="PRJ-1",
+            title="Task",
+            project="PROJ-A",
+        )
+
+        stopped = task_lifecycle._stop_active_timers(
+            doc, "2026-08-21 08:00:00"
+        )
+
+        self.assertEqual(stopped, ["TIMER-1"])
+        delete_doc.assert_called_once_with(
+            "BP Active Timer", "TIMER-1", ignore_permissions=True
+        )
+        args = append_time_log.call_args.args
+        self.assertIs(args[0], doc)
+        self.assertEqual(args[1], "alice@example.com")
+        self.assertEqual(args[4], 0.5)
+        self.assertIn("moved to Trash", append_time_log.call_args.kwargs["description"])
+
+    @patch(
+        "batch_projects.api.timers._append_time_log",
+        side_effect=frappe.ValidationError("cannot persist time"),
+    )
+    @patch.object(task_lifecycle.frappe, "delete_doc")
+    @patch.object(task_lifecycle.frappe, "get_all")
+    def test_trash_fails_if_active_time_cannot_be_preserved(
+        self, get_all, delete_doc, append_time_log
+    ):
+        get_all.return_value = [
+            frappe._dict(
+                name="TIMER-1",
+                user="alice@example.com",
+                started_at="2026-08-21 07:30:00",
+            )
+        ]
+        doc = SimpleNamespace(
+            name="TASK-1",
+            task_key="PRJ-1",
+            title="Task",
+            project="PROJ-A",
+        )
+
+        with self.assertRaises(frappe.ValidationError):
+            task_lifecycle._stop_active_timers(doc, "2026-08-21 08:00:00")
+
+        # The outer delete_task transaction owns rollback. The important
+        # invariant here is that a failed time-log write is not swallowed and
+        # allowed to commit a trashed task with lost working time.
+        append_time_log.assert_called_once()
+
+
 class TestRestoreCascadeProvenance(FrappeTestCase):
     @patch.object(task_lifecycle, "_schedule_lifecycle")
     @patch.object(task_lifecycle, "_assignees", return_value=[])
@@ -76,11 +143,12 @@ class TestRestoreCascadeProvenance(FrappeTestCase):
 
     @patch.object(task_lifecycle, "_schedule_lifecycle")
     @patch.object(task_lifecycle, "_assignees", return_value=["alice@example.com"])
+    @patch.object(task_lifecycle, "_stop_active_timers", return_value=[])
     @patch.object(task_lifecycle.frappe.db, "set_value")
     @patch.object(task_lifecycle.frappe, "get_all", return_value=[])
     @patch.object(task_lifecycle.frappe, "get_doc")
     def test_trash_uses_one_explicit_cascade_stamp(
-        self, get_doc, get_all, set_value, assignees, schedule
+        self, get_doc, get_all, set_value, stop_timers, assignees, schedule
     ):
         get_doc.return_value = SimpleNamespace(
             name="TASK-1", project="PROJ-A", task_key="PRJ-1",
@@ -89,6 +157,7 @@ class TestRestoreCascadeProvenance(FrappeTestCase):
         stamp = "2026-08-21 06:00:00"
         changed = task_lifecycle._trash_tree("TASK-1", stamp, "actor@example.com")
         self.assertEqual(changed, ["TASK-1"])
+        stop_timers.assert_called_once_with(get_doc.return_value, stamp)
         values = set_value.call_args.args[2]
         self.assertEqual(values["deleted_on"], stamp)
         self.assertEqual(values["deleted_by"], "actor@example.com")
