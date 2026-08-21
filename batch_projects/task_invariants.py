@@ -45,6 +45,10 @@ def _assert_assignable_user(user: str):
     return row
 
 
+def _assignee_users(doc) -> list[str]:
+    return [row.user for row in (doc.get("assignees") or []) if row.user]
+
+
 def before_task_insert(doc, method=None):
     """Materialize the project's default assignee before the task is inserted.
 
@@ -65,23 +69,34 @@ def before_task_insert(doc, method=None):
 
 
 def validate_task_assignees(doc, method=None):
-    """Validate and normalize every assignee on every BP Task save.
+    """Validate every newly-created assignment edge at the DocType boundary.
 
-    API allowlists are not sufficient protection: tasks can also be created or
-    modified through ORM/import/REST paths. Keeping this at the DocType event
-    boundary prevents disabled, Website, Guest and duplicate users from
-    entering the assignment graph regardless of caller.
+    Existing legacy rows are deliberately grandfathered when the assignee set
+    is unchanged: editing a title must not suddenly fail because an old task
+    contains a disabled user from years ago. As soon as the assignment set is
+    changed, every *new* edge is required to point at an enabled System User,
+    and the final set may not contain duplicates.
     """
-    seen = set()
+    new_users = _assignee_users(doc)
+    old = doc.get_doc_before_save() if hasattr(doc, "get_doc_before_save") else None
+    old_users = _assignee_users(old) if old else []
+
+    if old and new_users == old_users:
+        return
+
+    if len(new_users) != len(set(new_users)):
+        duplicate = next(user for user in new_users if new_users.count(user) > 1)
+        frappe.throw(
+            f"{duplicate} is assigned more than once.",
+            frappe.ValidationError,
+            title="Duplicate assignee",
+        )
+
+    old_set = set(old_users)
     for assignee in doc.get("assignees") or []:
         user = assignee.user
-        if user in seen:
-            frappe.throw(
-                f"{user} is assigned more than once.",
-                frappe.ValidationError,
-                title="Duplicate assignee",
-            )
-        seen.add(user)
+        if user in old_set:
+            continue
         row = _assert_assignable_user(user)
         assignee.full_name = row.full_name or user
 
