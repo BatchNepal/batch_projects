@@ -131,7 +131,7 @@ def validate_task_assignees(doc, method=None):
             row = _assert_assignable_user(user)
             assignee.full_name = row.full_name or user
 
-    _validate_project_relations(doc)
+    _validate_project_relations(doc, old)
 
     _assert_new_mentions_authorized(
         project=doc.project,
@@ -168,9 +168,25 @@ def validate_task_assignees(doc, method=None):
         frappe.db.after_commit.add(_sync_project_move)
 
 
-def _validate_project_relations(doc) -> None:
-    """Fail closed on project-local links that point across project boundaries."""
+def _changed(doc, old, field: str) -> bool:
+    """True when a project-local relation needs fresh validation."""
+    if not old:
+        return True
+    if old.project != doc.project:
+        return True  # project boundary changed: every surviving relation must fit the target
+    return (old.get(field) or None) != (doc.get(field) or None)
+
+
+def _validate_project_relations(doc, old=None) -> None:
+    """Fail closed on newly-created/changed cross-project relationship edges.
+
+    Unchanged legacy edges are grandfathered so a historical bad row doesn't
+    make a title/priority edit impossible. A project move revalidates every
+    surviving relation because its tenancy boundary itself changed.
+    """
     for field, (doctype, project_field, label) in _PROJECT_RELATIONS.items():
+        if not _changed(doc, old, field):
+            continue
         value = doc.get(field)
         if not value:
             continue
@@ -188,7 +204,7 @@ def _validate_project_relations(doc) -> None:
                 title=f"Cross-project {label.lower()} not allowed",
             )
 
-    if doc.parent_task:
+    if _changed(doc, old, "parent_task") and doc.parent_task:
         if doc.name and doc.parent_task == doc.name:
             frappe.throw("A task cannot be its own parent.", frappe.ValidationError)
         parent = frappe.db.get_value(
@@ -199,8 +215,6 @@ def _validate_project_relations(doc) -> None:
         if parent.project != doc.project:
             frappe.throw("Parent task belongs to another project.", frappe.ValidationError)
 
-        # Walk upward to prevent A -> B -> A (and longer) cycles. Bound the
-        # traversal so corrupted legacy data cannot make validation hang.
         ancestor = parent.parent_task
         seen = {doc.parent_task}
         for _ in range(1000):
@@ -213,7 +227,7 @@ def _validate_project_relations(doc) -> None:
         else:
             frappe.throw("Task hierarchy is too deep to validate safely.", frappe.ValidationError)
 
-    if doc.sprint:
+    if _changed(doc, old, "sprint") and doc.sprint:
         sprint = frappe.db.get_value(
             "BP Sprint", doc.sprint, ["project", "team", "sprint_type"], as_dict=True
         )
