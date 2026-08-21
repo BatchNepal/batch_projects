@@ -5,6 +5,13 @@ Some package-manager/symlink layouts cause Vite to record an absolute path befor
 ``node_modules/`` for third-party assets. That path is not part of the deployed
 artifact contract and differs across developer/CI machines. Everything from
 ``node_modules/`` onward, plus every other manifest field, must still match.
+
+Strip to the LAST ``node_modules/`` occurrence, not the first: some external
+dependency-storage layouts nest the real node_modules under a path that itself
+contains the literal substring ``node_modules/`` (e.g. a shared cache directory
+named .../node_modules/<workspace>/.../node_modules/pkg), which would otherwise
+leave a machine-specific prefix in the "normalized" path and cause a false
+mismatch.
 """
 
 from __future__ import annotations
@@ -30,7 +37,7 @@ def normalize_key(value: str) -> str:
 
 def normalize_path(value: str) -> str:
     marker = "node_modules/"
-    idx = value.find(marker)
+    idx = value.rfind(marker)
     return value[idx:] if idx >= 0 else value
 
 
