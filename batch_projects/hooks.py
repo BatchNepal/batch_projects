@@ -108,6 +108,16 @@ override_whitelisted_methods = {
         "batch_projects.timer_invariants.stop_timer",
     "batch_projects.api.timers.log_time":
         "batch_projects.timer_invariants.log_time",
+    "batch_projects.api.custom_fields.create_field":
+        "batch_projects.custom_field_security.create_field",
+    "batch_projects.api.custom_fields.update_field":
+        "batch_projects.custom_field_security.update_field",
+    "batch_projects.api.custom_fields.search_field_link_options":
+        "batch_projects.custom_field_security.search_field_link_options",
+    "batch_projects.api.workflows.list_workflows":
+        "batch_projects.workflow_security.list_workflows",
+    "batch_projects.api.workflows.test_workflow":
+        "batch_projects.workflow_security.test_workflow",
 }
 
 permission_query_conditions = {
