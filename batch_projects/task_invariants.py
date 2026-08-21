@@ -107,10 +107,13 @@ def validate_task_assignees(doc, method=None):
     new_users = _assignee_users(doc)
     old_users = _assignee_users(old)
 
+    _validate_project_move_authority(doc, old)
+
     # Legacy unchanged rows are grandfathered: editing a title must not fail
     # because a years-old assignment points at a now-disabled account. Any
     # newly-created edge is strict, and the final set may never duplicate.
     if new_users != old_users or not old:
+        _validate_assignment_authority(doc, old, new_users, old_users)
         if len(new_users) != len(set(new_users)):
             duplicate = next(user for user in new_users if new_users.count(user) > 1)
             frappe.throw(
@@ -166,6 +169,60 @@ def validate_task_assignees(doc, method=None):
                 )
 
         frappe.db.after_commit.add(_sync_project_move)
+
+
+def _validate_assignment_authority(doc, old, new_users, old_users) -> None:
+    """Separate ordinary task editing from the authority to grant task access.
+
+    Manager/Admin may assign any valid System User, including somebody with no
+    project standing (the assignment itself grants access to this one task).
+    A Member may manage assignments only within the existing project audience:
+    themselves or users who already have Viewer+ access. A task-only assignee
+    can edit their task through require_task(), but cannot rewrite its access
+    list at all.
+    """
+    if new_users == old_users and old:
+        return
+
+    from batch_projects import access
+
+    actor = frappe.session.user
+    if access.is_instance_admin(actor) or access.has_at_least(doc.project, "Manager", actor):
+        return
+
+    if not access.has_at_least(doc.project, "Member", actor):
+        frappe.throw(
+            "Task assignment changes require project Member access.",
+            frappe.PermissionError,
+            title="Assignment permission required",
+        )
+
+    added = set(new_users) - set(old_users)
+    for user in added:
+        if user == actor:
+            continue
+        if not access.has_at_least(doc.project, "Viewer", user):
+            frappe.throw(
+                "Only a project Manager or Admin can assign a task to someone "
+                "who does not already have project access.",
+                frappe.PermissionError,
+                title="Cannot grant task-only access",
+            )
+
+
+def _validate_project_move_authority(doc, old=None) -> None:
+    """Moving a task across projects is an access-boundary operation.
+
+    Require Manager+ on BOTH sides. A plain Member being allowed to move a
+    task could otherwise carry assignee access, history and ERP context across
+    tenancy boundaries even though they cannot manage either project's access.
+    """
+    if not old or not old.project or old.project == doc.project:
+        return
+    from batch_projects import access
+
+    access.require(old.project, "Manager")
+    access.require(doc.project, "Manager")
 
 
 def _prune_watchers_for_project_move(doc, pending_assignees) -> None:
