@@ -43,6 +43,31 @@ def active_task_values(project: str, field: str) -> set[str]:
     return {str(v) for v in rows if v not in (None, "")}
 
 
+def active_task_labels(project: str) -> set[str]:
+    used = set()
+    rows = frappe.get_all(
+        "BP Task",
+        filters={"project": project, "is_deleted": 0},
+        fields=["labels"],
+    )
+    for row in rows:
+        raw = row.get("labels")
+        if not raw:
+            continue
+        try:
+            labels = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            frappe.throw(
+                "A task contains malformed label data. Repair it before changing "
+                "the project label schema.",
+                frappe.ValidationError,
+                title="Invalid task label data",
+            )
+        if isinstance(labels, list):
+            used.update(str(v) for v in labels if v not in (None, ""))
+    return used
+
+
 def unique_named_rows(rows, label: str) -> list[dict]:
     clean = []
     seen = set()
@@ -182,6 +207,88 @@ def update_project_issue_types(project, issue_types):
         "BP Project",
         project,
         {"issue_types": json.dumps(rows), "modified": frappe.utils.now()},
+    )
+    _finish(project)
+    return rows
+
+
+@frappe.whitelist()
+def update_project_labels(project, labels):
+    """Protect the current name-backed label catalog from orphaning tasks.
+
+    BP Task stores label names today, despite the DocType description saying
+    IDs. Until that storage migration lands, a rename/delete of a referenced
+    label must be refused rather than silently leaving an orphan string.
+    """
+    require_admin(project)
+    incoming = parse_list(labels, "labels")
+
+    rows = []
+    seen_names = set()
+    seen_ids = set()
+    for raw in incoming:
+        if not isinstance(raw, dict):
+            frappe.throw("Each label must be an object.", frappe.ValidationError)
+        row = dict(raw)
+        name = str(row.get("label") or "").strip()
+        if not name:
+            frappe.throw("Each label requires a name.", frappe.ValidationError)
+        if name in seen_names:
+            frappe.throw(f"Duplicate label name: {name}.", frappe.ValidationError)
+        seen_names.add(name)
+
+        label_id = str(row.get("id") or "").strip()
+        if not label_id:
+            label_id = "lbl_" + frappe.generate_hash(length=10)
+        if label_id in seen_ids:
+            frappe.throw(f"Duplicate label id: {label_id}.", frappe.ValidationError)
+        seen_ids.add(label_id)
+        row["id"] = label_id
+        row["label"] = name
+        rows.append(row)
+
+    raw_old = frappe.db.get_value("BP Project", project, "labels") or "[]"
+    try:
+        old_rows = json.loads(raw_old) if isinstance(raw_old, str) else raw_old
+    except (TypeError, ValueError):
+        frappe.throw("Current project labels contain invalid JSON.", frappe.ValidationError)
+    old_rows = [row for row in (old_rows or []) if isinstance(row, dict)]
+
+    old_by_id = {str(row.get("id")): row for row in old_rows if row.get("id")}
+    new_by_id = {row["id"]: row for row in rows}
+    used = active_task_labels(project)
+    blocked = []
+
+    for label_id, old in old_by_id.items():
+        old_name = str(old.get("label") or "").strip()
+        if not old_name or old_name not in used:
+            continue
+        new = new_by_id.get(label_id)
+        if new is None:
+            blocked.append(f"'{old_name}' (delete)")
+        elif str(new.get("label") or "").strip() != old_name:
+            blocked.append(f"'{old_name}' (rename)")
+
+    old_legacy_names = {
+        str(row.get("label") or "").strip()
+        for row in old_rows if not row.get("id") and row.get("label")
+    }
+    removed_legacy = old_legacy_names - seen_names
+    blocked.extend(f"'{name}' (delete/rename)" for name in sorted(removed_legacy & used))
+
+    if blocked:
+        frappe.throw(
+            "Cannot change these labels while active tasks still reference their "
+            f"current names: {', '.join(blocked)}. Detach or migrate those task "
+            "labels first.",
+            frappe.ValidationError,
+            title="Label is still in use",
+        )
+
+    frappe.db.set_value(
+        "BP Project",
+        project,
+        {"labels": json.dumps(rows), "modified": frappe.utils.now()},
     )
     _finish(project)
     return rows
