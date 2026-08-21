@@ -136,10 +136,12 @@ def validate_task_assignees(doc, method=None):
         pending_assignees=new_users,
     )
 
-    # Project moves are permission-graph mutations. Queue the sync only after
-    # the DB transaction commits; a validation/save failure must never mutate
-    # OpenFGA ahead of MariaDB, which remains the durable authority.
     if old and old.project and old.project != doc.project:
+        _prune_watchers_for_project_move(doc, new_users)
+
+        # Project moves are permission-graph mutations. Queue the sync only
+        # after the DB transaction commits; a failed save must never mutate
+        # OpenFGA ahead of MariaDB, which remains the durable authority.
         old_project = old.project
         new_project = doc.project
         task = doc.name
@@ -161,6 +163,26 @@ def validate_task_assignees(doc, method=None):
                 )
 
         frappe.db.after_commit.add(_sync_project_move)
+
+
+def _prune_watchers_for_project_move(doc, pending_assignees) -> None:
+    """Keep only watchers who can still view the task in its target project.
+
+    The task row still belongs to the old project while validate() is running,
+    so evaluate the target project explicitly and treat the new in-memory
+    assignee set as an access edge. All mutations occur in the same DB
+    transaction as the task move and roll back with it on failure.
+    """
+    rows = frappe.get_all(
+        "BP Task Watcher", filters={"task": doc.name}, fields=["name", "user"]
+    )
+    for row in rows:
+        if _user_can_view_task(doc.project, None, row.user, pending_assignees):
+            frappe.db.set_value(
+                "BP Task Watcher", row.name, "project", doc.project, update_modified=False
+            )
+        else:
+            frappe.db.delete("BP Task Watcher", {"name": row.name})
 
 
 def _validate_task_type(doc, old=None) -> None:
