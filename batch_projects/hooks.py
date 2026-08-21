@@ -155,6 +155,14 @@ has_permission = {
     "BP Workflow":          "batch_projects.permissions.bp_doc_has_permission",
 }
 
+# Transparently redirects a whitelisted dotted path's real implementation to
+# a hardened replacement, without every existing caller (frontend, gateway)
+# needing to change what it calls.
+override_whitelisted_methods = {
+    "batch_projects.api.board.update_project_members":
+        "batch_projects.membership_invariants.update_project_members",
+}
+
 # actual_hours rollup — resync every BP Task a submitted/cancelled
 # Timesheet's rows point at (via the custom_bp_task fixture field).
 # erp.* automation triggers fire onto the same events.emit() bus every
@@ -209,6 +217,9 @@ doc_events = {
     # BP Team Member has no equivalent yet.
     "BP Project Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
+        # Revoked membership must not leave a stale watcher routing task
+        # notifications to a user with no other access edge to that task.
+        "after_delete": "batch_projects.membership_invariants.after_project_member_delete",
     },
     "BP Team Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
