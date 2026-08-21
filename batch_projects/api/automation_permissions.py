@@ -35,32 +35,31 @@ def _definition(workflow_id):
     return None
 
 
-def _allowed(definition, mode):
+def _allowed(definition, mode, user):
     if not definition:
         return False
-    scope = definition["scope"]
-    project = definition["project"]
-    if mode == "admin":
-        from batch_projects.api.board import _require_automation_admin
-        _require_automation_admin(scope, project)
-        return True
-
-    if scope == "project":
-        from batch_projects.api.board import _check_permission
-        _check_permission(project, "BP Viewer")
-        return True
-
-    # Match workflows.py's existing workspace visibility posture: workspace
-    # automations are an admin surface because they can span all projects.
     from batch_projects import access
-    if frappe.session.user == "Administrator" or access.is_workspace_admin():
-        return True
-    frappe.throw("Workspace automation access requires workspace admin.", frappe.PermissionError)
+
+    if definition["scope"] == "workspace":
+        return bool(access.is_workspace_admin(user))
+
+    project = definition["project"]
+    if not project or not frappe.db.exists("BP Project", project):
+        return False
+    if mode == "admin":
+        return bool(access.has_at_least(project, "Admin", user))
+    return bool(access.has_at_least(project, "Viewer", user))
 
 
 @frappe.whitelist()
 def check(user=None, workflow_ids=None, mode="view", **_):
-    """Batch-check execution visibility/admin authority for one authenticated user."""
+    """Batch-check execution visibility/admin authority for one authenticated user.
+
+    This endpoint itself is authenticated as the gateway service account, so it
+    deliberately does not invoke browser-request gateway guards. It asks the
+    shared access model directly about the named browser user instead of
+    mutating frappe.session.user inside a privileged service request.
+    """
     _assert_gateway_service_caller()
     if mode not in ("view", "admin"):
         frappe.throw("mode must be 'view' or 'admin'.")
@@ -70,17 +69,13 @@ def check(user=None, workflow_ids=None, mode="view", **_):
     if not user or user == "Guest" or not frappe.db.exists("User", user):
         return {wid: False for wid in workflow_ids}
 
-    original_user = frappe.session.user
     result = {}
-    try:
-        frappe.set_user(user)
-        for workflow_id in workflow_ids:
-            allowed = False
-            try:
-                allowed = _allowed(_definition(workflow_id), mode)
-            except (frappe.PermissionError, frappe.ValidationError):
-                allowed = False
-            result[workflow_id] = bool(allowed)
-    finally:
-        frappe.set_user(original_user)
+    for workflow_id in workflow_ids:
+        try:
+            result[workflow_id] = bool(_allowed(_definition(workflow_id), mode, user))
+        except Exception:
+            # Permission lookup is fail-closed. A deleted/corrupt definition
+            # must not leak historical execution metadata merely because its
+            # runtime row still exists.
+            result[workflow_id] = False
     return result
