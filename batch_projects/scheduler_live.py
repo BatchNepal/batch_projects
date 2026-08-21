@@ -203,11 +203,16 @@ def send_daily_digest():
         subject = f"batch_projects — {', '.join(parts)}"
 
         try:
+            # This is a multi-task security snapshot. A normal delayed Email
+            # Queue row has only one reference_doctype/reference_name and cannot
+            # re-authorize every embedded task at SMTP time. Send from this
+            # scheduler execution immediately after the per-task checks above
+            # instead of storing stale task metadata for later delivery.
             frappe.sendmail(
                 recipients=[user_row.email],
                 subject=subject,
                 message=html,
-                delayed=True,
+                delayed=False,
                 retry=1,
             )
         except Exception:
