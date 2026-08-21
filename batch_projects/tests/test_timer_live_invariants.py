@@ -48,24 +48,34 @@ class TestLiveTaskTimerGuard(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             timers._require_live_task("TASK-1")
 
+    @patch("batch_projects.api.timers._require_system_user")
+    @patch("batch_projects.api.timers.require_feature")
     @patch("batch_projects.api.timers.start_timer")
     @patch.object(timers, "_require_live_task")
-    def test_start_timer_checks_live_state_before_legacy_api(
-        self, require_live, original_start
+    def test_start_timer_checks_auth_then_live_state_before_legacy_api(
+        self, require_live, original_start, require_feature, require_user
     ):
         require_live.side_effect = frappe.ValidationError("in trash")
         with self.assertRaises(frappe.ValidationError):
             timers.start_timer("TASK-1")
+        require_user.assert_called_once()
+        require_feature.assert_called_once_with("time_tracking")
+        require_live.assert_called_once_with("TASK-1")
         original_start.assert_not_called()
 
+    @patch("batch_projects.api.timers._require_system_user")
+    @patch("batch_projects.api.timers.require_feature")
     @patch("batch_projects.api.timers.log_time")
     @patch.object(timers, "_require_live_task")
-    def test_manual_time_checks_live_state_before_legacy_api(
-        self, require_live, original_log
+    def test_manual_time_checks_auth_then_live_state_before_legacy_api(
+        self, require_live, original_log, require_feature, require_user
     ):
         require_live.side_effect = frappe.ValidationError("in trash")
         with self.assertRaises(frappe.ValidationError):
             timers.log_time("TASK-1", 1.0)
+        require_user.assert_called_once()
+        require_feature.assert_called_once_with("time_tracking")
+        require_live.assert_called_once_with("TASK-1")
         original_log.assert_not_called()
 
 
