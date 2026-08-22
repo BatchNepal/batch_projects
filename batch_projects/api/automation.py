@@ -895,6 +895,38 @@ def get_node_registry():
 
 _NODE_TYPE_TO_ACTION_TYPE = {v: k for k, v in _ACTION_TYPE_TO_NODE_TYPE.items()}
 
+
+def _resolve_workflow_node_action(workflow_doc, node_id):
+    """The one place run_workflow_node/run_local_workflow_step may learn what
+    a node does. Both used to accept node_type/config as caller-supplied
+    parameters and execute them directly — meaning whatever authority check
+    ran against workflow_doc's OWN stored graph (workflow_security.py) could
+    pass while a caller executed something else entirely under the same
+    workflow/node names. Resolving here, from workflow_doc.nodes by node_id,
+    makes validation and execution look at the same data by construction:
+    there is no longer a second copy of the config for them to disagree
+    about. Returns (action_type, config) or (None, None) if node_id doesn't
+    name a real action node in this workflow's current, stored graph.
+    """
+    nodes = workflow_doc.get("nodes")
+    if isinstance(nodes, str):
+        try:
+            nodes = json.loads(nodes) if nodes else []
+        except (json.JSONDecodeError, TypeError):
+            nodes = []
+    if not isinstance(nodes, list):
+        return None, None
+    for node in nodes:
+        if not isinstance(node, dict) or node.get("id") != node_id:
+            continue
+        action_type = _NODE_TYPE_TO_ACTION_TYPE.get(node.get("type"))
+        if not action_type:
+            return None, None
+        config = node.get("config")
+        return action_type, (config if isinstance(config, dict) else {})
+    return None, None
+
+
 _WORKFLOW_CACHE_FIELDS = [
     "name", "title", "scope", "project", "project_filter", "nodes", "edges",
     "automation_revision", "automation_definition_hash",
@@ -996,7 +1028,7 @@ def list_active_workflows(project=None, **_):
 
 
 @frappe.whitelist()
-def run_workflow_node(workflow=None, node=None, node_type=None, config=None, payload=None, **_):
+def run_workflow_node(workflow=None, node=None, payload=None, **_):
     """Called by the gateway for every action.* node it walks. Reuses
     bp_automation_rule._execute() UNCHANGED (02-NODE-LIBRARY.md §2) — the
     node's own `config` becomes an action dict of the exact same shape a
@@ -1004,7 +1036,16 @@ def run_workflow_node(workflow=None, node=None, node_type=None, config=None, pay
     (Change Status, Assign Issue, ...) works here with zero new code. Never
     writes to BP Automation Run — the gateway logs this call's outcome into
     BP Workflow Run via a SEPARATE log_workflow_run call, so this endpoint
-    only executes and returns."""
+    only executes and returns.
+
+    Identifies the node to run by (workflow, node) only — node_type/config
+    are never accepted as parameters. The gateway decides WHICH node fires;
+    what that node actually does is resolved here, from workflow's own
+    currently-stored graph, every time. A caller that could supply its own
+    node_type/config could execute anything under any workflow's name,
+    regardless of what workflow_security.py validated for that workflow —
+    validation and execution must read the same data, not two copies of it.
+    """
     _assert_service_caller()
     from batch_projects.entitlements import is_feature_enabled
     if not is_feature_enabled("automations"):
@@ -1015,15 +1056,20 @@ def run_workflow_node(workflow=None, node=None, node_type=None, config=None, pay
         # rather than a separate tier.
         return {"status": "Skipped", "json": {"message": "automations not enabled for this tenant"}}
 
-    payload = _as_dict(payload)
-    config = _as_dict(config)
-
-    action_type = _NODE_TYPE_TO_ACTION_TYPE.get(node_type)
+    if not workflow or not frappe.db.exists("BP Workflow", workflow):
+        return {"status": "Failed", "json": {
+            "message": f"workflow {workflow!r} not found",
+            "error_code": "workflow_not_found",
+        }}
+    workflow_doc = frappe.get_doc("BP Workflow", workflow)
+    action_type, config = _resolve_workflow_node_action(workflow_doc, node)
     if not action_type:
         return {"status": "Failed", "json": {
-            "message": f"unknown action node type {node_type!r}",
+            "message": f"node {node!r} is not a known action node in workflow {workflow!r}",
             "error_code": "unknown_action_node",
         }}
+
+    payload = _as_dict(payload)
 
     from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import (
         _build_context,
@@ -1054,22 +1100,34 @@ _LOCAL_WORKFLOW_ACTIONS = {
 
 
 @frappe.whitelist()
-def run_local_workflow_step(execution_id=None, node_id=None, node_type=None, config=None,
-                            payload=None, owner=None, lease_generation=None, **_):
+def run_local_workflow_step(execution_id=None, node_id=None, payload=None, owner=None,
+                            lease_generation=None, **_):
     """Execute a Frappe-only node and mark its durable step in one request TX.
 
     Do not catch action exceptions here.  A Frappe POST rolls the whole request
     back, including the business mutation, step write, and after-commit event
     callbacks.  That makes a lost response safely repeatable.
+
+    Identified by (execution_id, node_id) only, same reasoning as
+    run_workflow_node: node_type/config are resolved from the workflow's own
+    currently-stored graph, never accepted from the caller. The workflow is
+    itself resolved from execution_id (BP Workflow Execution.workflow) rather
+    than trusted as a separate parameter, so there's nothing here a caller
+    could point at a workflow/node pairing that doesn't actually exist.
     """
     _assert_service_caller()
     if not all((execution_id, node_id, owner)) or lease_generation is None:
         frappe.throw("Missing local workflow step context")
-    payload = _as_dict(payload)
-    config = _as_dict(config)
-    action_type = _NODE_TYPE_TO_ACTION_TYPE.get(node_type)
+
+    workflow_name = frappe.db.get_value("BP Workflow Execution", execution_id, "workflow")
+    if not workflow_name or not frappe.db.exists("BP Workflow", workflow_name):
+        frappe.throw("Workflow execution has no resolvable workflow.", frappe.PermissionError)
+    workflow_doc = frappe.get_doc("BP Workflow", workflow_name)
+    action_type, config = _resolve_workflow_node_action(workflow_doc, node_id)
     if action_type not in _LOCAL_WORKFLOW_ACTIONS:
         frappe.throw("Workflow action is not local-atomic")
+
+    payload = _as_dict(payload)
 
     from batch_projects.workflow_execution import finish_step, get_or_create_step
     from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import (
