@@ -222,6 +222,25 @@ def apply_action(rule=None, payload=None, **kwargs):
 
 
 @frappe.whitelist()
+def run_rule_node(rule=None, node=None, payload=None, **kwargs):
+    """Harden Runtime V2's single stored-rule-action callback."""
+    from batch_projects.api import automation
+
+    automation._assert_service_caller()
+    data = automation._as_dict(payload)
+    if not rule or not frappe.db.exists("BP Automation Rule", rule):
+        return {"status": "Failed", "json": {
+            "message": f"rule {rule!r} not found",
+            "error_code": "rule_not_found",
+        }}
+    rule_doc = frappe.get_doc("BP Automation Rule", rule)
+    if not rule_doc.is_active:
+        return {"status": "Skipped", "json": {"message": "rule inactive"}}
+    validate_dispatch(rule_doc, data)
+    return automation.run_rule_node(rule=rule, node=node, payload=data, **kwargs)
+
+
+@frappe.whitelist()
 def run_scheduled_event(job_id=None, tenant=None, kind=None, event=None, payload=None, **kwargs):
     from batch_projects.api import automation
 

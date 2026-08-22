@@ -56,6 +56,16 @@
                 </SelectItem>
               </Select>
 
+              <div v-if="webhookNewSecret" class="rounded-md border border-warning bg-warning-soft px-3 py-2 flex flex-col gap-1.5">
+                <p class="text-xs font-medium text-foreground">Copy the signing secret now — it will not be shown again.</p>
+                <div class="flex items-center gap-1.5">
+                  <span class="flex-1 min-w-0 text-sm font-mono text-foreground break-all">{{ webhookNewSecret }}</span>
+                  <Button size="sm" :variant="webhookSecretCopied ? 'outline' : 'light'" @click="copyWebhookSecret">
+                    {{ webhookSecretCopied ? 'Copied' : 'Copy secret' }}
+                  </Button>
+                </div>
+              </div>
+
               <template v-if="selectedWebhookToken">
                 <div class="flex items-center gap-1.5">
                   <span class="flex-1 min-w-0 h-8 px-2.5 rounded-md bg-surface-secondary text-sm font-mono text-foreground truncate flex items-center">
@@ -517,6 +527,8 @@ const webhookTokensError = ref('')
 const webhookCreateLabel = ref('')
 const webhookCreating = ref(false)
 const webhookUrlCopied = ref(false)
+const webhookNewSecret = ref('')
+const webhookSecretCopied = ref(false)
 
 async function loadWebhookTokens() {
   webhookTokensLoading.value = true
@@ -545,6 +557,11 @@ async function copyWebhookUrl() {
   webhookUrlCopied.value = true
   setTimeout(() => { webhookUrlCopied.value = false }, 1800)
 }
+async function copyWebhookSecret() {
+  try { await navigator.clipboard.writeText(webhookNewSecret.value) } catch { /* clipboard unavailable */ }
+  webhookSecretCopied.value = true
+  setTimeout(() => { webhookSecretCopied.value = false }, 1800)
+}
 async function createNewWebhookToken() {
   webhookCreating.value = true
   try {
@@ -553,6 +570,8 @@ async function createNewWebhookToken() {
     })
     webhookTokens.value.unshift({ ...res, is_active: 1, call_count: 0, last_used: null, last_event: null })
     localConfig.webhook_token = res.name
+    webhookNewSecret.value = res.signing_secret || ''
+    webhookSecretCopied.value = false
     webhookCreateLabel.value = ''
     toast.success('Webhook token created')
   } catch (e) {
@@ -659,6 +678,8 @@ watch(() => [props.open, props.node?.id], () => {
 
   webhookCreateLabel.value = ''
   webhookUrlCopied.value = false
+  webhookNewSecret.value = ''
+  webhookSecretCopied.value = false
   if (schema.value.some((f) => f.type === 'webhook_lifecycle')) loadWebhookTokens()
 }, { immediate: true })
 

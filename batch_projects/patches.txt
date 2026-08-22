@@ -70,3 +70,7 @@ batch_projects.patches.add_sales_invoice_timesheet_detail_index
 # Draft Sales Invoices as "Invoiced". Reconcile existing milestones against
 # authoritative ERPNext Sales Invoice docstatus after the DocType options sync.
 batch_projects.patches.reconcile_milestone_invoice_lifecycle
+
+# Runtime V2 compiles rules into durable executions too. Existing rule rows
+# need the same immutable revision/hash binding workflows already carry.
+batch_projects.patches.backfill_automation_rule_definition_identity

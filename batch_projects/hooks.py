@@ -16,12 +16,12 @@ from . import __version__ as app_version
 # against an incompatible batch_projects, and by the gateway installer to
 # resolve which gateway version to install/update to.
 #
-# 1.0.23 is the first release carrying the /v1/insights/* plane. This app no
-# longer computes the margin report, the portfolio rollup or the Money tab —
-# it asks the gateway to. Against 1.0.22 or older those three pages get a 404
-# from a gateway that has no such routes, so the floor has to move with them:
-# a version mismatch must fail loudly at boot, not as three broken pages.
-gateway_min_version = "1.0.23"
+# 1.0.24 is the first release that routes Runtime V2 definition identities
+# (workflow:<name> / rule:<name>) to the matching Frappe stored-node endpoint
+# and forwards immutable workflow revision IDs. Older gateways make compiled
+# actions fail only after traffic arrives, so release ordering must fail at
+# compatibility startup instead.
+gateway_min_version = "1.0.24"
 
 add_to_apps_screen = [
     {
@@ -161,6 +161,8 @@ has_permission = {
 override_whitelisted_methods = {
     "batch_projects.api.automation.apply_action":
         "batch_projects.automation_security.apply_action",
+    "batch_projects.api.automation.run_rule_node":
+        "batch_projects.automation_security.run_rule_node",
     "batch_projects.api.automation.run_scheduled_event":
         "batch_projects.automation_security.run_scheduled_event",
     "batch_projects.api.board.update_project_members":

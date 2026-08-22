@@ -145,6 +145,23 @@
       "description": "Internal: the agent's job id for this scheduled rule."
     },
     {
+      "fieldname": "automation_revision",
+      "fieldtype": "Int",
+      "label": "Automation Revision",
+      "default": "0",
+      "read_only": 1,
+      "hidden": 1,
+      "no_copy": 1
+    },
+    {
+      "fieldname": "automation_definition_hash",
+      "fieldtype": "Data",
+      "label": "Automation Definition Hash",
+      "read_only": 1,
+      "hidden": 1,
+      "no_copy": 1
+    },
+    {
       "fieldname": "column_break",
       "fieldtype": "Column Break"
     },
