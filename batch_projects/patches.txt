@@ -74,3 +74,12 @@ batch_projects.patches.reconcile_milestone_invoice_lifecycle
 # Runtime V2 compiles rules into durable executions too. Existing rule rows
 # need the same immutable revision/hash binding workflows already carry.
 batch_projects.patches.backfill_automation_rule_definition_identity
+
+# telemetry_key's own unique index (BP Automation Run / BP Workflow Run) is
+# safe to create as a brand-new all-NULL column — MySQL/MariaDB allow
+# multiple NULLs in a unique index — but any row written before this patch
+# needs a computed key, and two rows that would compute the SAME key are, by
+# construction, duplicates from the exact get_value()-then-insert race this
+# migration closes. Must run after DocType schema sync (the column has to
+# exist first) and de-duplicate before ever writing a key twice.
+batch_projects.patches.backfill_run_telemetry_keys

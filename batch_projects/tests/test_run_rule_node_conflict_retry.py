@@ -297,3 +297,181 @@ class TestRunRuleNodeConflictRetry(FrappeTestCase):
         )
         self.assertEqual(len(steps), 1)
         self.assertEqual(steps[0].status, "succeeded")
+
+    def test_concurrent_telemetry_write_creates_exactly_one_row(self):
+        """_upsert_run_log's old get_value()-then-insert check was itself a
+        TOCTOU race: two concurrent writers for the SAME (execution, node,
+        attempt) can both see "not found" and both insert, duplicating a
+        telemetry row ExecutionsView.vue/AutomationRules.vue then render
+        twice for one real node run. telemetry_key's own DocType-level
+        unique index makes the database the arbiter regardless of what two
+        real threads actually observe."""
+        from batch_projects.api import automation
+
+        project = self._make_project()
+        rule = self._make_rule(project)
+        frappe.db.commit()
+
+        site = frappe.local.site
+        execution_id = "bpx_test_concurrent_telemetry"
+        results = []
+        errors = []
+        barrier = threading.Barrier(2)
+
+        def write_once():
+            try:
+                frappe.init(site=site)
+                frappe.connect()
+                with patch("batch_projects.api.automation._assert_service_caller"):
+                    barrier.wait(timeout=5)
+                    result = automation.log_rule_run(
+                        rule=rule.name, node="action-1", status="Success",
+                        message="Status -> Done", execution_id=execution_id, attempt=1,
+                    )
+                frappe.db.commit()
+                results.append(result)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+            finally:
+                frappe.destroy()
+
+        threads = [threading.Thread(target=write_once) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        self.assertFalse(errors, f"unexpected exceptions in worker threads: {errors}")
+        self.assertEqual(len(results), 2)
+        rows = frappe.get_all(
+            "BP Automation Run",
+            filters={"execution_id": execution_id, "action_index": 0, "attempt": 1},
+            fields=["name"],
+        )
+        self.assertEqual(len(rows), 1, f"expected exactly one telemetry row, got {rows}")
+        frappe.db.delete("BP Automation Run", {"execution_id": execution_id})
+        frappe.db.commit()
+
+    def test_concurrent_out_of_order_report_never_regresses_status(self):
+        """_update_last_run_if_newer's old read-then-write was the same
+        class of race: two concurrent reports can both read the same
+        "current" last_run_at, both decide they're newer, and whichever
+        WRITES last wins regardless of whose `at` was actually newer. Fires
+        the older-timestamped report and the newer one at the same instant
+        (barrier-synchronized, real threads/connections) — the conditional
+        UPDATE's WHERE clause must make the outcome depend on the timestamps
+        themselves, not on scheduling luck."""
+        from batch_projects.api import automation
+
+        project = self._make_project()
+        rule = self._make_rule(project)
+        frappe.db.commit()
+
+        site = frappe.local.site
+        older_at = "2026-01-01 00:00:00"
+        newer_at = "2026-01-02 00:00:00"
+        errors = []
+        barrier = threading.Barrier(2)
+
+        def report_once(status, at):
+            try:
+                frappe.init(site=site)
+                frappe.connect()
+                with patch("batch_projects.api.automation._assert_service_caller"):
+                    barrier.wait(timeout=5)
+                    automation.report_rule_run(rule=rule.name, status=status, at=at)
+                frappe.db.commit()
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+            finally:
+                frappe.destroy()
+
+        threads = [
+            threading.Thread(target=report_once, args=("Failed", older_at)),
+            threading.Thread(target=report_once, args=("Success", newer_at)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        self.assertFalse(errors, f"unexpected exceptions in worker threads: {errors}")
+        final = frappe.db.get_value(
+            "BP Automation Rule", rule.name, ["last_run_status", "last_run_at"], as_dict=True,
+        )
+        # Regardless of which thread's UPDATE statement physically executed
+        # last, the newer-timestamped report must be what's stored.
+        self.assertEqual(final.last_run_status, "Success")
+        self.assertEqual(str(final.last_run_at), newer_at)
+
+    def test_lock_timeout_on_stuck_worker_is_retryable_not_permanent(self):
+        """A caller that never releases the advisory lock (crashed, or a
+        genuinely very slow action) must not make a concurrent redelivery's
+        call permanently fail while the original worker goes on to succeed.
+        frappe_mutation.go's client only classifies specific HTTP statuses as
+        RetryTransient (408/409/429/5xx) — a well-formed 200 "Failed" body is
+        ALWAYS RetryPermanent there regardless of error_code. This must
+        surface as frappe.DuplicateEntryError (-> HTTP 409), not a plain
+        Failed result, so the gateway actually retries it."""
+        import hashlib
+
+        from batch_projects.api import automation
+
+        project = self._make_project()
+        task = self._make_task(project)
+        rule = self._make_rule(project)
+        frappe.db.commit()
+
+        idempotency_key = "bpn_test_lock_timeout"
+        lock_name = "bp_rule_node:" + hashlib.sha256(idempotency_key.encode()).hexdigest()
+
+        # Pre-claim the step exactly as run_rule_node itself would — the
+        # test's "stuck worker" holds the advisory lock without ever
+        # finishing it, so it stays 'claimed' for the whole test.
+        from batch_projects.workflow_execution import get_or_create_node_step
+
+        get_or_create_node_step(idempotency_key, None, f"rule:{rule.name}:action-1")
+        frappe.db.commit()
+
+        site = frappe.local.site
+        lock_held = threading.Event()
+        release_lock = threading.Event()
+
+        def hold_lock():
+            frappe.init(site=site)
+            frappe.connect()
+            try:
+                frappe.db.sql("SELECT GET_LOCK(%s, 5)", (lock_name,))
+                lock_held.set()
+                release_lock.wait(timeout=10)
+            finally:
+                frappe.db.sql("SELECT RELEASE_LOCK(%s)", (lock_name,))
+                frappe.destroy()
+
+        holder = threading.Thread(target=hold_lock)
+        holder.start()
+        self.assertTrue(lock_held.wait(timeout=5), "holder thread never acquired the lock")
+
+        try:
+            with (
+                patch("batch_projects.api.automation._assert_service_caller"),
+                patch("batch_projects.entitlements.is_feature_enabled", return_value=True),
+                patch("batch_projects.api.automation._RULE_NODE_LOCK_TIMEOUT_SECONDS", 1),
+            ):
+                with self.assertRaises(frappe.DuplicateEntryError):
+                    automation.run_rule_node(
+                        rule=rule.name, node="action-1", payload=self._payload(project, task),
+                        idempotency_key=idempotency_key,
+                        workflow_revision_id=f"rule:{rule.automation_revision}:{rule.automation_definition_hash}",
+                    )
+        finally:
+            release_lock.set()
+            holder.join(timeout=10)
+
+        # The step must still be exactly where the (still-alive, just slow)
+        # original worker left it — 'claimed' — not corrupted by the timed-
+        # out caller into some other state.
+        step_status = frappe.db.get_value(
+            "BP Workflow Step", {"node_id": f"rule:{rule.name}:action-1"}, "status",
+        )
+        self.assertEqual(step_status, "claimed")

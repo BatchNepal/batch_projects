@@ -23,6 +23,7 @@ These are server-to-server. The agent authenticates with the service account
 so a stray browser session can't drive automations.
 """
 
+import hashlib
 import json
 import time
 import uuid
@@ -33,6 +34,14 @@ import frappe
 # Attempts for the optimistic-lock retry in apply_action — a dispatched action
 # racing the SPA's drag writes (move_task + reorder_tasks) needs a beat or two.
 _CONFLICT_RETRIES = 3
+
+# run_rule_node's advisory-lock wait for a concurrent caller with the same
+# idempotency_key. Below service.Injector's own 10s HTTP client timeout
+# (internal/auth/service/service.go) with room to spare — this must resolve
+# (acquire, or detect the winner's cached result) before that client gives up
+# on its own, not race it to decide who times out first. A module constant,
+# not inline, so tests can patch it down instead of a real multi-second sleep.
+_RULE_NODE_LOCK_TIMEOUT_SECONDS = 8
 
 from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import (
     run_scheduled,
@@ -345,13 +354,42 @@ def run_rule_node(
         # window: a second worker blocks here instead of racing into
         # _execute. Bounded, not indefinite — a worker that's died holding it
         # must not wedge every future redelivery of this key forever.
-        lock_name = f"bp_rule_node:{idempotency_key}"
-        acquired = frappe.db.sql("SELECT GET_LOCK(%s, %s)", (lock_name, 10))[0][0]
+        # Hashed, not the raw key: idempotency_key is gateway-generated and
+        # its length isn't a contract this endpoint controls — MySQL/MariaDB
+        # GET_LOCK names have a real length ceiling (64 bytes on MySQL), and
+        # silently truncating an over-length name risks two DIFFERENT keys
+        # colliding on the same lock. A fixed-width hash has no such ceiling
+        # regardless of what the gateway ever sends.
+        lock_name = "bp_rule_node:" + hashlib.sha256(idempotency_key.encode()).hexdigest()
+        acquired = frappe.db.sql(
+            "SELECT GET_LOCK(%s, %s)", (lock_name, _RULE_NODE_LOCK_TIMEOUT_SECONDS)
+        )[0][0]
         if not acquired:
-            return {"status": "Failed", "json": {
-                "message": "timed out waiting for another in-progress attempt of this exact action",
-                "error_code": "concurrent_execution_lock_timeout",
-            }}
+            # Didn't get the lock in time — but the other worker may have
+            # finished in that same window. FOR UPDATE bypasses REPEATABLE
+            # READ's snapshot, so this always sees the true current row.
+            current = frappe.db.sql(
+                "SELECT status, result_json FROM `tabBP Workflow Step` WHERE name=%s FOR UPDATE",
+                (step["step_id"],), as_dict=True,
+            )
+            if current and current[0].status in ("succeeded", "failed", "needs_review"):
+                cached = json.loads(current[0].result_json) if current[0].result_json else None
+                if cached:
+                    return cached
+            # Still genuinely unresolved (the other worker is still running,
+            # or died holding the row without ever finishing). This must be
+            # RETRYABLE, not the permanent failure a plain {"status":
+            # "Failed"} 200 body would be: frappe_mutation.go's client only
+            # ever classifies specific HTTP status codes as RetryTransient
+            # (408/409/429/5xx) — a well-formed 200 reply is ALWAYS
+            # RetryPermanent there regardless of error_code, which would
+            # permanently give up on what's just lock contention, not a real
+            # failure, while the original worker goes on to succeed.
+            # DuplicateEntryError maps to HTTP 409 — exactly that contract.
+            frappe.throw(
+                "Another attempt of this exact action is still in progress; retry.",
+                exc=frappe.DuplicateEntryError,
+            )
         try:
             # Now holding the lock — but the OTHER worker may have finished
             # (or even started and died) between our own claim above and
@@ -483,10 +521,14 @@ def log_rule_run(rule=None, node=None, status=None, message=None, execution_id=N
         except (TypeError, ValueError):
             attempt = 1
         now = frappe.utils.now_datetime()
+        action_index = action_index if action_index is not None else 0
         _upsert_run_log(
             "BP Automation Run",
-            {"execution_id": execution_id, "action_index": action_index if action_index is not None else 0, "attempt": attempt},
+            _telemetry_key(execution_id, action_index, attempt),
             {
+                "execution_id": execution_id,
+                "action_index": action_index,
+                "attempt": attempt,
                 "rule": rule_doc.name,
                 "rule_name": rule_doc.rule_name,
                 "trigger_event": rule_doc.trigger_event,
@@ -1525,23 +1567,42 @@ _RUN_LOG_STATUSES = {"Success", "Failed", "Skipped"}
 _RUN_REPORT_STATUSES = {"Success", "Failed", "Partial"}
 
 
-def _upsert_run_log(doctype, identity_filters, fields):
-    """Idempotent per-node run-log write, keyed on identity_filters (execution
-    id + node id + attempt). A redelivered lifecycle event from the gateway
-    — or a retried HTTP call after a lost-but-actually-delivered response —
-    must update the SAME row, never insert a second one: ExecutionsView.vue /
-    AutomationRules.vue group rows by run/execution id and would otherwise
-    render duplicate node entries for one real node run.
+def _telemetry_key(*parts):
+    return hashlib.sha256("\0".join(str(p or "") for p in parts).encode()).hexdigest()
+
+
+def _upsert_run_log(doctype, telemetry_key, fields):
+    """Idempotent per-node run-log write, keyed on a deterministic
+    telemetry_key (sha256 of execution/run id + node id + attempt) that the
+    DocType itself declares unique — a get_value()-then-insert check is a
+    race under concurrency (two redelivered/concurrent callers can both see
+    "not found" and both insert); the unique index makes the database the
+    actual arbiter, matching the exact insert/DuplicateEntryError/fallback
+    pattern get_or_create_node_step already uses for the same class of race.
+    A redelivered lifecycle event from the gateway — or a retried HTTP call
+    after a lost-but-actually-delivered response — must update the SAME row,
+    never insert a second one: ExecutionsView.vue / AutomationRules.vue group
+    rows by run/execution id and would otherwise render duplicate node
+    entries for one real node run.
 
     BP Workflow Run / BP Automation Run are a READ-ONLY TELEMETRY PROJECTION
     of what the gateway's Runtime V2 already decided — the gateway's own
     SQLite execution store remains the sole authority for retries, leases,
     graph state and resume. Nothing here is ever read back by Runtime V2."""
-    existing = frappe.db.get_value(doctype, identity_filters, "name")
-    if existing:
-        frappe.db.set_value(doctype, existing, fields)
-    else:
-        frappe.get_doc({"doctype": doctype, **identity_filters, **fields}).insert(ignore_permissions=True)
+    try:
+        frappe.db.savepoint("bp_run_telemetry_insert")
+        frappe.get_doc({
+            "doctype": doctype, "telemetry_key": telemetry_key, **fields,
+        }).insert(ignore_permissions=True)
+    except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
+        frappe.db.rollback(save_point="bp_run_telemetry_insert")
+        existing = frappe.db.get_value(doctype, {"telemetry_key": telemetry_key}, "name")
+        if existing:
+            frappe.db.set_value(doctype, existing, fields)
+        # else: lost the race to a concurrent DELETE (shouldn't happen in
+        # practice — nothing deletes these rows in normal operation) —
+        # nothing to update, and re-inserting risks a second race; drop it,
+        # this is best-effort telemetry, not the execution's source of truth.
 
 
 def _update_last_run_if_newer(doctype, name, status, at):
@@ -1551,15 +1612,27 @@ def _update_last_run_if_newer(doctype, name, status, at):
     with stale data. `at` is the gateway's own terminal-transition timestamp
     (RuntimeLifecycleEvent.At), not this call's arrival time, so ordering is
     judged by when the gateway decided the outcome, not when Frappe heard
-    about it."""
-    current_at, prev_status = frappe.db.get_value(doctype, name, ["last_run_at", "last_run_status"]) or (None, None)
-    if current_at and at and _workflow_run_datetime(at) and _workflow_run_datetime(at) < current_at:
-        return False, prev_status
-    frappe.db.set_value(doctype, name, {
-        "last_run_at": _workflow_run_datetime(at) or frappe.utils.now_datetime(),
-        "last_run_status": status,
-    })
-    return True, prev_status
+    about it.
+
+    One conditional UPDATE, not read-then-write: a read-then-write here is
+    the same TOCTOU race as _upsert_run_log's old get_value()-then-insert —
+    two concurrent reports can both read the same "current" last_run_at,
+    both decide they're newer, and whichever WRITES last wins regardless of
+    whose `at` was actually newer. The WHERE clause makes the database
+    itself enforce the ordering; _row_count() says which one actually won."""
+    at_dt = _workflow_run_datetime(at) or frappe.utils.now_datetime()
+    # Best-effort only, for the edge-triggered failure notification below —
+    # a race here means at most a duplicate/missed notification, never a
+    # wrong last_run_at/last_run_status (the UPDATE below is what actually
+    # guarantees that).
+    prev_status = frappe.db.get_value(doctype, name, "last_run_status")
+    frappe.db.sql(f"""
+        UPDATE `tab{doctype}`
+        SET last_run_at = %(at)s, last_run_status = %(status)s
+        WHERE name = %(name)s AND (last_run_at IS NULL OR last_run_at <= %(at)s)
+    """, {"at": at_dt, "status": status, "name": name})
+    updated = bool(frappe.db.sql("SELECT ROW_COUNT()")[0][0])
+    return updated, prev_status
 
 
 @frappe.whitelist()
@@ -1587,19 +1660,23 @@ def log_workflow_run(workflow=None, run_id=None, node_id=None, node_type=None, s
             attempt = max(1, int(attempt or 1))
         except (TypeError, ValueError):
             attempt = 1
+        run_id = run_id or execution_id
         _upsert_run_log(
             "BP Workflow Run",
             # Identity is (run_id, node_id, attempt) — run_id is a plain Data
-            # field, safe to match/insert on. execution is a Link to BP
-            # Workflow Execution and must stay out of the identity filter:
-            # coercing it to run_id here previously failed LinkValidationError
-            # whenever no real execution_id existed (run_id alone is not a
-            # BP Workflow Execution name) — found live by this file's own
-            # regression test after this rewrite.
-            {"run_id": run_id or execution_id, "node_id": node_id, "attempt": attempt},
+            # field, safe to key on. execution is a Link to BP Workflow
+            # Execution and must stay out of the identity: coercing it to
+            # run_id here previously failed LinkValidationError whenever no
+            # real execution_id existed (run_id alone is not a BP Workflow
+            # Execution name) — found live by this file's own regression
+            # test after an earlier rewrite.
+            _telemetry_key(run_id, node_id, attempt),
             {
                 "workflow": workflow,
+                "run_id": run_id,
                 "execution": execution_id or None,
+                "node_id": node_id,
+                "attempt": attempt,
                 "node_type": node_type,
                 "status": status,
                 "message": (message or "")[:500],

@@ -6,13 +6,22 @@
   "autoname": "hash",
   "naming_rule": "Random",
   "creation": "2026-06-14 00:00:00",
-  "modified": "2026-06-14 00:00:00",
+  "modified": "2026-08-23 00:00:00",
   "owner": "Administrator",
   "modified_by": "Administrator",
   "sort_field": "creation",
   "sort_order": "DESC",
   "track_changes": 0,
   "fields": [
+    {
+      "fieldname": "telemetry_key",
+      "fieldtype": "Data",
+      "label": "Telemetry Key",
+      "unique": 1,
+      "hidden": 1,
+      "read_only": 1,
+      "description": "sha256(execution_id, action_index, attempt) — database-level idempotency for the write itself. A get_value()-then-insert check is a race under concurrency (two redelivered/concurrent writers can both see \"not found\"); the unique index makes the DB the actual arbiter, with the second writer's insert failing and falling back to an update of the row the first one just created."
+    },
     {
       "fieldname": "rule",
       "fieldtype": "Link",
