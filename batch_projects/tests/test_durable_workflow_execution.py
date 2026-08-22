@@ -163,6 +163,46 @@ class TestDurableWorkflowExecution(FrappeTestCase):
         self.assertEqual(sum(1 for row in results if row["created"]), 1)
         self.executions.append(results[0]["execution_id"])
 
+    def test_concurrent_duplicate_node_step_creation_has_one_step(self):
+        """The run_workflow_node idempotency path's own version of
+        test_concurrent_duplicate_step_creation_has_one_step — two genuinely
+        concurrent connections (real threads, real separate DB connections,
+        a barrier so both race the same INSERT), not two sequential calls in
+        one thread. This is what two actual overlapping gateway retries of
+        the same node attempt look like."""
+        workflow = self._workflow()
+        frappe.db.commit()
+        site = frappe.local.site
+        results = []
+        errors = []
+        barrier = threading.Barrier(2)
+
+        def create_node_step_once():
+            try:
+                frappe.init(site=site)
+                frappe.connect()
+                from batch_projects.workflow_execution import get_or_create_node_step
+                barrier.wait(timeout=5)
+                result = get_or_create_node_step("bpn_concurrent_key", workflow.name, "action")
+                frappe.db.commit()
+                results.append(result)
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                frappe.destroy()
+
+        threads = [threading.Thread(target=create_node_step_once) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        self.assertFalse(errors)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(len({row["step_id"] for row in results}), 1)
+        self.assertEqual(sum(1 for row in results if row["created"]), 1)
+        frappe.db.delete("BP Workflow Step", results[0]["step_id"])
+
     def test_concurrent_duplicate_step_creation_has_one_step(self):
         self._workflow()
         execution = self._admit("evt-concurrent-step")
