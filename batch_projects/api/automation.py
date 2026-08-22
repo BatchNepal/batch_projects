@@ -319,13 +319,42 @@ def run_rule_node(
     depth = int(payload.get("depth", 0))
     frappe.flags.bp_automation_depth = depth + 1
     try:
-        ctx = _build_context(payload)
-        status, message = _execute(action, ctx, payload)
+        # Conflict retry: Runtime V2 dispatches this node asynchronously, so
+        # it can race the SPA's own follow-up writes to the same task (a drag
+        # = move_task then reorder_tasks within ~200ms) and lose Frappe's
+        # optimistic lock — apply_action (the legacy synchronous path this
+        # replaces) already handled exactly this with a bounded retry; this
+        # entrypoint dropped it. Every task-saving action is check-and-skip
+        # idempotent (see _execute's per-action-type guards), so re-running
+        # against a freshly loaded doc is safe.
+        from frappe.exceptions import TimestampMismatchError
+
+        status = message = None
+        for attempt in range(1, _CONFLICT_RETRIES + 1):
+            try:
+                ctx = _build_context(payload)
+                status, message = _execute(action, ctx, payload)
+                if attempt > 1:
+                    message = f"{message} (succeeded on retry {attempt}/{_CONFLICT_RETRIES})"
+                break
+            except TimestampMismatchError:
+                frappe.db.rollback()
+                # frappe.throw() queues its red message into the request's
+                # message_log before raising — that queued entry survives
+                # this except block and would otherwise leak into
+                # _server_messages on the eventual successful response.
+                frappe.clear_last_message()
+                if attempt == _CONFLICT_RETRIES:
+                    raise
+                time.sleep(0.15 * attempt)
         result = {"status": status, "json": {"message": message}}
     except Exception as exc:
         frappe.log_error(frappe.get_traceback(), f"BP rule node failed: {rule}/{node}")
+        msg = _short_error()
+        if "TimestampMismatchError" in frappe.get_traceback():
+            msg = f"{msg} (failed after {_CONFLICT_RETRIES} attempts — conflict retry exhausted)"
         result = {"status": "Failed", "json": {
-            "message": _short_error(),
+            "message": msg,
             "error_code": type(exc).__name__,
         }}
     finally:
@@ -343,6 +372,97 @@ def run_rule_node(
             error_message=result["json"].get("message") if terminal == "failed" else None,
         )
     return result
+
+
+@frappe.whitelist()
+def log_rule_run(rule=None, node=None, status=None, message=None, execution_id=None,
+                  correlation_id=None, source=None, attempt=1, error_code=None, **_):
+    """Best-effort per-node run log for rules — the log_workflow_run counterpart
+    for BP Automation Rule. Called by the gateway's lifecycle observer (see
+    internal/automation/runtime_frappe_run_logger.go), not from run_rule_node
+    itself: only the gateway knows the stable execution_id shared across every
+    node of one rule firing, so it stays the source of that identity rather
+    than each node call minting its own.
+
+    No project/task/trigger_event context — AutomationRules.vue's run-history
+    view doesn't render those, and the gateway's lifecycle event doesn't carry
+    them (that's business-envelope data, not runtime-execution data).
+    READ-ONLY TELEMETRY — see _upsert_run_log's module note."""
+    _assert_service_caller()
+    if status not in _RUN_LOG_STATUSES:
+        return {"status": "rejected", "reason": f"status must be one of {sorted(_RUN_LOG_STATUSES)}"}
+    if not rule or not frappe.db.exists("BP Automation Rule", rule):
+        return {"status": "rejected", "reason": "unknown rule"}
+    if not node or not execution_id:
+        return {"status": "rejected", "reason": "node and execution_id are required"}
+    try:
+        from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import _get_actions
+
+        rule_doc = frappe.get_doc("BP Automation Rule", rule)
+        action_index = None
+        if isinstance(node, str) and node.startswith("action-"):
+            try:
+                action_index = int(node[len("action-"):]) - 1
+            except ValueError:
+                pass
+        action_type = None
+        if action_index is not None:
+            actions = _get_actions(rule_doc)
+            if 0 <= action_index < len(actions):
+                action_type = actions[action_index].get("type")
+        try:
+            attempt = max(1, int(attempt or 1))
+        except (TypeError, ValueError):
+            attempt = 1
+        now = frappe.utils.now_datetime()
+        _upsert_run_log(
+            "BP Automation Run",
+            {"execution_id": execution_id, "action_index": action_index if action_index is not None else 0, "attempt": attempt},
+            {
+                "rule": rule_doc.name,
+                "rule_name": rule_doc.rule_name,
+                "trigger_event": rule_doc.trigger_event,
+                "action_type": action_type,
+                "status": status,
+                "message": (message or "")[:500],
+                "run_at": now,
+                "correlation_id": correlation_id or None,
+                "source": source or "gateway",
+                "started_at": now,
+                "finished_at": now,
+                "error_code": (error_code or "")[:140] or None,
+            },
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"log_rule_run failed: {rule}/{node}")
+    return {"status": "logged"}
+
+
+@frappe.whitelist()
+def report_rule_run(rule=None, status=None, at=None, **_):
+    """Called once per gateway rule-execution (all its action nodes finished)
+    — the report_workflow_run counterpart for BP Automation Rule. Updates
+    BP Automation Rule.last_run_at/last_run_status — run_rule_node's per-node
+    calls have no visibility into whether theirs was the execution's last
+    node, so only the gateway (which does) can call this. READ-ONLY TELEMETRY
+    — see _upsert_run_log's module note; `at` guards against out-of-order
+    delivery, see _update_last_run_if_newer. BP Automation Rule.last_run_status
+    has no "Partial" option (Success/Failed/Skipped only, unlike BP Workflow)
+    — the gateway maps ExecutionPartial to "Failed" for rules."""
+    _assert_service_caller()
+    if not rule or not frappe.db.exists("BP Automation Rule", rule):
+        return {"status": "rejected", "reason": "unknown rule"}
+    if status not in ("Success", "Failed", "Skipped"):
+        return {"status": "rejected", "reason": 'status must be one of ["Failed", "Skipped", "Success"]'}
+    try:
+        from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import _notify_rule_failure
+
+        updated, prev = _update_last_run_if_newer("BP Automation Rule", rule, status, at)
+        if updated and status == "Failed" and prev != "Failed":
+            _notify_rule_failure(rule)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"report_rule_run failed: {rule}")
+    return {"status": "recorded"}
 
 
 # ─── EXTERNAL WEBHOOKS (the piece bp-gateway's /v1/hooks/{token} calls) ─────
@@ -1333,6 +1453,47 @@ def _workflow_run_datetime(value):
         return None
 
 
+_RUN_LOG_STATUSES = {"Success", "Failed", "Skipped"}
+_RUN_REPORT_STATUSES = {"Success", "Failed", "Partial"}
+
+
+def _upsert_run_log(doctype, identity_filters, fields):
+    """Idempotent per-node run-log write, keyed on identity_filters (execution
+    id + node id + attempt). A redelivered lifecycle event from the gateway
+    — or a retried HTTP call after a lost-but-actually-delivered response —
+    must update the SAME row, never insert a second one: ExecutionsView.vue /
+    AutomationRules.vue group rows by run/execution id and would otherwise
+    render duplicate node entries for one real node run.
+
+    BP Workflow Run / BP Automation Run are a READ-ONLY TELEMETRY PROJECTION
+    of what the gateway's Runtime V2 already decided — the gateway's own
+    SQLite execution store remains the sole authority for retries, leases,
+    graph state and resume. Nothing here is ever read back by Runtime V2."""
+    existing = frappe.db.get_value(doctype, identity_filters, "name")
+    if existing:
+        frappe.db.set_value(doctype, existing, fields)
+    else:
+        frappe.get_doc({"doctype": doctype, **identity_filters, **fields}).insert(ignore_permissions=True)
+
+
+def _update_last_run_if_newer(doctype, name, status, at):
+    """Guards last_run_at/last_run_status against out-of-order delivery: an
+    execution that finished earlier but whose report arrives later (retry,
+    redelivery, network reordering) must never clobber a newer run's status
+    with stale data. `at` is the gateway's own terminal-transition timestamp
+    (RuntimeLifecycleEvent.At), not this call's arrival time, so ordering is
+    judged by when the gateway decided the outcome, not when Frappe heard
+    about it."""
+    current_at, prev_status = frappe.db.get_value(doctype, name, ["last_run_at", "last_run_status"]) or (None, None)
+    if current_at and at and _workflow_run_datetime(at) and _workflow_run_datetime(at) < current_at:
+        return False, prev_status
+    frappe.db.set_value(doctype, name, {
+        "last_run_at": _workflow_run_datetime(at) or frappe.utils.now_datetime(),
+        "last_run_status": status,
+    })
+    return True, prev_status
+
+
 @frappe.whitelist()
 def log_workflow_run(workflow=None, run_id=None, node_id=None, node_type=None, status=None,
                      message=None, correlation_id=None, source=None, attempt=1,
@@ -1340,8 +1501,14 @@ def log_workflow_run(workflow=None, run_id=None, node_id=None, node_type=None, s
     """Best-effort per-node run log (mirrors bp_automation_rule._log_run's
     swallow-everything discipline — logging must never break the graph
     walk). Per-node only — the run's overall status is a SEPARATE call, see
-    report_workflow_run below."""
+    report_workflow_run below. READ-ONLY TELEMETRY — see _upsert_run_log."""
     _assert_service_caller()
+    if status not in _RUN_LOG_STATUSES:
+        return {"status": "rejected", "reason": f"status must be one of {sorted(_RUN_LOG_STATUSES)}"}
+    if not workflow or not frappe.db.exists("BP Workflow", workflow):
+        return {"status": "rejected", "reason": "unknown workflow"}
+    if not node_id or not (execution_id or run_id):
+        return {"status": "rejected", "reason": "node_id and execution_id/run_id are required"}
     try:
         started = _workflow_run_datetime(started_at)
         finished = _workflow_run_datetime(finished_at)
@@ -1352,49 +1519,47 @@ def log_workflow_run(workflow=None, run_id=None, node_id=None, node_type=None, s
             attempt = max(1, int(attempt or 1))
         except (TypeError, ValueError):
             attempt = 1
-        frappe.get_doc({
-            "doctype": "BP Workflow Run",
-            "workflow": workflow,
-            "run_id": run_id,
-            "execution": execution_id or None,
-            "node_id": node_id,
-            "node_type": node_type,
-            "status": status,
-            "message": (message or "")[:500],
-            "run_at": frappe.utils.now_datetime(),
-            "correlation_id": correlation_id or None,
-            "source": source if source in _WORKFLOW_RUN_SOURCES else None,
-            "attempt": attempt,
-            "started_at": started,
-            "finished_at": finished,
-            "duration_ms": duration_ms,
-            "error_code": (error_code or "")[:140] or None,
-        }).insert(ignore_permissions=True)
+        _upsert_run_log(
+            "BP Workflow Run",
+            {"execution": execution_id or run_id, "node_id": node_id, "attempt": attempt},
+            {
+                "workflow": workflow,
+                "run_id": run_id or execution_id,
+                "node_type": node_type,
+                "status": status,
+                "message": (message or "")[:500],
+                "run_at": frappe.utils.now_datetime(),
+                "correlation_id": correlation_id or None,
+                "source": source if source in _WORKFLOW_RUN_SOURCES else None,
+                "started_at": started,
+                "finished_at": finished,
+                "duration_ms": duration_ms,
+                "error_code": (error_code or "")[:140] or None,
+            },
+        )
     except Exception:
         frappe.log_error(frappe.get_traceback(), f"log_workflow_run failed: {workflow}/{run_id}")
     return {"status": "logged"}
 
 
 @frappe.whitelist()
-def report_workflow_run(workflow=None, run_id=None, status=None, **_):
-    """Called exactly once per graph walk, after runWorkflow finishes
-    (graph.go's reportWorkflowRun, deferred so it fires on every return path
-    — cycle, missing trigger, or a normal walk). Updates
+def report_workflow_run(workflow=None, run_id=None, status=None, at=None, **_):
+    """Called exactly once per graph walk, after the gateway's Runtime V2
+    execution reaches a terminal status (success/partial/failed). Updates
     BP Workflow.last_run_at/last_run_status — previously nothing wrote these
-    fields at all."""
+    fields at all. READ-ONLY TELEMETRY — see _upsert_run_log's module note;
+    `at` guards against out-of-order delivery, see _update_last_run_if_newer."""
     _assert_service_caller()
-    if not workflow or not status:
-        return {"status": "skipped", "reason": "missing workflow or status"}
+    if not workflow or not frappe.db.exists("BP Workflow", workflow):
+        return {"status": "rejected", "reason": "unknown workflow"}
+    if status not in _RUN_REPORT_STATUSES:
+        return {"status": "rejected", "reason": f"status must be one of {sorted(_RUN_REPORT_STATUSES)}"}
     try:
-        # Edge-triggered notify, same posture as
-        # bp_automation_rule._update_rule_last_run: alert once when a
-        # workflow starts failing, not once per run while it stays broken.
-        prev = frappe.db.get_value("BP Workflow", workflow, "last_run_status")
-        frappe.db.set_value("BP Workflow", workflow, {
-            "last_run_at": frappe.utils.now_datetime(),
-            "last_run_status": status,
-        })
-        if status == "Failed" and prev != "Failed":
+        updated, prev = _update_last_run_if_newer("BP Workflow", workflow, status, at)
+        if updated and status == "Failed" and prev != "Failed":
+            # Edge-triggered notify, same posture as
+            # bp_automation_rule._update_rule_last_run: alert once when a
+            # workflow starts failing, not once per run while it stays broken.
             _notify_workflow_failure(workflow)
     except Exception:
         frappe.log_error(frappe.get_traceback(), f"report_workflow_run failed: {workflow}/{run_id}")
