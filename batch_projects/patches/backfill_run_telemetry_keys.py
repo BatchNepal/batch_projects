@@ -10,6 +10,11 @@ before this migration, and — since a duplicate telemetry_key can now only
 mean two rows genuinely describing the same (execution, node, attempt), i.e.
 exactly the race this fix closes — keeps the most recently modified one and
 removes the rest so the unique index below can actually be created.
+
+Rows are processed newest-first (order_by="modified desc"): the first time a
+key is seen it's necessarily the newest row with that key, so it's the one
+kept; every later encounter of the same key is, by construction, an older
+duplicate.
 """
 
 import hashlib
@@ -30,7 +35,7 @@ def _backfill_workflow_run():
     rows = frappe.get_all(
         "BP Workflow Run",
         fields=["name", "execution", "run_id", "node_id", "attempt"],
-        order_by="modified asc",
+        order_by="modified desc",
     )
     seen = set()
     for row in rows:
@@ -47,7 +52,7 @@ def _backfill_automation_run():
     rows = frappe.get_all(
         "BP Automation Run",
         fields=["name", "execution_id", "action_index", "attempt"],
-        order_by="modified asc",
+        order_by="modified desc",
     )
     seen = set()
     for row in rows:

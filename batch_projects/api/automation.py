@@ -43,6 +43,23 @@ _CONFLICT_RETRIES = 3
 # not inline, so tests can patch it down instead of a real multi-second sleep.
 _RULE_NODE_LOCK_TIMEOUT_SECONDS = 8
 
+# MySQL/MariaDB GET_LOCK names have a real 64-character ceiling. A fixed-
+# width hash of idempotency_key (gateway-generated, a length this endpoint
+# doesn't control) avoids any risk of the RAW key silently truncating and
+# two different keys colliding on the same lock — but the prefix has to fit
+# inside that same 64-char budget too, not be added on top of a full-length
+# hash. Truncating the hash itself, not the raw key, keeps it a fixed-width
+# proxy for the real key rather than a truncation of arbitrary caller input
+# — 50 hex chars (200 bits) is still astronomically collision-safe for a
+# lock scoped to one automation execution's lifetime, with 8 characters of
+# margin under the ceiling, and named distinctly from rank.py's own
+# "bp_rank:" GET_LOCK usage so the two never collide.
+def _rule_node_lock_name(idempotency_key):
+    digest = hashlib.sha256(idempotency_key.encode()).hexdigest()
+    name = f"bp_rn:{digest[:50]}"
+    assert len(name) <= 64, f"MySQL GET_LOCK name too long ({len(name)} chars): {name!r}"
+    return name
+
 from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import (
     run_scheduled,
 )
@@ -354,13 +371,7 @@ def run_rule_node(
         # window: a second worker blocks here instead of racing into
         # _execute. Bounded, not indefinite — a worker that's died holding it
         # must not wedge every future redelivery of this key forever.
-        # Hashed, not the raw key: idempotency_key is gateway-generated and
-        # its length isn't a contract this endpoint controls — MySQL/MariaDB
-        # GET_LOCK names have a real length ceiling (64 bytes on MySQL), and
-        # silently truncating an over-length name risks two DIFFERENT keys
-        # colliding on the same lock. A fixed-width hash has no such ceiling
-        # regardless of what the gateway ever sends.
-        lock_name = "bp_rule_node:" + hashlib.sha256(idempotency_key.encode()).hexdigest()
+        lock_name = _rule_node_lock_name(idempotency_key)
         acquired = frappe.db.sql(
             "SELECT GET_LOCK(%s, %s)", (lock_name, _RULE_NODE_LOCK_TIMEOUT_SECONDS)
         )[0][0]

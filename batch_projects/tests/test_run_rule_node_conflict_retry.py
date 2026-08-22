@@ -413,8 +413,6 @@ class TestRunRuleNodeConflictRetry(FrappeTestCase):
         ALWAYS RetryPermanent there regardless of error_code. This must
         surface as frappe.DuplicateEntryError (-> HTTP 409), not a plain
         Failed result, so the gateway actually retries it."""
-        import hashlib
-
         from batch_projects.api import automation
 
         project = self._make_project()
@@ -423,7 +421,7 @@ class TestRunRuleNodeConflictRetry(FrappeTestCase):
         frappe.db.commit()
 
         idempotency_key = "bpn_test_lock_timeout"
-        lock_name = "bp_rule_node:" + hashlib.sha256(idempotency_key.encode()).hexdigest()
+        lock_name = automation._rule_node_lock_name(idempotency_key)
 
         # Pre-claim the step exactly as run_rule_node itself would — the
         # test's "stuck worker" holds the advisory lock without ever
@@ -475,3 +473,23 @@ class TestRunRuleNodeConflictRetry(FrappeTestCase):
             "BP Workflow Step", {"node_id": f"rule:{rule.name}:action-1"}, "status",
         )
         self.assertEqual(step_status, "claimed")
+
+    def test_lock_name_always_fits_mysql_get_lock_limit(self):
+        """MySQL/MariaDB GET_LOCK names have a real 64-character ceiling —
+        found live: "bp_rule_node:" (13 chars) + a full 64-char SHA-256 hex
+        digest is 77, already over it before any real gateway key is even
+        involved. Exercises the actual range of idempotency_key shapes the
+        gateway could plausibly send, not just one example."""
+        from batch_projects.api import automation
+
+        for key in (
+            "",
+            "short",
+            "a" * 500,
+            "rule:RULE-0001:action-1:evt-" + "f" * 200,
+            "unicode-éèê-key",
+        ):
+            name = automation._rule_node_lock_name(key)
+            self.assertLessEqual(
+                len(name), 64, f"lock name for key length {len(key)} was {len(name)} chars: {name!r}",
+            )
