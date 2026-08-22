@@ -6,7 +6,12 @@ The credential stores the access+refresh tokens; the bp-gateway engine uses
 them when firing webhook actions.
 """
 
+import hashlib
+import hmac
 import json
+import re
+import time
+
 import frappe
 from frappe import _
 from frappe.utils import get_url
@@ -236,17 +241,87 @@ def delete_credential(name):
     return {"status": "deleted"}
 
 
+_GATEWAY_CREDENTIAL_TIMESTAMP_HEADER = "X-BP-Gateway-Timestamp"
+_GATEWAY_CREDENTIAL_NONCE_HEADER = "X-BP-Gateway-Nonce"
+_GATEWAY_CREDENTIAL_SIGNATURE_HEADER = "X-BP-Gateway-Signature"
+_GATEWAY_CREDENTIAL_PATH = "/api/method/batch_projects.api.credentials.get_credential_secret"
+_GATEWAY_CREDENTIAL_MAX_SKEW_SECONDS = 300
+_GATEWAY_CREDENTIAL_NONCE_RE = re.compile(r"^[0-9a-f]{32,128}$")
+_GATEWAY_CREDENTIAL_SIGNATURE_RE = re.compile(r"^v1=([0-9a-f]{64})$")
+
+
+def _gateway_credential_signature_message(method, path, timestamp, nonce, body):
+    body_hash = hashlib.sha256(body).hexdigest()
+    return "\n".join((method.upper(), path, timestamp, nonce, body_hash))
+
+
+def _claim_gateway_credential_nonce(nonce):
+    key = f"bp:gateway:credential-secret:nonce:{nonce}"
+    return bool(frappe.cache().set(
+        key, "1", ex=_GATEWAY_CREDENTIAL_MAX_SKEW_SECONDS, nx=True
+    ))
+
+
+def _verify_gateway_credential_signature(
+    secret, method, path, body, headers, now=None, claim_nonce=None
+):
+    """Verify the endpoint-scoped Gateway identity proof.
+
+    This deliberately does not inspect frappe.session.user or roles. API-token
+    authentication identifies the Frappe user; only this fresh HMAC proves the
+    request came from the configured Gateway service. Therefore Administrator
+    and System Manager browser/API sessions fail exactly like every other
+    human session when the proof is absent.
+    """
+    deny = lambda: frappe.throw(_("Not permitted"), frappe.PermissionError)
+    secret = str(secret or "").strip()
+    if not secret or method.upper() != "POST" or path != _GATEWAY_CREDENTIAL_PATH:
+        deny()
+
+    timestamp = str(headers.get(_GATEWAY_CREDENTIAL_TIMESTAMP_HEADER, "")).strip()
+    nonce = str(headers.get(_GATEWAY_CREDENTIAL_NONCE_HEADER, "")).strip()
+    supplied = str(headers.get(_GATEWAY_CREDENTIAL_SIGNATURE_HEADER, "")).strip()
+    match = _GATEWAY_CREDENTIAL_SIGNATURE_RE.fullmatch(supplied)
+    if not timestamp.isdigit() or not _GATEWAY_CREDENTIAL_NONCE_RE.fullmatch(nonce) or not match:
+        deny()
+
+    current = int(time.time() if now is None else now)
+    if abs(current - int(timestamp)) > _GATEWAY_CREDENTIAL_MAX_SKEW_SECONDS:
+        deny()
+
+    message = _gateway_credential_signature_message(method, path, timestamp, nonce, body)
+    expected = hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, match.group(1)):
+        deny()
+
+    claim = claim_nonce or _claim_gateway_credential_nonce
+    if not claim(nonce):
+        deny()
+
+
+def _verify_gateway_credential_request():
+    request = getattr(frappe.local, "request", None)
+    if request is None:
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    body = request.get_data(cache=True) or b""
+    _verify_gateway_credential_signature(
+        frappe.conf.get("bp_gateway_shared_secret"),
+        request.method,
+        request.path,
+        body,
+        request.headers,
+    )
+
+
 @frappe.whitelist()
 def get_credential_secret(name):
-    """The gateway-facing lookup list_credentials' own docstring flagged as
-    'not-yet-built' — WORKPLAN-PHASE25 C3. Service-account ONLY (never
-    _require_credential_admin/workspace-admin — a browser session, even an
-    admin one, must never see a decrypted secret; only the Go engine calling
-    server-to-server does). Mirrors automation.py's _assert_service_caller
-    exactly rather than importing across modules for one one-line check."""
-    user = frappe.session.user
-    if user != "Administrator" and "System Manager" not in frappe.get_roles(user):
-        frappe.throw("Not permitted", frappe.PermissionError)
+    """Return a decrypted integration credential only to the signed Gateway.
+
+    Human administrators remain able to create, rotate, list, and delete
+    credentials through the metadata APIs above. Administrator/System Manager
+    roles alone never authorize this plaintext response.
+    """
+    _verify_gateway_credential_request()
     if not frappe.db.exists("BP Integration Credential", name):
         frappe.throw(_("Credential not found."))
     doc = frappe.get_doc("BP Integration Credential", name)
