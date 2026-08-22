@@ -91,6 +91,43 @@ class TestDurableWorkflowExecution(FrappeTestCase):
         self.assertEqual(replay["status"], "succeeded")
         self.assertEqual(replay["result"]["json"]["message"], "done")
 
+    def test_node_step_has_no_execution_or_lease_dependency(self):
+        """get_or_create_node_step/finish_node_step back run_workflow_node's
+        idempotency, which has no BP Workflow Execution of its own — Runtime
+        V2 owns execution/lease state on the gateway side. Unlike
+        get_or_create_step, there must be no _require_live_lease call here:
+        this must work with no admit()/claim_lease() ever having run."""
+        workflow = self._workflow()
+        from batch_projects.workflow_execution import get_or_create_node_step, finish_node_step
+        step_one = get_or_create_node_step("bpn_test_key_1", workflow.name, "action")
+        step_two = get_or_create_node_step("bpn_test_key_1", workflow.name, "action")
+        self.assertTrue(step_one["created"])
+        self.assertFalse(step_two["created"])
+        self.assertEqual(step_one["step_id"], step_two["step_id"])
+        self.assertEqual(step_one["status"], "claimed")
+
+        finish_node_step(step_one["step_id"], "succeeded", {"status": "Success", "json": {"message": "done"}})
+        replay = get_or_create_node_step("bpn_test_key_1", workflow.name, "action")
+        self.assertEqual(replay["status"], "succeeded")
+        self.assertEqual(replay["result"]["json"]["message"], "done")
+
+        frappe.db.delete("BP Workflow Step", step_one["step_id"])
+
+    def test_node_step_key_is_scoped_per_key_not_per_node(self):
+        """A different gateway-generated key (a distinct execution/node/run
+        attempt) must be a genuinely separate ledger row, even for the same
+        workflow/node — this is what lets two real, distinct dispatches of
+        the same node (not a retry of one) both actually run."""
+        workflow = self._workflow()
+        from batch_projects.workflow_execution import get_or_create_node_step
+        first = get_or_create_node_step("bpn_test_key_a", workflow.name, "action")
+        second = get_or_create_node_step("bpn_test_key_b", workflow.name, "action")
+        self.assertTrue(first["created"])
+        self.assertTrue(second["created"])
+        self.assertNotEqual(first["step_id"], second["step_id"])
+        frappe.db.delete("BP Workflow Step", first["step_id"])
+        frappe.db.delete("BP Workflow Step", second["step_id"])
+
     def test_concurrent_duplicate_admission_has_one_execution(self):
         workflow = self._workflow()
         frappe.db.commit()
