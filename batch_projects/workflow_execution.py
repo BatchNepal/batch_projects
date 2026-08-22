@@ -244,9 +244,26 @@ def get_or_create_node_step(idempotency_key, workflow, node_id):
 
 def finish_node_step(step_id, status, result=None, error_code=None, error_message=None):
     """Terminal transition for get_or_create_node_step's row. No lease/owner
-    fencing to check — see get_or_create_node_step's docstring for why."""
+    fencing to check — see get_or_create_node_step's docstring for why.
+
+    The WHERE ... status = 'claimed' guard means a second call for the same
+    step_id (this row already terminal) affects zero rows. Two cases reach
+    that: a genuinely identical redelivery finishing the same outcome twice
+    (the caller's own retry after a lost response, or two concurrent callers
+    that both raced past 'claimed' before either finished — see
+    get_or_create_node_step's own docstring on why that can happen; the loser
+    may compute a slightly different-but-still-successful result, e.g. the
+    winner's real mutation vs. the loser's own idempotent no-op "already
+    done" check, so this compares at the step-machine's own status
+    vocabulary, not byte-equality of the nested business result) — which must
+    succeed, not fail a redelivery/loser that was actually fine; and a
+    genuinely conflicting second transition (a DIFFERENT terminal status —
+    say one caller computed "succeeded" and another "failed" for what should
+    be the same outcome) — which must still be rejected, since silently
+    accepting that after the fact could mask a real bug."""
     if status not in TERMINAL_STEP_STATES:
         frappe.throw("Illegal terminal workflow step status")
+    result_json = _json(result) if result is not None else None
     frappe.db.sql("""
         UPDATE `tabBP Workflow Step`
         SET status = %(status)s, result_json = %(result)s,
@@ -254,11 +271,14 @@ def finish_node_step(step_id, status, result=None, error_code=None, error_messag
         WHERE name = %(step)s AND status = 'claimed'
     """, {
         "step": step_id,
-        "status": status, "result": _json(result) if result is not None else None,
+        "status": status, "result": result_json,
         "error_code": (error_code or "")[:140] or None,
         "error_message": (error_message or "")[:500] or None,
     })
     if not _row_count():
+        existing_status = frappe.db.get_value("BP Workflow Step", step_id, "status")
+        if existing_status == status:
+            return _step_payload(frappe.get_doc("BP Workflow Step", step_id), created=False)
         frappe.throw("Workflow node step transition rejected")
     return _step_payload(frappe.get_doc("BP Workflow Step", step_id), created=False)
 
