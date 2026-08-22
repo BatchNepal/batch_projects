@@ -1028,7 +1028,7 @@ def list_active_workflows(project=None, **_):
 
 
 @frappe.whitelist()
-def run_workflow_node(workflow=None, node=None, payload=None, **_):
+def run_workflow_node(workflow=None, node=None, payload=None, idempotency_key=None, **_):
     """Called by the gateway for every action.* node it walks. Reuses
     bp_automation_rule._execute() UNCHANGED (02-NODE-LIBRARY.md §2) — the
     node's own `config` becomes an action dict of the exact same shape a
@@ -1045,6 +1045,19 @@ def run_workflow_node(workflow=None, node=None, payload=None, **_):
     node_type/config could execute anything under any workflow's name,
     regardless of what workflow_security.py validated for that workflow —
     validation and execution must read the same data, not two copies of it.
+
+    idempotency_key (from bp-gateway's runtimeNodeIdempotencyKey — stable
+    across every retry of the same execution/node/run attempt, opaque here)
+    makes THIS call idempotent: Notify/Email/Add Comment/Create Issue have
+    no natural dedup of their own (unlike Update ERPNext Document, which is
+    idempotent by construction — it only writes fields that differ), so a
+    gateway retry after a lost-but-actually-successful response would
+    otherwise repeat the side effect. See
+    workflow_execution.get_or_create_node_step/finish_node_step — the same
+    BP Workflow Step ledger run_local_workflow_step already uses for its own
+    (execution-lease-scoped) local-atomic actions, keyed here by the
+    gateway's own key instead, since this call has no BP Workflow Execution
+    of its own to scope a lease to.
     """
     _assert_service_caller()
     from batch_projects.entitlements import is_feature_enabled
@@ -1071,6 +1084,29 @@ def run_workflow_node(workflow=None, node=None, payload=None, **_):
 
     payload = _as_dict(payload)
 
+    step = None
+    if idempotency_key:
+        from batch_projects.workflow_execution import get_or_create_node_step
+
+        step = get_or_create_node_step(idempotency_key, workflow, node)
+        if step["status"] == "succeeded":
+            return step["result"]
+        if step["status"] in ("failed", "needs_review"):
+            # A prior attempt under this exact key already reached a terminal
+            # rejection/error. Replay it rather than trying again — whatever
+            # caused it (authorization, validation, a raised exception) will
+            # not change on its own, matching the non-idempotent-key behavior
+            # for a "Failed" status elsewhere in this function.
+            return step["result"] or {"status": "Failed", "json": {
+                "message": step["error_message"] or "previous attempt failed",
+                "error_code": step["error_code"] or "previous_attempt_failed",
+            }}
+        # status == "claimed": either this exact call's own fresh claim, or —
+        # under InnoDB's row-lock-then-refetch behavior on the unique
+        # step_key — a concurrent claim that has already committed as
+        # terminal by the time this SELECT ... FOR UPDATE returns, in which
+        # case one of the branches above already returned. Proceed to execute.
+
     from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import (
         _build_context,
         _execute,
@@ -1082,15 +1118,26 @@ def run_workflow_node(workflow=None, node=None, payload=None, **_):
     try:
         ctx = _build_context(payload)
         status, message = _execute({"type": action_type, "config": config}, ctx, payload)
-        return {"status": status, "json": {"message": message}}
+        result = {"status": status, "json": {"message": message}}
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), f"BP workflow node failed: {workflow}/{node}")
-        return {"status": "Failed", "json": {
+        result = {"status": "Failed", "json": {
             "message": _short_error(),
             "error_code": type(e).__name__,
         }}
     finally:
         frappe.flags.bp_automation_depth = depth
+
+    if step is not None:
+        from batch_projects.workflow_execution import finish_node_step
+
+        terminal = "failed" if result["status"] == "Failed" else "succeeded"
+        finish_node_step(
+            step["step_id"], terminal, result=result,
+            error_code=result["json"].get("error_code") if terminal == "failed" else None,
+            error_message=result["json"].get("message") if terminal == "failed" else None,
+        )
+    return result
 
 
 _LOCAL_WORKFLOW_ACTIONS = {

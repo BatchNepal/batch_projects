@@ -10,9 +10,10 @@
   "sort_order": "DESC",
   "fields": [
     {"fieldname": "step_key", "fieldtype": "Data", "label": "Step Key", "reqd": 1, "unique": 1, "read_only": 1},
-    {"fieldname": "execution", "fieldtype": "Link", "label": "Execution", "options": "BP Workflow Execution", "reqd": 1, "in_standard_filter": 1, "search_index": 1},
+    {"fieldname": "execution", "fieldtype": "Link", "label": "Execution", "options": "BP Workflow Execution", "in_standard_filter": 1, "search_index": 1},
+    {"fieldname": "workflow", "fieldtype": "Link", "label": "Workflow", "options": "BP Workflow", "read_only": 1, "in_standard_filter": 1},
     {"fieldname": "node_id", "fieldtype": "Data", "label": "Node ID", "reqd": 1},
-    {"fieldname": "effect_kind", "fieldtype": "Select", "label": "Effect Kind", "options": "frappe_atomic\nexternal", "reqd": 1, "read_only": 1},
+    {"fieldname": "effect_kind", "fieldtype": "Select", "label": "Effect Kind", "options": "frappe_atomic\nexternal\ngateway_node", "reqd": 1, "read_only": 1},
     {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "claimed\ndispatching\nsucceeded\nfailed\nneeds_review", "default": "claimed", "reqd": 1, "in_standard_filter": 1, "read_only": 1},
     {"fieldname": "dispatch_started_at", "fieldtype": "Datetime", "label": "Dispatch Started At", "read_only": 1},
     {"fieldname": "error_code", "fieldtype": "Data", "label": "Error Code", "read_only": 1},

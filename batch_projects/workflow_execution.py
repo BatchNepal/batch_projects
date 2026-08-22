@@ -198,6 +198,71 @@ def get_or_create_step(execution_id, node_id, effect_kind, owner, generation):
         return _step_row_payload(rows[0], created=False)
 
 
+def get_or_create_node_step(idempotency_key, workflow, node_id):
+    """Idempotency ledger entry for one run_workflow_node call, keyed by the
+    GATEWAY's own idempotency_key (already a stable hash of that gateway's
+    execution/node/run-attempt identity — see bp-gateway's
+    runtimeNodeIdempotencyKey) rather than a BP Workflow Execution row.
+
+    run_workflow_node has no BP Workflow Execution/lease of its own: Runtime
+    V2 owns execution/retry/lease state entirely on the gateway side (its own
+    SQLite-backed store), so unlike get_or_create_step there is no
+    _require_live_lease precondition here — that would require a Frappe-side
+    execution admission Runtime V2 does not (and should not) perform. This
+    reuses BP Workflow Step's schema and the same insert-or-fetch-existing
+    concurrency pattern as get_or_create_step, just without the lease
+    dependency, so a real duplicate-key race still resolves to exactly one
+    winner (the unique step_key constraint) instead of two.
+    """
+    if not idempotency_key:
+        frappe.throw("idempotency_key is required")
+    step_key = _key("workflow-node-step", idempotency_key)
+    name = frappe.db.get_value("BP Workflow Step", {"step_key": step_key}, "name")
+    if name:
+        step = frappe.get_doc("BP Workflow Step", name)
+        return _step_payload(step, created=False)
+    try:
+        frappe.db.savepoint("bp_workflow_node_step")
+        step = frappe.get_doc({
+            "doctype": "BP Workflow Step", "step_key": step_key,
+            "workflow": workflow or None, "node_id": node_id or "",
+            "effect_kind": "gateway_node", "status": "claimed",
+        }).insert(ignore_permissions=True)
+        return _step_payload(step, created=True)
+    except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
+        frappe.db.rollback(save_point="bp_workflow_node_step")
+        rows = frappe.db.sql(
+            """SELECT name, status, effect_kind, result_json, error_code, error_message
+               FROM `tabBP Workflow Step` WHERE step_key = %(key)s FOR UPDATE""",
+            {"key": step_key},
+            as_dict=True,
+        )
+        if not rows:
+            frappe.throw("Concurrent workflow node step creation did not resolve")
+        return _step_row_payload(rows[0], created=False)
+
+
+def finish_node_step(step_id, status, result=None, error_code=None, error_message=None):
+    """Terminal transition for get_or_create_node_step's row. No lease/owner
+    fencing to check — see get_or_create_node_step's docstring for why."""
+    if status not in TERMINAL_STEP_STATES:
+        frappe.throw("Illegal terminal workflow step status")
+    frappe.db.sql("""
+        UPDATE `tabBP Workflow Step`
+        SET status = %(status)s, result_json = %(result)s,
+            error_code = %(error_code)s, error_message = %(error_message)s
+        WHERE name = %(step)s AND status = 'claimed'
+    """, {
+        "step": step_id,
+        "status": status, "result": _json(result) if result is not None else None,
+        "error_code": (error_code or "")[:140] or None,
+        "error_message": (error_message or "")[:500] or None,
+    })
+    if not _row_count():
+        frappe.throw("Workflow node step transition rejected")
+    return _step_payload(frappe.get_doc("BP Workflow Step", step_id), created=False)
+
+
 def begin_external_step(execution_id, node_id, owner, generation):
     """Durably mark dispatching before Gateway may send an external request."""
     step = get_or_create_step(execution_id, node_id, "external", owner, generation)
