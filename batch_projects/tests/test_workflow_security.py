@@ -164,6 +164,20 @@ class TestWorkflowAuthority(FrappeTestCase):
         with self.assertRaises(frappe.PermissionError):
             workflow_security.validate_workflow_authority(_workflow(nodes=nodes))
 
+    def test_notify_node_rejects_every_task_reads_internal_field(self):
+        """Regression for the automation_security.py field-list drift fix —
+        proves the fix's benefit is transitive to BP Workflow through reuse,
+        not something workflow_security.py would need its own copy of."""
+        from batch_projects.task_reads import _INTERNAL_TASK_FIELDS
+
+        for field in _INTERNAL_TASK_FIELDS:
+            nodes = json.dumps([
+                _trigger_node(),
+                {"id": "n2", "type": "action.notify", "config": {"message": f"Value: {{{{ task.{field} }}}}"}},
+            ])
+            with self.assertRaises(frappe.PermissionError):
+                workflow_security.validate_workflow_authority(_workflow(nodes=nodes))
+
     def test_notify_node_allows_ordinary_field_token(self):
         nodes = json.dumps([
             _trigger_node(),
