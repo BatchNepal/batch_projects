@@ -226,6 +226,125 @@ def apply_action(rule=None, payload=None, **_):
         frappe.flags.bp_automation_depth = depth
 
 
+def _rule_revision_is_current(rule_doc, workflow_revision_id):
+    if not workflow_revision_id:
+        return True
+    parts = str(workflow_revision_id).split(":", 2)
+    if len(parts) != 3 or parts[0] != "rule":
+        return False
+    try:
+        revision = int(parts[1])
+    except (TypeError, ValueError):
+        return False
+    return (
+        revision == int(rule_doc.automation_revision or 0)
+        and parts[2] == (rule_doc.automation_definition_hash or "")
+    )
+
+
+@frappe.whitelist()
+def run_rule_node(
+    rule=None,
+    node=None,
+    payload=None,
+    idempotency_key=None,
+    workflow_revision_id=None,
+    **_,
+):
+    """Execute one gateway-compiled action node from a stored rule.
+
+    Runtime V2 compiles an ordered BP Automation Rule into ``action-1``,
+    ``action-2``, ... graph nodes. The gateway sends only that identity and
+    event context; this endpoint resolves the indexed action from the current
+    stored rule, revalidates its scope/authority, and executes exactly once.
+    """
+    _assert_service_caller()
+    from batch_projects.entitlements import is_feature_enabled
+
+    if not is_feature_enabled("automations"):
+        return {"status": "Skipped", "json": {"message": "automations not enabled for this tenant"}}
+    if not rule or not frappe.db.exists("BP Automation Rule", rule):
+        return {"status": "Failed", "json": {
+            "message": f"rule {rule!r} not found",
+            "error_code": "rule_not_found",
+        }}
+
+    rule_doc = frappe.get_doc("BP Automation Rule", rule)
+    if not rule_doc.is_active:
+        return {"status": "Skipped", "json": {"message": "rule inactive"}}
+    if not _rule_revision_is_current(rule_doc, workflow_revision_id):
+        return {"status": "Failed", "json": {
+            "message": "rule changed after this execution was admitted",
+            "error_code": "rule_revision_mismatch",
+        }}
+
+    payload = _as_dict(payload)
+    from batch_projects import automation_security
+
+    payload = automation_security.validate_dispatch(rule_doc, payload)
+
+    from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule import (
+        _build_context,
+        _execute,
+        _get_actions,
+        _short_error,
+    )
+
+    prefix = "action-"
+    try:
+        action_index = int(node[len(prefix):]) - 1 if isinstance(node, str) and node.startswith(prefix) else -1
+    except ValueError:
+        action_index = -1
+    actions = _get_actions(rule_doc)
+    if action_index < 0 or action_index >= len(actions):
+        return {"status": "Failed", "json": {
+            "message": f"node {node!r} is not a known action node in rule {rule!r}",
+            "error_code": "unknown_rule_action_node",
+        }}
+    action = actions[action_index]
+
+    step = None
+    if idempotency_key:
+        from batch_projects.workflow_execution import get_or_create_node_step
+
+        step = get_or_create_node_step(idempotency_key, None, f"rule:{rule}:{node}")
+        if step["status"] == "succeeded":
+            return step["result"]
+        if step["status"] in ("failed", "needs_review"):
+            return step["result"] or {"status": "Failed", "json": {
+                "message": step["error_message"] or "previous attempt failed",
+                "error_code": step["error_code"] or "previous_attempt_failed",
+            }}
+
+    depth = int(payload.get("depth", 0))
+    frappe.flags.bp_automation_depth = depth + 1
+    try:
+        ctx = _build_context(payload)
+        status, message = _execute(action, ctx, payload)
+        result = {"status": status, "json": {"message": message}}
+    except Exception as exc:
+        frappe.log_error(frappe.get_traceback(), f"BP rule node failed: {rule}/{node}")
+        result = {"status": "Failed", "json": {
+            "message": _short_error(),
+            "error_code": type(exc).__name__,
+        }}
+    finally:
+        frappe.flags.bp_automation_depth = depth
+
+    if step is not None:
+        from batch_projects.workflow_execution import finish_node_step
+
+        terminal = "failed" if result["status"] == "Failed" else "succeeded"
+        finish_node_step(
+            step["step_id"],
+            terminal,
+            result=result,
+            error_code=result["json"].get("error_code") if terminal == "failed" else None,
+            error_message=result["json"].get("message") if terminal == "failed" else None,
+        )
+    return result
+
+
 # ─── EXTERNAL WEBHOOKS (the piece bp-gateway's /v1/hooks/{token} calls) ─────
 
 @frappe.whitelist()
@@ -300,54 +419,12 @@ def run_external_event(token=None, event=None, body=None, **_):
     return {"status": "accepted"}
 
 
-def _require_workspace_admin_for_tokens():
-    """Token management is an admin action — reuses the same workspace-admin
-    check the rest of the app's admin-only endpoints use."""
-    from batch_projects import access
-    if frappe.session.user == "Administrator":
-        return
-    if not access.is_workspace_admin():
-        frappe.throw("You need workspace admin access for this.", frappe.PermissionError)
-
-
-def _require_webhooks_feature():
-    """`webhooks` is catalogued in _FEATURE_MIN_TIER (Team) but nothing ever
-    called require_feature() for it — these 3 functions were only gated
-    incidentally, via this module's blanket "automations" prefix in
-    bp-gateway's urlToFeature table (both features happen to be Team tier
-    today, so there's no actual under-charging bug). Making it explicit here so the catalog entry
-    means something instead of being dead weight, and so a future tier split
-    between "webhooks" and "automations" doesn't silently do nothing."""
-    from batch_projects.entitlements import require_feature
-    require_feature("webhooks")
-
-
 @frappe.whitelist()
 def create_webhook_token(label, scope="project", project=None):
-    """Mint a new webhook token. Returns the token value ONCE (it's not a
-    secret bp-gateway needs to keep private the way an API key is — it's an
-    unguessable routing key — but there's still no reason to keep re-serving
-    it after creation, so callers should copy it from this response)."""
-    _require_workspace_admin_for_tokens()
-    _require_webhooks_feature()
-    if scope not in ("workspace", "project"):
-        frappe.throw("scope must be 'workspace' or 'project'.")
-    if scope == "project" and not project:
-        frappe.throw("project is required when scope is 'project'.")
+    """Compatibility route for the per-hook signing-secret implementation."""
+    from batch_projects.api.automation_webhooks import create_webhook_token as create
 
-    doc = frappe.get_doc({
-        "doctype": "BP Webhook Token",
-        "label": label,
-        "scope": scope,
-        "project": project if scope == "project" else None,
-        "is_active": 1,
-    }).insert(ignore_permissions=True)
-    frappe.db.commit()
-    return {
-        "name": doc.name, "token": doc.token, "label": doc.label,
-        "scope": doc.scope, "project": doc.project,
-        "webhook_path": f"/v1/hooks/{doc.token}",
-    }
+    return create(label=label, scope=scope, project=project)
 
 
 @frappe.whitelist()
@@ -359,27 +436,23 @@ def list_webhook_tokens(project=None):
     fields store "" for "unset", not SQL NULL, so this matches correctly.
     No project given returns everything (unchanged from the original
     signature — no other caller exists yet)."""
-    _require_workspace_admin_for_tokens()
-    _require_webhooks_feature()
-    filters = {"project": ["in", [project, ""]]} if project else {}
-    return frappe.get_all(
-        "BP Webhook Token",
-        filters=filters,
-        fields=["name", "label", "token", "scope", "project", "is_active",
-                "call_count", "last_used", "last_event", "creation"],
-        order_by="creation desc",
-    )
+    from batch_projects.api.automation_webhooks import list_webhook_tokens as list_tokens
+
+    return list_tokens(project=project)
+
+
+@frappe.whitelist()
+def rotate_webhook_secret(name):
+    from batch_projects.api.automation_webhooks import rotate_webhook_secret as rotate
+
+    return rotate(name=name)
 
 
 @frappe.whitelist()
 def revoke_webhook_token(name):
-    _require_workspace_admin_for_tokens()
-    _require_webhooks_feature()
-    if not frappe.db.exists("BP Webhook Token", name):
-        frappe.throw("Token not found.")
-    frappe.db.set_value("BP Webhook Token", name, "is_active", 0)
-    frappe.db.commit()
-    return {"status": "revoked"}
+    from batch_projects.api.automation_webhooks import revoke_webhook_token as revoke
+
+    return revoke(name=name)
 
 
 # ─── NODE REGISTRY (WORKPLAN-PHASE24 02-NODE-LIBRARY.md) ───────────────────
@@ -1027,8 +1100,32 @@ def list_active_workflows(project=None, **_):
     )
 
 
+def _workflow_revision_is_current(workflow_doc, workflow_revision_id):
+    """Validate Runtime V2's immutable workflow snapshot against Frappe."""
+    if not workflow_revision_id:
+        return True
+    parts = str(workflow_revision_id).split(":", 2)
+    if len(parts) != 3 or parts[0] != "workflow":
+        return False
+    try:
+        revision = int(parts[1])
+    except (TypeError, ValueError):
+        return False
+    return (
+        revision == int(workflow_doc.automation_revision or 0)
+        and parts[2] == (workflow_doc.automation_definition_hash or "")
+    )
+
+
 @frappe.whitelist()
-def run_workflow_node(workflow=None, node=None, payload=None, idempotency_key=None, **_):
+def run_workflow_node(
+    workflow=None,
+    node=None,
+    payload=None,
+    idempotency_key=None,
+    workflow_revision_id=None,
+    **_,
+):
     """Called by the gateway for every action.* node it walks. Reuses
     bp_automation_rule._execute() UNCHANGED (02-NODE-LIBRARY.md §2) — the
     node's own `config` becomes an action dict of the exact same shape a
@@ -1075,6 +1172,11 @@ def run_workflow_node(workflow=None, node=None, payload=None, idempotency_key=No
             "error_code": "workflow_not_found",
         }}
     workflow_doc = frappe.get_doc("BP Workflow", workflow)
+    if not _workflow_revision_is_current(workflow_doc, workflow_revision_id):
+        return {"status": "Failed", "json": {
+            "message": "workflow changed after this execution was admitted",
+            "error_code": "workflow_revision_mismatch",
+        }}
     action_type, config = _resolve_workflow_node_action(workflow_doc, node)
     if not action_type:
         return {"status": "Failed", "json": {

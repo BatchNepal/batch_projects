@@ -85,6 +85,8 @@ Update ERPNext Document : {"doctype": "Sales Invoice"|"Sales Order"|"Timesheet"|
                  Gateway-engine only — see _ERPNEXT_DOCTYPE_WHITELIST.
 """
 
+import hashlib
+
 import frappe
 import json
 import re
@@ -161,6 +163,18 @@ class BPAutomationRule(Document):
         if self._is_scheduled() and int(self.interval_seconds or 0) <= 0:
             frappe.throw("Recurring rules require a positive Interval (seconds).")
 
+        definition_hash = automation_rule_definition_hash(self)
+        previous = self.get_doc_before_save() if not self.is_new() else None
+        previous_hash = previous.get("automation_definition_hash") if previous else None
+        previous_revision = int(previous.get("automation_revision") or 0) if previous else 0
+        if not previous_hash:
+            self.automation_revision = max(1, int(self.automation_revision or 0))
+        elif previous_hash != definition_hash:
+            self.automation_revision = max(1, previous_revision + 1)
+        else:
+            self.automation_revision = max(1, previous_revision)
+        self.automation_definition_hash = definition_hash
+
     def _validate_json(self, fieldname):
         raw = self.get(fieldname)
         if not raw:
@@ -226,6 +240,29 @@ class BPAutomationRule(Document):
                 "It will not fire until re-saved.",
                 indicator="orange", alert=True,
             )
+
+
+def automation_rule_definition_hash(rule):
+    """Hash only stored fields that change Runtime V2 rule execution."""
+    actions = _parse(rule.get("actions"))
+    if not isinstance(actions, list) or not actions:
+        actions = []
+        if rule.get("action_type"):
+            actions = [{"type": rule.get("action_type"), "config": _parse(rule.get("action_config"))}]
+    canonical = {
+        "is_active": bool(rule.get("is_active")),
+        "scope": rule.get("scope"),
+        "project": rule.get("project"),
+        "project_filter": _parse(rule.get("project_filter")),
+        "trigger_event": rule.get("trigger_event"),
+        "trigger_config": _parse(rule.get("trigger_config")),
+        "conditions": _parse(rule.get("conditions")),
+        "actions": actions,
+        "interval_seconds": int(rule.get("interval_seconds") or 0),
+        "first_run": str(rule.get("first_run") or ""),
+    }
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=str)
+    return hashlib.sha256(encoded.encode()).hexdigest()
 
 
 def _validate_action(action: dict):

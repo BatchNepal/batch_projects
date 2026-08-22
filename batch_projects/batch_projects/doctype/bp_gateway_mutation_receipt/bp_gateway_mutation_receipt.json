@@ -1,0 +1,66 @@
+{
+  "name": "BP Gateway Mutation Receipt",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "autoname": "field:idempotency_key",
+  "creation": "2026-08-21 00:00:00",
+  "modified": "2026-08-21 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "track_changes": 0,
+  "fields": [
+    {
+      "fieldname": "idempotency_key",
+      "fieldtype": "Data",
+      "label": "Idempotency Key",
+      "reqd": 1,
+      "unique": 1,
+      "read_only": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "operation",
+      "fieldtype": "Data",
+      "label": "Operation",
+      "reqd": 1,
+      "read_only": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "target_doctype",
+      "fieldtype": "Data",
+      "label": "Target DocType",
+      "read_only": 1
+    },
+    {
+      "fieldname": "target_name",
+      "fieldtype": "Data",
+      "label": "Target Name",
+      "read_only": 1
+    },
+    {
+      "fieldname": "result_json",
+      "fieldtype": "Long Text",
+      "label": "Committed Result",
+      "read_only": 1
+    },
+    {
+      "fieldname": "applied_at",
+      "fieldtype": "Datetime",
+      "label": "Applied At",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

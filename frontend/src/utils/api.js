@@ -493,6 +493,7 @@ const callAutomation = (method, params = {}) => callPath(`${AUTOMATION_BASE}.${m
 
 export const createWebhookToken = (params) => callAutomation("create_webhook_token", params);
 export const listWebhookTokens = (project = null) => callAutomation("list_webhook_tokens", { project });
+export const rotateWebhookSecret = (name) => callAutomation("rotate_webhook_secret", { name });
 export const revokeWebhookToken = (name) => callAutomation("revoke_webhook_token", { name });
 
 // ─── BP INTEGRATION CREDENTIAL ────────────────────────────────────
