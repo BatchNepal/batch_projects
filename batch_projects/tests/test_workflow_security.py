@@ -289,7 +289,10 @@ class TestWorkflowDispatch(FrappeTestCase):
 class TestWorkflowWrapperDelegation(FrappeTestCase):
     """Prove run_workflow_node/run_local_workflow_step actually call
     validate_workflow_dispatch before delegating — not just that hooks.py
-    names them correctly."""
+    names them correctly. Also prove node_type/config are never accepted as
+    parameters: the executed node is always resolved from the workflow's
+    own stored graph by node id, so validation (over that same stored
+    graph) and execution can never disagree about what a node does."""
 
     def test_run_workflow_node_rejects_unknown_workflow_without_delegating(self):
         with (
@@ -297,59 +300,73 @@ class TestWorkflowWrapperDelegation(FrappeTestCase):
             patch.object(frappe.db, "exists", return_value=False),
             patch("batch_projects.api.automation.run_workflow_node") as real_run,
         ):
-            result = workflow_security.run_workflow_node(workflow="nope", node="n1", node_type="action.change_status")
+            result = workflow_security.run_workflow_node(workflow="nope", node="n1")
         self.assertEqual(result["status"], "Failed")
         real_run.assert_not_called()
 
     def test_run_workflow_node_blocks_inactive_workflow_before_delegating(self):
+        nodes = json.dumps([{"id": "n1", "type": "action.change_status", "config": {"status": "Done"}}])
         with (
             patch("batch_projects.api.automation._assert_service_caller"),
             patch.object(frappe.db, "exists", return_value=True),
             patch("batch_projects.api.automation.run_workflow_node") as real_run,
-            patch.object(
-                frappe, "get_doc",
-                return_value=_workflow(is_active=0, nodes=json.dumps([])),
-            ),
+            patch.object(frappe, "get_doc", return_value=_workflow(is_active=0, nodes=nodes)),
         ):
             with self.assertRaises(frappe.PermissionError):
-                workflow_security.run_workflow_node(workflow="wf-1", node="n1", node_type="action.change_status")
+                workflow_security.run_workflow_node(workflow="wf-1", node="n1")
         real_run.assert_not_called()
 
     def test_run_workflow_node_blocks_mismatched_project_before_delegating(self):
+        nodes = json.dumps([{"id": "n1", "type": "action.change_status", "config": {"status": "Done"}}])
         with (
             patch("batch_projects.api.automation._assert_service_caller"),
             patch.object(frappe.db, "exists", return_value=True),
             patch("batch_projects.api.automation.run_workflow_node") as real_run,
-            patch.object(
-                frappe, "get_doc",
-                return_value=_workflow(nodes=json.dumps([])),
-            ),
+            patch.object(frappe, "get_doc", return_value=_workflow(nodes=nodes)),
         ):
             with self.assertRaises(frappe.PermissionError):
                 workflow_security.run_workflow_node(
-                    workflow="wf-1", node="n1", node_type="action.change_status",
-                    payload={"project": "OTHER-PROJECT"},
+                    workflow="wf-1", node="n1", payload={"project": "OTHER-PROJECT"},
                 )
         real_run.assert_not_called()
 
+    def test_run_workflow_node_rejects_node_id_absent_from_stored_graph(self):
+        """The wrapper's own resolution must fail closed on an id that isn't
+        in the graph at all — this is the check that stands between a
+        caller and 'execute anything under this workflow's name'."""
+        nodes = json.dumps([{"id": "n1", "type": "action.change_status", "config": {"status": "Done"}}])
+        with (
+            patch("batch_projects.api.automation._assert_service_caller"),
+            patch.object(frappe.db, "exists", return_value=True),
+            patch("batch_projects.api.automation.run_workflow_node") as real_run,
+            patch.object(frappe, "get_doc", return_value=_workflow(nodes=nodes)),
+        ):
+            result = workflow_security.run_workflow_node(
+                workflow="wf-1", node="does-not-exist", payload={"project": "SOME-PROJECT"},
+            )
+        self.assertEqual(result["status"], "Failed")
+        self.assertEqual(result["json"]["error_code"], "unknown_action_node")
+        real_run.assert_not_called()
+
     def test_run_workflow_node_delegates_once_checks_pass(self):
+        nodes = json.dumps([{"id": "n1", "type": "action.change_status", "config": {"status": "Done"}}])
         with (
             patch("batch_projects.api.automation._assert_service_caller"),
             patch.object(frappe.db, "exists", return_value=True),
             patch(
                 "batch_projects.api.automation.run_workflow_node", return_value={"status": "Success"},
             ) as real_run,
-            patch.object(
-                frappe, "get_doc",
-                return_value=_workflow(nodes=json.dumps([])),
-            ),
+            patch.object(frappe, "get_doc", return_value=_workflow(nodes=nodes)),
         ):
             result = workflow_security.run_workflow_node(
-                workflow="wf-1", node="n1", node_type="action.change_status",
-                payload={"project": "SOME-PROJECT"},
+                workflow="wf-1", node="n1", payload={"project": "SOME-PROJECT"},
             )
         self.assertEqual(result["status"], "Success")
         real_run.assert_called_once()
+        # No node_type/config crosses the wrapper boundary — there is nothing
+        # left for a caller to have supplied that the delegate could trust.
+        self.assertNotIn("node_type", real_run.call_args.kwargs)
+        self.assertNotIn("config", real_run.call_args.kwargs)
 
     def test_run_local_workflow_step_rejects_unresolvable_execution(self):
         with (
@@ -358,10 +375,30 @@ class TestWorkflowWrapperDelegation(FrappeTestCase):
             patch("batch_projects.api.automation.run_local_workflow_step") as real_run,
         ):
             with self.assertRaises(frappe.PermissionError):
-                workflow_security.run_local_workflow_step(execution_id="exec-1", node_id="n1", node_type="action.change_status")
+                workflow_security.run_local_workflow_step(execution_id="exec-1", node_id="n1")
+        real_run.assert_not_called()
+
+    def test_run_local_workflow_step_rejects_node_not_local_atomic(self):
+        """A node whose STORED type is external (e.g. Notify) must not run
+        through the local-atomic path even if a caller asks for that node id
+        here instead of via run_workflow_node."""
+        nodes = json.dumps([{"id": "n1", "type": "action.notify", "config": {"message": "hi"}}])
+        with (
+            patch("batch_projects.api.automation._assert_service_caller"),
+            patch.object(frappe.db, "get_value", return_value="wf-1"),
+            patch.object(frappe.db, "exists", return_value=True),
+            patch("batch_projects.api.automation.run_local_workflow_step") as real_run,
+            patch.object(frappe, "get_doc", return_value=_workflow(nodes=nodes)),
+        ):
+            with self.assertRaises(frappe.ValidationError):
+                workflow_security.run_local_workflow_step(
+                    execution_id="exec-1", node_id="n1", owner="w1", lease_generation=1,
+                    payload={"project": "SOME-PROJECT"},
+                )
         real_run.assert_not_called()
 
     def test_run_local_workflow_step_delegates_once_checks_pass(self):
+        nodes = json.dumps([{"id": "n1", "type": "action.change_status", "config": {"status": "Done"}}])
         with (
             patch("batch_projects.api.automation._assert_service_caller"),
             patch.object(frappe.db, "get_value", return_value="wf-1"),
@@ -369,14 +406,88 @@ class TestWorkflowWrapperDelegation(FrappeTestCase):
             patch(
                 "batch_projects.api.automation.run_local_workflow_step", return_value={"status": "Success"},
             ) as real_run,
-            patch.object(frappe, "get_doc", return_value=_workflow(nodes=json.dumps([]))),
+            patch.object(frappe, "get_doc", return_value=_workflow(nodes=nodes)),
         ):
             result = workflow_security.run_local_workflow_step(
-                execution_id="exec-1", node_id="n1", node_type="action.change_status",
-                payload={"project": "SOME-PROJECT"},
+                execution_id="exec-1", node_id="n1", payload={"project": "SOME-PROJECT"},
             )
         self.assertEqual(result["status"], "Success")
         real_run.assert_called_once()
+        self.assertNotIn("node_type", real_run.call_args.kwargs)
+        self.assertNotIn("config", real_run.call_args.kwargs)
+
+
+class TestWorkflowNodeExecutionMatchesStoredDefinition(FrappeTestCase):
+    """The regression this whole PR exists for: a request that names a real
+    workflow/node but tries to make it perform a DIFFERENT action than what
+    is actually stored must either run the stored action or be rejected —
+    never the caller's claimed one. node_type/config aren't parameters
+    anymore, so there's no field left for such a request to set; these tests
+    prove that removing them didn't just move the trust elsewhere."""
+
+    def _workflow_with_notify_node(self):
+        nodes = json.dumps([
+            {"id": "trigger", "type": "trigger.task_event", "config": {"event": "task.updated"}},
+            {"id": "n2", "type": "action.notify", "config": {"message": "hi"}},
+        ])
+        return _workflow(scope="project", project="SOME-PROJECT", nodes=nodes, is_active=1)
+
+    def test_run_workflow_node_executes_the_stored_notify_not_an_erp_update(self):
+        workflow_doc = self._workflow_with_notify_node()
+        executed_actions = []
+
+        def fake_execute(action, ctx, payload):
+            executed_actions.append(action)
+            return "Success", "ok"
+
+        with (
+            patch("batch_projects.api.automation._assert_service_caller"),
+            patch("batch_projects.entitlements.is_feature_enabled", return_value=True),
+            patch.object(frappe.db, "exists", return_value=True),
+            patch.object(frappe, "get_doc", return_value=workflow_doc),
+            patch(
+                "batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule._execute",
+                side_effect=fake_execute,
+            ),
+            patch(
+                "batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule._build_context",
+                return_value={},
+            ),
+        ):
+            # A caller (or a compromised/buggy gateway) asking to execute
+            # node "n2" gets whatever "n2" actually is in the stored graph —
+            # Notify — regardless of any extra field it might try to send;
+            # there is no node_type/config parameter left to smuggle
+            # "Update ERPNext Document" through anymore.
+            result = workflow_security.run_workflow_node(
+                workflow="wf-1", node="n2", payload={"project": "SOME-PROJECT"},
+                node_type="action.update_erpnext_document",
+                config={"doctype": "Sales Invoice", "name": "SINV-0001", "fields": {"grand_total": 0}},
+            )
+
+        self.assertEqual(result["status"], "Success")
+        self.assertEqual(len(executed_actions), 1)
+        self.assertEqual(executed_actions[0]["type"], "Notify")
+        self.assertEqual(executed_actions[0]["config"], {"message": "hi"})
+
+    def test_run_workflow_node_rejects_when_claimed_node_id_has_no_stored_action(self):
+        workflow_doc = self._workflow_with_notify_node()
+        with (
+            patch("batch_projects.api.automation._assert_service_caller"),
+            patch.object(frappe.db, "exists", return_value=True),
+            patch.object(frappe, "get_doc", return_value=workflow_doc),
+            patch(
+                "batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule._execute",
+            ) as execute_mock,
+        ):
+            result = workflow_security.run_workflow_node(
+                workflow="wf-1", node="trigger", payload={"project": "SOME-PROJECT"},
+                node_type="action.update_erpnext_document",
+                config={"doctype": "Sales Invoice", "name": "SINV-0001", "fields": {"grand_total": 0}},
+            )
+        self.assertEqual(result["status"], "Failed")
+        self.assertEqual(result["json"]["error_code"], "unknown_action_node")
+        execute_mock.assert_not_called()
 
 
 class TestListWorkflowsScopeLeak(FrappeTestCase):

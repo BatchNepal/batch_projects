@@ -127,7 +127,16 @@ def validate_workflow_dispatch(workflow_doc, payload: dict) -> dict:
 
 
 @frappe.whitelist()
-def run_workflow_node(workflow=None, node=None, node_type=None, config=None, payload=None, **kwargs):
+def run_workflow_node(workflow=None, node=None, payload=None, **kwargs):
+    """node_type/config are not accepted here (or by api.automation.
+    run_workflow_node below it) — both resolve the node's actual type/config
+    from workflow_doc.nodes by `node` id, so the graph this validates and the
+    graph that executes are the same read of the same document, not two
+    independently-supplied copies that could disagree. Resolving here too
+    (not just relying on validate_workflow_dispatch's whole-graph pass) means
+    an unknown node is rejected before automation.run_workflow_node is even
+    called, with a clear error rather than falling through to its own
+    (identical) resolution failure."""
     from batch_projects.api import automation
 
     automation._assert_service_caller()
@@ -139,14 +148,23 @@ def run_workflow_node(workflow=None, node=None, node_type=None, config=None, pay
     workflow_doc = frappe.get_doc("BP Workflow", workflow)
     data = automation._as_dict(payload)
     validate_workflow_dispatch(workflow_doc, data)
-    return automation.run_workflow_node(
-        workflow=workflow, node=node, node_type=node_type, config=config, payload=payload, **kwargs
-    )
+
+    action_type, _config = automation._resolve_workflow_node_action(workflow_doc, node)
+    if not action_type:
+        return {"status": "Failed", "json": {
+            "message": f"node {node!r} is not a known action node in workflow {workflow!r}",
+            "error_code": "unknown_action_node",
+        }}
+
+    return automation.run_workflow_node(workflow=workflow, node=node, payload=payload, **kwargs)
 
 
 @frappe.whitelist()
-def run_local_workflow_step(execution_id=None, node_id=None, node_type=None, config=None,
-                            payload=None, owner=None, lease_generation=None, **kwargs):
+def run_local_workflow_step(execution_id=None, node_id=None, payload=None, owner=None,
+                            lease_generation=None, **kwargs):
+    """Same reasoning as run_workflow_node above — node_type/config are not
+    accepted; the workflow and node are resolved from execution_id/node_id
+    and validated and executed from that same resolution."""
     from batch_projects.api import automation
 
     automation._assert_service_caller()
@@ -158,9 +176,14 @@ def run_local_workflow_step(execution_id=None, node_id=None, node_type=None, con
     workflow_doc = frappe.get_doc("BP Workflow", workflow_name)
     data = automation._as_dict(payload)
     validate_workflow_dispatch(workflow_doc, data)
+
+    action_type, _config = automation._resolve_workflow_node_action(workflow_doc, node_id)
+    if action_type not in automation._LOCAL_WORKFLOW_ACTIONS:
+        frappe.throw("Workflow action is not local-atomic")
+
     return automation.run_local_workflow_step(
-        execution_id=execution_id, node_id=node_id, node_type=node_type, config=config,
-        payload=payload, owner=owner, lease_generation=lease_generation, **kwargs
+        execution_id=execution_id, node_id=node_id, payload=payload,
+        owner=owner, lease_generation=lease_generation, **kwargs
     )
 
 
