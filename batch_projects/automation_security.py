@@ -18,18 +18,9 @@ from batch_projects.notification_delivery import (
     can_receive_project_delivery,
     resolve_system_user,
 )
+from batch_projects.task_reads import _INTERNAL_TASK_FIELDS, _MONEY_TASK_FIELDS
 
 _TASK_TOKEN = re.compile(r"\{\{\s*task\.([A-Za-z0-9_]+)\s*\}\}")
-
-# Mirrors task_reads.py's _INTERNAL_TASK_FIELDS / _MONEY_TASK_FIELDS (not yet
-# landed on develop-15 as of this PR — inlined here rather than importing a
-# module this one doesn't otherwise need, to keep this fix self-contained).
-# Reconcile into a single shared definition once task_reads.py merges.
-_INTERNAL_TASK_FIELDS = {
-    "sequence_no",
-    "bridge_job_id",
-}
-_MONEY_TASK_FIELDS = {"billable", "sales_order"}
 
 
 def _parse(value, default):
@@ -150,10 +141,8 @@ def _validate_action_authority(doc, action: dict) -> None:
                 )
 
     if action_type in ("Assign Issue", "Create Issue"):
-        # Deferred: requires task_invariants.py (a separate, not-yet-merged
-        # PR). Lazy import so this module loads fine without it — this one
-        # action-type check is a no-op ImportError-safe skip until that PR
-        # lands, not a functioning check yet. Tracked as a residual.
+        # task_invariants.py landed via PR #61 — this is a real, enforced
+        # check now, not the ImportError-safe no-op it was before that merge.
         from batch_projects.task_invariants import _assert_assignable_user
         for user in config.get("assignees") or []:
             _assert_assignable_user(user)
