@@ -37,6 +37,12 @@
       "description": "Enforced gap between the linked ends. Negative = lead (overlap)."
     },
     {
+      "fieldname": "link_metadata",
+      "fieldtype": "JSON",
+      "label": "Link Metadata",
+      "description": "Free-form integration metadata for this link, e.g. {\"source\": \"github\", \"external_id\": \"123\", \"context\": \"pull_request\"}. Lets external integrations attach provenance without adding a column per integration."
+    },
+    {
       "fieldname": "linked_task_key",
       "fieldtype": "Data",
       "label": "Task Key",

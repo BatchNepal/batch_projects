@@ -37,6 +37,16 @@
       "read_only": 1
     },
     {
+      "fieldname": "sequence_no",
+      "fieldtype": "Int",
+      "label": "Sequence No",
+      "reqd": 0,
+      "in_list_view": 0,
+      "read_only": 1,
+      "hidden": 1,
+      "description": "Global monotonic sequence — stable internal identity independent of the display task_key. Assigned automatically at creation, never changed."
+    },
+    {
       "fieldname": "column_break_identity",
       "fieldtype": "Column Break"
     },
@@ -180,6 +190,22 @@
       "in_list_view": 0
     },
     {
+      "fieldname": "planned_start",
+      "fieldtype": "Date",
+      "label": "Planned Start",
+      "reqd": 0,
+      "in_list_view": 0,
+      "description": "Scheduled start (the plan). Gantt/scheduling read this first and fall back to Start Date. Actual execution lives in started_on/completed_on."
+    },
+    {
+      "fieldname": "planned_end",
+      "fieldtype": "Date",
+      "label": "Planned End",
+      "reqd": 0,
+      "in_list_view": 0,
+      "description": "Scheduled finish (the plan). Distinct from Due Date, which stays the commitment/deadline that drives reminders."
+    },
+    {
       "fieldname": "parent_task",
       "fieldtype": "Link",
       "label": "Parent Task",
@@ -265,6 +291,41 @@
       "description": "Internal: the agent's job id for this task's recurrence timer."
     },
     {
+      "fieldname": "section_blocked",
+      "fieldtype": "Section Break",
+      "label": "Blocked",
+      "collapsible": 1,
+      "description": "Human block — outside formal task dependencies (see Linked Tasks). Set to surface waits on clients, vendors, approvals, etc."
+    },
+    {
+      "fieldname": "blocked_reason",
+      "fieldtype": "Select",
+      "label": "Blocked",
+      "reqd": 0,
+      "in_list_view": 0,
+      "options": "\nWaiting for Client\nWaiting for Vendor\nWaiting for Approval\nTechnical Blocker\nResource Shortage",
+      "description": "Set a reason to mark the task blocked; clear to unblock. blocked_since / blocked_by are maintained automatically."
+    },
+    {
+      "fieldname": "column_break_blocked",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "blocked_since",
+      "fieldtype": "Datetime",
+      "label": "Blocked Since",
+      "read_only": 1,
+      "description": "When the task was last blocked — feeds the time-blocked project-health metric."
+    },
+    {
+      "fieldname": "blocked_by",
+      "fieldtype": "Link",
+      "label": "Blocked By",
+      "options": "User",
+      "read_only": 1,
+      "description": "The user who last marked this task blocked."
+    },
+    {
       "fieldname": "section_time_billing",
       "fieldtype": "Section Break",
       "label": "Time & Billing",
@@ -323,6 +384,15 @@
       "label": "Completed On",
       "read_only": 1,
       "hidden": 1
+    },
+    {
+      "fieldname": "completed_by",
+      "fieldtype": "Link",
+      "label": "Completed By",
+      "options": "User",
+      "read_only": 1,
+      "hidden": 1,
+      "description": "The user who moved this task into a completed status. Cleared when the task is reopened."
     },
     {
       "fieldname": "resolution",

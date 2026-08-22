@@ -113,7 +113,7 @@
               <button
                 v-for="tab in visibleTabs" :key="tab.value"
                 draggable="true"
-                class="flex items-center gap-1.5 px-3 h-[26px] text-sm font-medium rounded-md transition-colors whitespace-nowrap"
+                class="flex items-center gap-1.5 px-3 h-[26px] text-sm font-medium rounded-sm transition-colors whitespace-nowrap"
                 :class="[
                   isActiveTab(tab) ? 'bg-surface text-foreground shadow-xs' : 'text-muted hover:text-foreground',
                   tab.soon ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',

@@ -288,15 +288,18 @@ def query_tasks(project, filters=None, group_by=None, sort_by="creation",
     fields = [
         "name", "task_key", "title", "status", "priority", "task_type",
         "epic", "sprint", "story_points", "due_date", "start_date",
+        "planned_start", "planned_end", "sequence_no",
         "board_order", "board_rank", "parent_task", "team", "description",
         "estimated_hours", "actual_hours", "billable",
-        "started_on", "completed_on", "resolution",
+        "started_on", "completed_on", "completed_by", "resolution",
+        "blocked_reason", "blocked_since", "blocked_by",
         "custom_field_values", "labels",
         "reporter", "creation", "modified",
     ]
 
     valid_sort_fields = {
         "creation", "modified", "due_date", "start_date",
+        "planned_start", "planned_end", "sequence_no",
         "priority", "title", "board_order", "story_points",
     }
     sort_by = sort_by if sort_by in valid_sort_fields else "creation"
@@ -911,7 +914,8 @@ def get_gantt(project):
         filters=_task_filters({"project": project}),
         fields=[
             "name", "task_key", "title", "status", "priority", "task_type",
-            "start_date", "due_date", "epic", "parent_task", "sprint",
+            "start_date", "due_date", "planned_start", "planned_end",
+            "blocked_reason", "epic", "parent_task", "sprint",
             "estimated_hours", "actual_hours", "billable", "board_order", "labels",
         ],
         order_by="start_date asc, due_date asc, creation asc",
@@ -951,7 +955,7 @@ def get_gantt(project):
                 "parent": ["in", names],
                 "link_type": ["in", ["blocks", "is blocked by"]],
             },
-            fields=["parent", "linked_task", "link_type", "dep_type", "lag_days"],
+            fields=["parent", "linked_task", "link_type", "dep_type", "lag_days", "link_metadata"],
         ):
             if l["linked_task"] not in valid:
                 continue
@@ -969,6 +973,7 @@ def get_gantt(project):
                 # finish-to-start blocks.
                 "dep_type": l.get("dep_type") or "FS",
                 "lag": frappe.utils.cint(l.get("lag_days") or 0),
+                "link_metadata": l.get("link_metadata"),
             })
 
     # Epic titles/colors for Gantt grouping.
@@ -1384,6 +1389,12 @@ def get_task(issue):
             "linked_task_title": (live.get(l.linked_task) or {}).get("title") or l.linked_task_title,
             "linked_task_status": (live.get(l.linked_task) or {}).get("status") or l.linked_task_status,
             "linked_task_project": (live.get(l.linked_task) or {}).get("project") or l.get("linked_task_project"),
+            # Scheduling + integration metadata — round-trips to the SPA so a
+            # drawn dependency keeps its type/lag and integrations can read
+            # back their own provenance blob.
+            "dep_type": l.get("dep_type") or "FS",
+            "lag_days": frappe.utils.cint(l.get("lag_days") or 0),
+            "link_metadata": l.get("link_metadata"),
         }
         for l in (doc.links or [])
     ]
@@ -1461,7 +1472,8 @@ def get_task(issue):
 @frappe.whitelist()
 def create_task(project, title, status=None, priority="Medium", task_type="Task",
                  assignees=None, epic=None, description=None, story_points=None,
-                 due_date=None, start_date=None, parent_task=None,
+                 due_date=None, start_date=None, planned_start=None, planned_end=None,
+                 parent_task=None,
                  estimated_hours=None, custom_field_values=None,
                  labels=None, sprint=None, billable=0, team=None):
 
@@ -1497,6 +1509,8 @@ def create_task(project, title, status=None, priority="Medium", task_type="Task"
         "story_points": int(story_points) if story_points else 0,
         "due_date": due_date,
         "start_date": start_date,
+        "planned_start": planned_start,
+        "planned_end": planned_end,
         "parent_task": parent_task,
         "estimated_hours": float(estimated_hours) if estimated_hours else None,
         "billable": billable,
@@ -1534,6 +1548,7 @@ def create_task(project, title, status=None, priority="Medium", task_type="Task"
 _MEMBER_WRITABLE_FIELDS = frozenset({
     "title", "description", "status", "priority", "task_type",
     "epic", "sprint", "milestone", "team", "due_date", "start_date",
+    "planned_start", "planned_end", "blocked_reason",
     "story_points", "estimated_hours", "billable", "is_unplanned",
     "needs_triage", "is_recurring", "recurrence_frequency", "recurrence_end_date",
     "resolution",
@@ -3413,7 +3428,7 @@ def _all_tracked_users():
 
 
 
-def _append_link(doc, other, link_type):
+def _append_link(doc, other, link_type, dep_type=None, lag_days=None, link_metadata=None):
     """Append a link row to ``doc`` pointing at ``other`` (idempotent)."""
     for l in doc.get("links", []):
         if l.linked_task == other.name and l.link_type == link_type:
@@ -3425,6 +3440,12 @@ def _append_link(doc, other, link_type):
         "linked_task_title": other.title,
         "linked_task_status": other.status,
         "linked_task_project": other.project,
+        # Scheduling + integration metadata ride along when provided (the
+        # Gantt sends dep_type/lag_days for drawn dependencies; integrations
+        # may attach link_metadata). Defaults keep older callers unchanged.
+        "dep_type": dep_type or "FS",
+        "lag_days": lag_days if lag_days is not None else 0,
+        "link_metadata": link_metadata,
     })
     return True
 
@@ -3847,7 +3868,7 @@ def add_reference(issue, ref_doctype, ref_name, two_way=0):
 
 
 @frappe.whitelist()
-def add_task_link(issue, linked_task, link_type="relates to"):
+def add_task_link(issue, linked_task, link_type="relates to", dep_type="FS", lag_days=0, link_metadata=None):
     if issue == linked_task:
         frappe.throw("A task can't be linked to itself.")
     doc = frappe.get_doc("BP Task", issue)
@@ -3862,12 +3883,17 @@ def add_task_link(issue, linked_task, link_type="relates to"):
         if _blocks_reaches(succ, pred):
             frappe.throw("That link would create a circular dependency.")
 
-    if _append_link(doc, linked_doc, link_type):
+    # dep_type/lag_days were previously sent by the Gantt but dropped here —
+    # the endpoint signature never accepted them, so every drawn dependency
+    # silently fell back to FS/0. They now persist (this is the fix), and
+    # link_metadata lets integrations attach provenance without a column per
+    # integration. Both ride the reciprocal link too.
+    if _append_link(doc, linked_doc, link_type, dep_type, lag_days, link_metadata):
         doc.save(ignore_permissions=True)
 
     # Mirror the reciprocal link onto the other task.
     inverse = INVERSE_LINK.get(link_type)
-    if inverse and _append_link(linked_doc, doc, inverse):
+    if inverse and _append_link(linked_doc, doc, inverse, dep_type, lag_days, link_metadata):
         linked_doc.save(ignore_permissions=True)
 
     return {"ok": True}
@@ -3914,7 +3940,7 @@ def backfill_reciprocal_links():
     rows = frappe.get_all(
         "BP Task Link",
         filters={"parenttype": "BP Task"},
-        fields=["parent", "linked_task", "link_type"],
+        fields=["parent", "linked_task", "link_type", "dep_type", "lag_days", "link_metadata"],
     )
     # Index existing (task -> {(other, type)}) so we don't duplicate.
     existing = {}
@@ -3939,6 +3965,10 @@ def backfill_reciprocal_links():
             "linked_task_key": meta.task_key,
             "linked_task_title": meta.title,
             "linked_task_status": meta.status,
+            # Mirror scheduling + integration metadata on the reciprocal too.
+            "dep_type": r.get("dep_type") or "FS",
+            "lag_days": r.get("lag_days") if r.get("lag_days") is not None else 0,
+            "link_metadata": r.get("link_metadata"),
         })
         other.save(ignore_permissions=True)
         existing.setdefault(tgt, set()).add((src, inv))
@@ -7176,7 +7206,7 @@ def watch_task(task):
     """Current user starts watching a task."""
     from batch_projects.events import add_watcher
     _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
-    add_watcher(task, frappe.session.user)
+    add_watcher(task, frappe.session.user, reason="manual")
     return {"watching": True}
 
 
@@ -7200,7 +7230,7 @@ def get_task_watchers(task):
     """List watchers of a task + whether the current user is watching."""
     _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
     rows = frappe.get_all(
-        "BP Task Watcher", filters={"task": task}, fields=["user"], order_by="creation asc"
+        "BP Task Watcher", filters={"task": task}, fields=["user", "watch_reason"], order_by="creation asc"
     )
     users = [r["user"] for r in rows]
     # Batched, not N+1 — same shape the header's real photo needs (see
@@ -7213,11 +7243,12 @@ def get_task_watchers(task):
     } if users else {}
     watchers = [
         {
-            "user": u,
-            "full_name": info.get(u, {}).get("full_name") or u,
-            "user_image": info.get(u, {}).get("user_image") or None,
+            "user": r["user"],
+            "full_name": info.get(r["user"], {}).get("full_name") or r["user"],
+            "user_image": info.get(r["user"], {}).get("user_image") or None,
+            "watch_reason": r.get("watch_reason") or "manual",
         }
-        for u in users
+        for r in rows
     ]
     return {
         "watchers": watchers,

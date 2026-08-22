@@ -103,7 +103,7 @@ permission_query_conditions = {
     "BP Milestone":       "batch_projects.permissions.bp_milestone_query_conditions",
     "BP Risk":            "batch_projects.permissions.bp_risk_query_conditions",
     "BP Automation Run":  "batch_projects.permissions.bp_automation_run_query_conditions",
-    "BP Notification":    "batch_projects.permissions.bp_notification_query_conditions",
+    "BP Notification":    "batch_projects.notification_permissions.query_conditions",
     "BP Webhook Token":   "batch_projects.permissions.bp_webhook_token_query_conditions",
     # Project-scoped doctypes with a `project` field but no hook without
     # this (see permissions.py for the shared query-condition primitives).
@@ -134,7 +134,7 @@ has_permission = {
     "BP Milestone":       "batch_projects.permissions.bp_doc_has_permission",
     "BP Risk":            "batch_projects.permissions.bp_doc_has_permission",
     "BP Automation Run":  "batch_projects.permissions.bp_doc_has_permission",
-    "BP Notification":    "batch_projects.permissions.bp_notification_has_permission",
+    "BP Notification":    "batch_projects.notification_permissions.has_permission",
     "BP Webhook Token":   "batch_projects.permissions.bp_webhook_token_has_permission",
     "BP Drawing":           "batch_projects.permissions.bp_doc_has_permission",
     "BP Intake Form":       "batch_projects.permissions.bp_doc_has_permission",
@@ -155,6 +155,72 @@ has_permission = {
     "BP Workflow":          "batch_projects.permissions.bp_doc_has_permission",
 }
 
+# Transparently redirects a whitelisted dotted path's real implementation to
+# a hardened replacement, without every existing caller (frontend, gateway)
+# needing to change what it calls.
+override_whitelisted_methods = {
+    "batch_projects.api.automation.apply_action":
+        "batch_projects.automation_security.apply_action",
+    "batch_projects.api.automation.run_scheduled_event":
+        "batch_projects.automation_security.run_scheduled_event",
+    "batch_projects.api.board.update_project_members":
+        "batch_projects.membership_invariants.update_project_members",
+    "batch_projects.api.board.get_task":
+        "batch_projects.task_reads.get_task",
+    "batch_projects.api.board.get_export_data":
+        "batch_projects.task_reads.get_export_data",
+    "batch_projects.api.board.delete_task":
+        "batch_projects.task_lifecycle.delete_task",
+    "batch_projects.api.board.restore_task":
+        "batch_projects.task_lifecycle.restore_task",
+    "batch_projects.api.board.bulk_delete_tasks":
+        "batch_projects.task_lifecycle.bulk_delete_tasks",
+    "batch_projects.api.board.get_milestone_report":
+        "batch_projects.task_aggregates.get_milestone_report",
+    "batch_projects.api.board.get_sprint_capacity":
+        "batch_projects.task_aggregates.get_sprint_capacity",
+    "batch_projects.api.board.get_reports":
+        "batch_projects.task_aggregates.get_reports",
+    "batch_projects.api.board.complete_sprint":
+        "batch_projects.task_surfaces.complete_sprint",
+    "batch_projects.api.board.get_project_files":
+        "batch_projects.task_surfaces.get_project_files",
+    "batch_projects.api.dashboards.get_column_widget_data":
+        "batch_projects.dashboard_task_reads.get_column_widget_data",
+    "batch_projects.api.dashboards.get_widget_source_fields":
+        "batch_projects.dashboard_security.get_widget_source_fields",
+    "batch_projects.api.dashboards.get_widget_source_field_options":
+        "batch_projects.dashboard_security.get_widget_source_field_options",
+    "batch_projects.api.dashboards.get_multi_source_count":
+        "batch_projects.dashboard_security.get_multi_source_count",
+    "batch_projects.api.dashboards.get_doctype_group_data":
+        "batch_projects.dashboard_security.get_doctype_group_data",
+    "batch_projects.api.dashboards.get_doctype_column_data":
+        "batch_projects.dashboard_security.get_doctype_column_data",
+    "batch_projects.api.dashboards.update_widget_source_field":
+        "batch_projects.dashboard_security.update_widget_source_field",
+    "batch_projects.api.dashboards.get_widget_source_doc_quickview":
+        "batch_projects.dashboard_security.get_widget_source_doc_quickview",
+    "batch_projects.api.board.get_notifications":
+        "batch_projects.notification_reads.get_notifications",
+    "batch_projects.api.board.get_notification_count":
+        "batch_projects.notification_reads.get_notification_count",
+    "batch_projects.api.board.mark_notification_read":
+        "batch_projects.notification_reads.mark_notification_read",
+    "batch_projects.api.board.mark_notification_unread":
+        "batch_projects.notification_reads.mark_notification_unread",
+    "batch_projects.api.board.mark_all_notifications_read":
+        "batch_projects.notification_reads.mark_all_notifications_read",
+    "batch_projects.api.workflows.list_workflows":
+        "batch_projects.workflow_security.list_workflows",
+    "batch_projects.api.workflows.test_workflow":
+        "batch_projects.workflow_security.test_workflow",
+    "batch_projects.api.automation.run_workflow_node":
+        "batch_projects.workflow_security.run_workflow_node",
+    "batch_projects.api.automation.run_local_workflow_step":
+        "batch_projects.workflow_security.run_local_workflow_step",
+}
+
 # actual_hours rollup — resync every BP Task a submitted/cancelled
 # Timesheet's rows point at (via the custom_bp_task fixture field).
 # erp.* automation triggers fire onto the same events.emit() bus every
@@ -166,13 +232,31 @@ doc_events = {
         "on_cancel": "batch_projects.timesheet_sync.on_timesheet_cancel",
     },
     "Sales Invoice": {
-        "on_submit": "batch_projects.erp_triggers.on_sales_invoice_submit",
+        # P0 billing reservation: native ERPNext draft creation/editing must
+        # obey the same Timesheet Detail exclusivity as BatchProjects.
+        "validate": "batch_projects.billing_reservation.validate_sales_invoice_sources",
+
+        # Milestone billing lifecycle. on_submit also delegates to the existing
+        # erp.invoice_submitted automation emitter so there remains exactly one
+        # specific Sales Invoice submit hook.
+        "after_insert": "batch_projects.milestone_billing.on_sales_invoice_after_insert",
+        "on_submit": "batch_projects.milestone_billing.on_sales_invoice_submit",
+        "on_cancel": "batch_projects.milestone_billing.on_sales_invoice_cancel",
+        "on_trash": "batch_projects.milestone_billing.on_sales_invoice_trash",
     },
     "Sales Order": {
         "on_submit": "batch_projects.erp_triggers.on_sales_order_submit",
     },
     "Payment Entry": {
         "on_submit": "batch_projects.erp_triggers.on_payment_entry_submit",
+    },
+    # Single authority model for task creation/read/update validation —
+    # applies on every save path (whitelisted API, generic REST, import, ORM),
+    # not just the SPA's own endpoints.
+    "BP Task": {
+        "before_insert": "batch_projects.task_defaults.before_task_insert",
+        "validate": "batch_projects.task_validation.validate_task",
+        "after_insert": "batch_projects.task_defaults.after_task_insert",
     },
     # Generic doc-event trigger — widens erp.* coverage beyond the 4
     # hardcoded doctypes above. "*" fires for EVERY doctype site-wide;
@@ -188,14 +272,35 @@ doc_events = {
         "on_cancel": "batch_projects.erp_triggers.on_any_doctype_event",
         "on_trash": "batch_projects.erp_triggers.on_any_doctype_event",
     },
-    # Seat-limit enforcement — catches EVERY insertion path for BP Project
-    # Member and BP Team Member, including the generic REST API, batch
-    # operations, and ORM saves. See entitlements.before_member_insert.
+    # Seat-limit enforcement for BP Project Member and BP Team Member. Since
+    # both are child tables, `before_insert` only fires for a direct
+    # frappe.get_doc(...).insert() on the child doctype itself — it does NOT
+    # fire when a row is added by appending to the parent's child table and
+    # saving the parent (the generic REST/ORM insert path for child rows), so
+    # this hook cannot be the only gate on either doctype. BP Project's own
+    # validate() carries the authority check for BP Project Member role
+    # mutations (see bp_project.py:_validate_members_mutation_authority) —
+    # BP Team Member has no equivalent yet.
     "BP Project Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
+        # Revoked membership must not leave a stale watcher routing task
+        # notifications to a user with no other access edge to that task.
+        "after_delete": "batch_projects.membership_invariants.after_project_member_delete",
     },
     "BP Team Member": {
         "before_insert": "batch_projects.entitlements.before_member_insert",
+    },
+    # Re-scopes rule authority at save time — a rule is a durable capability,
+    # and the gateway's own service-account identity only proves who called
+    # in, not what a saved rule is allowed to do. See automation_security.py.
+    "BP Automation Rule": {
+        "validate": "batch_projects.automation_security.validate_rule_authority",
+    },
+    # Same reasoning, for the graph-canvas surface — a workflow's action
+    # nodes carry the exact same {type, config} shape a rule's actions do.
+    # See workflow_security.py.
+    "BP Workflow": {
+        "validate": "batch_projects.workflow_security.validate_workflow_authority",
     },
 }
 

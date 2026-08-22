@@ -303,7 +303,11 @@ def get_workflow_runs(workflow, since=None, limit=20):
         filters["run_at"] = [">=", since]
     rows = frappe.get_all(
         "BP Workflow Run", filters=filters,
-        fields=["run_id", "node_id", "node_type", "status", "message", "run_at"],
+        fields=[
+            "run_id", "execution", "node_id", "node_type", "status", "message", "run_at",
+            "correlation_id", "source", "attempt", "started_at", "finished_at",
+            "duration_ms", "error_code",
+        ],
         order_by="run_at asc",
     )
 
@@ -311,12 +315,29 @@ def get_workflow_runs(workflow, since=None, limit=20):
     order = []
     for r in rows:
         if r.run_id not in groups:
-            groups[r.run_id] = {"run_id": r.run_id, "started_at": r.run_at, "nodes": []}
+            groups[r.run_id] = {
+                "run_id": r.run_id,
+                "execution_id": r.execution or None,
+                "correlation_id": r.correlation_id or None,
+                "source": r.source or None,
+                "started_at": r.started_at or r.run_at,
+                "finished_at": r.finished_at or r.run_at,
+                "nodes": [],
+            }
             order.append(r.run_id)
         groups[r.run_id]["nodes"].append({
             "node_id": r.node_id, "node_type": r.node_type,
             "status": r.status, "message": r.message, "run_at": r.run_at,
+            "attempt": r.attempt or 1,
+            "started_at": r.started_at or r.run_at,
+            "finished_at": r.finished_at or r.run_at,
+            "duration_ms": r.duration_ms,
+            "error_code": r.error_code or None,
         })
+        if r.started_at and r.started_at < groups[r.run_id]["started_at"]:
+            groups[r.run_id]["started_at"] = r.started_at
+        if r.finished_at and r.finished_at > groups[r.run_id]["finished_at"]:
+            groups[r.run_id]["finished_at"] = r.finished_at
 
     result = []
     for run_id in reversed(order):  # newest run first; each group's own nodes stay chronological

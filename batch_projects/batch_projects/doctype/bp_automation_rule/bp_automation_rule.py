@@ -88,6 +88,8 @@ Update ERPNext Document : {"doctype": "Sales Invoice"|"Sales Order"|"Timesheet"|
 import frappe
 import json
 import re
+import uuid
+import time
 from frappe.model.document import Document
 
 
@@ -362,6 +364,16 @@ def run_for_event(event_name: str, payload: dict):
                     continue
                 if not _match(_parse(rule.conditions), ctx, payload):
                     continue  # conditions not met — not logged (would flood)
+                # Generate one execution_id per rule fire — groups all action
+                # rows from this trigger. correlation_id links back to the
+                # originating event: prefer the event_id emit() stamped on the
+                # payload (so multiple rules fired by ONE event share a single
+                # correlation), falling back to this execution's own ID.
+                payload["_execution_id"] = str(uuid.uuid4())
+                payload["_correlation_id"] = (
+                    payload.get("_correlation_id") or payload.get("event_id") or payload["_execution_id"]
+                )
+                payload["_source"] = "event"
                 results = _run_actions(rule, ctx, payload)
                 status, _ = _aggregate_status(results)
                 _update_rule_last_run(rule.name, status)
@@ -370,7 +382,11 @@ def run_for_event(event_name: str, payload: dict):
                     frappe.get_traceback(),
                     f"BP Automation rule failed: {rule.name} ({rule.rule_name})",
                 )
-                _log_run(rule, payload, "Failed", _short_error())
+                _log_run(rule, payload, "Failed", _short_error(),
+                         execution_id=payload.get("_execution_id"),
+                         correlation_id=payload.get("_correlation_id"),
+                         source="event",
+                         error_code="Exception")
                 _update_rule_last_run(rule.name, "Failed")
     finally:
         frappe.flags.bp_automation_depth = depth
@@ -410,13 +426,19 @@ def run_scheduled(rule_name: str, payload: dict):
 
     payload = dict(payload or {})
     payload.setdefault("project", rule.project)
+    payload["_execution_id"] = str(uuid.uuid4())
+    payload["_correlation_id"] = payload.get("_correlation_id") or payload["_execution_id"]
+    payload["_source"] = "schedule"
 
     ctx = _build_context(payload)
     depth = frappe.flags.get("bp_automation_depth", 0)
     frappe.flags.bp_automation_depth = depth + 1
     try:
         if not _match(_parse(rule.conditions), ctx, payload):
-            _log_run(rule, payload, "Skipped", "conditions not met")
+            _log_run(rule, payload, "Skipped", "conditions not met",
+                     execution_id=payload.get("_execution_id"),
+                     correlation_id=payload.get("_correlation_id"),
+                     source="schedule")
             _update_rule_last_run(rule_name, "Skipped")
             return "Skipped", "conditions not met"
         results = _run_actions(rule, ctx, payload)
@@ -426,7 +448,11 @@ def run_scheduled(rule_name: str, payload: dict):
     except Exception:
         frappe.log_error(frappe.get_traceback(), f"BP scheduled rule failed: {rule_name}")
         msg = _short_error()
-        _log_run(rule, payload, "Failed", msg)
+        _log_run(rule, payload, "Failed", msg,
+                 execution_id=payload.get("_execution_id"),
+                 correlation_id=payload.get("_correlation_id"),
+                 source="schedule",
+                 error_code="Exception")
         _update_rule_last_run(rule_name, "Failed")
         return "Failed", msg
     finally:
@@ -482,6 +508,9 @@ def _run_relative_schedule(rule):
             payload = {
                 "event": "schedule.relative", "project": project,
                 "task": t.name, "task_key": t.task_key,
+                "_execution_id": str(uuid.uuid4()),
+                "_correlation_id": str(uuid.uuid4()),
+                "_source": "schedule",
             }
             ctx = _build_context(payload)
             try:
@@ -578,10 +607,23 @@ def _run_actions(rule, ctx, payload) -> list:
     """Run every action in order. Per-action isolation: one failing action
     logs its own BP Automation Run row (with action_index) and the loop
     continues — it never aborts the rest of the rule, matching events.py's
-    own isolation doctrine."""
+    own isolation doctrine.
+
+    Execution metadata (execution_id, correlation_id, source) is threaded
+    from the payload's _execution_id/_correlation_id/_source keys (set by
+    run_for_event / run_scheduled / apply_action) into each _log_run call
+    so every action row from one trigger fire shares the same trace ID."""
     actions = _get_actions(rule)
     results = []
+    execution_id = payload.get("_execution_id")
+    correlation_id = payload.get("_correlation_id")
+    source = payload.get("_source") or "event"
+    # Attempt number for THIS pass through the action list. Set by
+    # apply_action's conflict-retry loop (payload["_attempt"]); defaults to 1
+    # for the event/schedule/webhook paths which have no retry loop.
+    attempt = payload.get("_attempt") or 1
     for idx, action in enumerate(actions):
+        started_at = frappe.utils.now_datetime()
         try:
             status, message = _execute(action, ctx, payload)
         except frappe.TimestampMismatchError:
@@ -599,13 +641,19 @@ def _run_actions(rule, ctx, payload) -> list:
             # per-rule `except Exception` still catches this and logs the same
             # Failed run row it always did.
             raise
-        except Exception:
+        except Exception as e:
             frappe.log_error(
                 frappe.get_traceback(),
                 f"BP Automation action failed: {rule.get('name')} #{idx}",
             )
             status, message = "Failed", _short_error()
-        _log_run(rule, payload, status, message, action_index=idx, action_type=action.get("type"))
+            error_code = type(e).__name__
+        else:
+            error_code = None
+        finished_at = frappe.utils.now_datetime()
+        _log_run(rule, payload, status, message, action_index=idx, action_type=action.get("type"),
+                 execution_id=execution_id, correlation_id=correlation_id, source=source,
+                 attempt=attempt, started_at=started_at, finished_at=finished_at, error_code=error_code)
         results.append((status, message))
     return results
 
@@ -671,10 +719,29 @@ def _aggregate_status(results: list):
     return "Skipped", results[-1][1]
 
 
-def _log_run(rule, payload, status, message, action_index=None, action_type=None):
+def _log_run(rule, payload, status, message, action_index=None, action_type=None,
+             execution_id=None, correlation_id=None, source=None,
+             attempt=1, started_at=None, finished_at=None, error_code=None):
     """Record a single action execution for the run-history view. Best-effort —
-    logging must never break the automation itself."""
+    logging must never break the automation itself.
+
+    Execution metadata (execution_id, correlation_id, source, attempt,
+    started_at, finished_at, duration_ms, error_code) provides the
+    traceability needed to safely run automations on real customer data —
+    one execution_id groups all action rows from a single trigger fire,
+    and correlation_id links back to the originating event across
+    BP Activity and BP Audit Log.
+    """
     try:
+        now = frappe.utils.now_datetime()
+        duration_ms = None
+        if started_at and finished_at:
+            try:
+                delta = finished_at - started_at
+                duration_ms = int(delta.total_seconds() * 1000)
+            except Exception:
+                pass
+
         frappe.get_doc({
             "doctype": "BP Automation Run",
             "rule": rule.get("name"),
@@ -687,7 +754,15 @@ def _log_run(rule, payload, status, message, action_index=None, action_type=None
             "action_index": action_index if action_index is not None else 0,
             "status": status,
             "message": (message or "")[:500],
-            "run_at": frappe.utils.now_datetime(),
+            "run_at": now,
+            "execution_id": execution_id or payload.get("_execution_id"),
+            "correlation_id": correlation_id or payload.get("_correlation_id"),
+            "source": source or payload.get("_source") or "event",
+            "attempt": attempt,
+            "started_at": started_at or now,
+            "finished_at": finished_at or now,
+            "duration_ms": duration_ms,
+            "error_code": error_code,
         }).insert(ignore_permissions=True)
     except Exception:
         pass

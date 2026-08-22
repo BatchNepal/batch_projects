@@ -1,5 +1,5 @@
 <template>
-  <span class="ph-icon-btn-wrap">
+  <span class="border-1 shadow-xs shadow-gray-100 rounded-sm ">
     <IconButton
       variant="outline" size="sm"
       :color="activeCount > 0 ? 'accent' : 'default'"
@@ -7,7 +7,7 @@
       title="Filter"
       @click="open = true"
     >
-      <ListFilter :size="15" :stroke-width="1.75" />
+      <ListFilter :size="15" class="text-gray-800" :stroke-width="1.75" />
     </IconButton>
     <span v-if="activeCount" class="ph-tool-badge">{{ activeCount }}</span>
   </span>
@@ -119,7 +119,11 @@ function clearAll() {
    only adds what IconButton doesn't have: the "drawer is open" pinned state
    and the active-filter-count badge. */
 .ph-icon-btn-wrap { position: relative; display: inline-flex; }
-.ph-icon-btn-on { background: var(--surface-secondary); color: var(--foreground); }
+.ph-icon-btn-on { 
+  background: var(--surface-secondary);
+   color: black;
+   box-shadow: var(--shadow-xs);
+   }
 .ph-tool-badge {
   position: absolute;
   top: -4px;

@@ -595,12 +595,13 @@ export const getProjectMoney = (project, period = "last_30_days") =>
   bridgeCall(`insights/money?project=${encodeURIComponent(project)}&period=${encodeURIComponent(period)}`);
 // `project` is one BP Project name, or an array for the batch path (N
 // projects -> one invoice, each line tagged to its own project).
+// Invoice scope is intentionally the all-time currently-unbilled balance;
+// period-scoped billing is not a supported first-party contract.
 // currency/conversion_rate/amount drive the payment-first flow: the money
 // already landed, so the invoice must state that exact currency and total.
-export const generateInvoice = (project, period, opts = {}) =>
+export const generateInvoice = (project, opts = {}) =>
   callErpLink("generate_invoice", {
     project: Array.isArray(project) ? JSON.stringify(project) : project,
-    period,
     ...(opts.tasks ? { tasks: JSON.stringify(opts.tasks) } : {}),
     ...(opts.currency ? { currency: opts.currency } : {}),
     ...(opts.conversion_rate ? { conversion_rate: opts.conversion_rate } : {}),
@@ -988,8 +989,8 @@ export const updateSharedTask = (token, task, fields) =>
 
 // ─── TASK LINKS ──────────────────────────────────────────────────────────────
 
-export const addTaskLink = (task, linked_task, link_type, dep_type = "FS", lag_days = 0) =>
-  call("add_task_link", { issue: task, linked_task, link_type, dep_type, lag_days });
+export const addTaskLink = (task, linked_task, link_type, dep_type = "FS", lag_days = 0, link_metadata = null) =>
+  call("add_task_link", { issue: task, linked_task, link_type, dep_type, lag_days, link_metadata });
 
 export const removeTaskLink = (task, linked_task, link_type) =>
   call("remove_task_link", { issue: task, linked_task, link_type });

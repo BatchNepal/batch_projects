@@ -9,6 +9,20 @@ from frappe.tests.utils import FrappeTestCase
 
 from batch_projects.api.board import create_project
 
+# These are BP Project lifecycle tests, not ERPNext fixture-integration tests.
+# Frappe's full-app bootstrap otherwise follows optional ERPNext Links from
+# BP Project into unrelated finance/payment fixture graphs. None of these
+# external records is a fixture prerequisite for the lifecycle tests below.
+test_ignore = [
+    "Company",
+    "Customer",
+    "Lead",
+    "Opportunity",
+    "Project",
+    "Quotation",
+    "Sales Order",
+]
+
 TEST_KEY = "TBPRJ"
 
 WORKFLOW = json.dumps([

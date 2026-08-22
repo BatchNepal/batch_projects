@@ -81,6 +81,23 @@
       "description": "Internal: the agent's job id for this workflow's trigger.schedule node (WORKPLAN-PHASE25 B5). Mirrors BP Automation Rule's own field."
     },
     {
+      "fieldname": "automation_revision",
+      "fieldtype": "Int",
+      "label": "Automation Revision",
+      "default": "0",
+      "read_only": 1,
+      "no_copy": 1,
+      "description": "Monotonic revision of execution-semantic workflow data."
+    },
+    {
+      "fieldname": "automation_definition_hash",
+      "fieldtype": "Data",
+      "label": "Automation Definition Hash",
+      "read_only": 1,
+      "no_copy": 1,
+      "description": "Deterministic hash of execution-semantic workflow data; excludes canvas layout and display labels."
+    },
+    {
       "fieldname": "section_break_graph",
       "fieldtype": "Section Break",
       "label": "Graph"

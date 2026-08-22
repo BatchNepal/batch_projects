@@ -11,14 +11,21 @@ Linking itself is free-tier plumbing — entitlement gates belong on the money
 surfaces built on top of this, not on creating the link.
 """
 
-import frappe
 import json
+import math
 import re
+
+import frappe
 
 from frappe.utils import flt, add_days, nowdate
 
 from batch_projects.api.board import _check_permission, _require_system_user
 from batch_projects.entitlements import require_feature, require_workspace_feature
+from batch_projects.billing_reservation import (
+    guard_timesheet_details,
+    get_live_claimed_timesheet_details,
+)
+from batch_projects.expense_reservation import guard_expense_claim_details
 
 
 @frappe.whitelist()
@@ -483,25 +490,46 @@ def _service_item():
 
 
 def _price_list_rate(customer, item_code):
-    """The customer's contracted rate for the service item, read from
-    ERPNext's own rate-card mechanism (Customer.default_price_list ->
-    Item Price) rather than duplicated into batch_projects.
+    """Return the customer's contracted Item Price with its currency.
 
-    This is the "negotiate once per client, apply to every project" case.
-    Returns None when there's no price list, no item, or no price — callers
-    fall back to the project rate, so an unconfigured site behaves as today."""
+    ERPNext v15 makes Item Price.price_list_rate a Currency field whose
+    currency is Item Price.currency, and ItemPrice.validate() copies that
+    currency from the linked Price List. Returning a naked float discards
+    money type information and makes cross-currency fallback unsafe.
+    """
     if not customer or not item_code:
         return None
-    price_list = frappe.db.get_value("Customer", customer, "default_price_list")
+
+    price_list = frappe.db.get_value(
+        "Customer", customer, "default_price_list"
+    )
     if not price_list:
         return None
-    rate = frappe.db.get_value(
-        "Item Price",
-        {"item_code": item_code, "price_list": price_list, "selling": 1},
-        "price_list_rate",
-    )
-    return flt(rate) if rate else None
 
+    row = frappe.db.get_value(
+        "Item Price",
+        {
+            "item_code": item_code,
+            "price_list": price_list,
+            "selling": 1,
+        },
+        ["price_list_rate", "currency"],
+        as_dict=True,
+    )
+    if not row or not flt(row.price_list_rate):
+        return None
+
+    currency = (row.currency or "").strip()
+    if not currency:
+        frappe.throw(
+            f"Item Price for '{item_code}' in Price List '{price_list}' "
+            "has a rate but no currency. Fix the Price List before billing."
+        )
+
+    return frappe._dict({
+        "rate": flt(row.price_list_rate),
+        "currency": currency,
+    })
 
 def _resolve_project_list(project):
     """`project` accepts ONE BP Project name (every existing caller, e.g.
@@ -524,59 +552,571 @@ def _resolve_project_list(project):
     return names
 
 
-def _resolve_invoice_currency(company, customer, currency, conversion_rate,
-                               project_currency=None):
-    """Decide the invoice currency and its FX rate, or refuse.
+def _effective_project_company(project):
+    """Return the ERPNext Company this BP Project actually bills through.
 
-    Order: explicit override -> the PROJECT's own currency ->
-    Customer.default_currency -> company currency.
+    BP Project.company is optional in the schema, so billing historically fell
+    back to ERPNext's global default Company. Financial validation, preview and
+    invoice creation must all normalize that fallback identically; otherwise a
+    batch containing an explicit company and a blank company can become
+    order-dependent.
+    """
+    explicit = (
+        (project.get("company") if hasattr(project, "get")
+         else getattr(project, "company", None))
+        or ""
+    ).strip()
 
-    The project's currency comes before the customer's and the company's for
-    a concrete reason: BP Project.hourly_rate is denominated in
-    BP Project.currency, and those rates flow into Timesheet Detail
-    unconverted. A project priced at 50 USD/hr on a company that books in NPR
-    used to produce an invoice of 50 NPR/hr — the number passed through
-    untouched while the label changed, under-billing by the whole exchange
-    rate. Defaulting to the project's own currency keeps the number and its
-    unit together; conversion_rate then restates it in company currency for
-    the GL, which is exactly what base_grand_total is for.
-    The override exists for the payment-first case (money already landed in a
-    known foreign amount; the invoice must state that exact currency/rate
-    rather than have one guessed for it).
+    if explicit:
+        return explicit
 
-    When the result differs from company currency we need a conversion rate.
-    If none is given and ERPNext has no Currency Exchange record for the pair,
-    we THROW rather than silently falling back to company currency — the old
-    behaviour did exactly that, producing an invoice denominated in the wrong
-    currency at face value. A loud refusal is recoverable; a wrong invoice
-    that someone submits is not."""
-    company_currency = frappe.get_cached_value("Company", company, "default_currency")
+    default_company = (
+        frappe.defaults.get_global_default("company")
+        or ""
+    ).strip()
+
+    if default_company:
+        return default_company
+
+    project_name = (
+        (project.get("project_name") if hasattr(project, "get")
+         else getattr(project, "project_name", None))
+        or
+        (project.get("name") if hasattr(project, "get")
+         else getattr(project, "name", None))
+        or "this project"
+    )
+
+    frappe.throw(
+        f"Set a Company on '{project_name}', or configure ERPNext's "
+        "global default Company, before invoicing."
+    )
+
+
+def _validated_invoice_company(projects):
+    """Resolve and validate the one ledger company for an invoice batch."""
+    companies = sorted({
+        _effective_project_company(project)
+        for project in projects
+    })
+
+    if len(companies) > 1:
+        frappe.throw(
+            "These projects belong to different companies ("
+            + ", ".join(companies)
+            + ") — one invoice can only post to one company."
+        )
+
+    # projects is non-empty by generate_invoice contract.
+    return companies[0]
+
+
+def _authoritative_billing_hours(row):
+    """Return persisted Timesheet Detail.billing_hours for financial use.
+
+    ERPNext v15 normal Timesheet validation already materializes
+    billing_hours from worked hours for billable rows when appropriate.
+    Financial code must therefore consume the persisted value directly:
+    a stored 0 is 0, not a signal to infer worked hours again.
+    """
+    value = row.get("billing_hours") if hasattr(row, "get") else getattr(row, "billing_hours", None)
+    return flt(value)
+
+
+def _requires_billing_rate(row):
+    """A zero-billing-hours row has no amount that requires pricing."""
+    return _authoritative_billing_hours(row) != 0
+
+
+def _billing_row_amount(
+    row,
+    effective_rate,
+):
+    """Financial amount for one Timesheet Detail source row.
+
+    Generation and preview MUST share this primitive. The amount of each
+    financial source row is rounded independently before rows are grouped.
+    """
+    return round(
+        _authoritative_billing_hours(row)
+        * flt(effective_rate),
+        2,
+    )
+
+
+def _validate_resolved_billing_rates(
+    rows,
+    name_by_erp,
+):
+    """Fail if real billing hours would be invoiced without a resolved rate."""
+    zero_rate_projects = sorted({
+        name_by_erp.get(
+            r.erp_project,
+            r.erp_project,
+        )
+        for r in rows
+        if (
+            _requires_billing_rate(r)
+            and not flt(
+                r.get("eff_rate")
+                if hasattr(r, "get")
+                else getattr(
+                    r,
+                    "eff_rate",
+                    None,
+                )
+            )
+        )
+    })
+
+    if zero_rate_projects:
+        frappe.throw(
+            "No billing rate resolved for: "
+            + ", ".join(
+                zero_rate_projects
+            )
+            + ". Set an hourly rate on the project, or a Price List rate "
+              "for the client, before invoicing — billing hours at zero "
+              "can't be undone."
+        )
+
+
+def _sales_invoice_payable_total(doc):
+    """Return ERPNext's actual customer-payable total.
+
+    Real Sales Invoice documents expose ``is_rounded_total_disabled``.
+    Lightweight test doubles used by older billing regressions do not, so
+    those safely fall back to grand_total.
+    """
+    rounded_disabled = getattr(
+        doc,
+        "is_rounded_total_disabled",
+        None,
+    )
+
+    if callable(rounded_disabled):
+        field = (
+            "grand_total"
+            if rounded_disabled()
+            else "rounded_total"
+        )
+    else:
+        field = "grand_total"
+
+    if hasattr(doc, "get"):
+        value = doc.get(field)
+    else:
+        value = getattr(
+            doc,
+            field,
+            None,
+        )
+
+    return flt(value)
+
+
+def _currency_code(value):
+    """Normalize an optional currency selector without inventing a value."""
+    if value is None:
+        return None
+
+    code = str(value).strip()
+    return code or None
+
+
+def _validated_conversion_rate(value, label="Conversion rate"):
+    """Return a finite positive FX value, or None when genuinely omitted."""
+    if value is None:
+        return None
+
+    if isinstance(value, str) and not value.strip():
+        return None
+
+    if isinstance(value, bool):
+        frappe.throw(
+            f"{label} must be a finite number greater than zero."
+        )
+
+    try:
+        rate = float(value)
+    except (TypeError, ValueError):
+        frappe.throw(
+            f"{label} must be a finite number greater than zero."
+        )
+
+    if not math.isfinite(rate) or rate <= 0:
+        frappe.throw(
+            f"{label} must be a finite number greater than zero."
+        )
+
+    return rate
+
+
+def _validated_expected_amount(value):
+    """Normalize the optional payment-first amount assertion.
+
+    The amount is not used to alter pricing. It is only an assertion that the
+    independently computed invoice total equals money already received.
+    Non-finite / non-numeric input must therefore fail rather than weakening
+    that assertion.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, str) and not value.strip():
+        return None
+
+    if isinstance(value, bool):
+        frappe.throw(
+            "Expected received amount must be a finite number."
+        )
+
+    try:
+        expected = float(value)
+    except (TypeError, ValueError):
+        frappe.throw(
+            "Expected received amount must be a finite number."
+        )
+
+    if not math.isfinite(expected):
+        frappe.throw(
+            "Expected received amount must be a finite number."
+        )
+
+    return expected
+
+
+def _resolve_invoice_currency(
+    company,
+    customer,
+    currency,
+    conversion_rate,
+    project_currency=None,
+):
+    """Resolve one target invoice currency and authoritative target FX.
+
+    Resolution order for the target remains:
+
+        explicit override
+        -> project currency
+        -> Customer.default_currency
+        -> company currency
+
+    An explicit conversion_rate is a target->company FX override. It never
+    chooses the target currency itself.
+
+    If the target is company currency, its conversion rate is definitionally
+    1. Any explicit non-1 value is contradictory financial input and is
+    rejected rather than silently ignored.
+    """
+    company_currency = _currency_code(
+        frappe.get_cached_value(
+            "Company",
+            company,
+            "default_currency",
+        )
+    )
+
+    if not company_currency:
+        frappe.throw(
+            f"Company '{company}' has no Default Currency configured."
+        )
+
     target = (
-        currency
-        or project_currency
-        or frappe.db.get_value("Customer", customer, "default_currency")
+        _currency_code(currency)
+        or _currency_code(project_currency)
+        or _currency_code(
+            frappe.db.get_value(
+                "Customer",
+                customer,
+                "default_currency",
+            )
+        )
         or company_currency
     )
-    if target == company_currency:
-        return company_currency, target, 1.0
 
-    if conversion_rate:
-        return company_currency, target, flt(conversion_rate)
+    explicit_fx = _validated_conversion_rate(
+        conversion_rate,
+        "Explicit conversion rate",
+    )
+
+    if target == company_currency:
+        if (
+            explicit_fx is not None
+            and abs(explicit_fx - 1.0) > 1e-12
+        ):
+            frappe.throw(
+                f"Invoice currency '{target}' is the company currency, "
+                "so its conversion rate must be 1."
+            )
+
+        return (
+            company_currency,
+            target,
+            1.0,
+        )
+
+    if explicit_fx is not None:
+        return (
+            company_currency,
+            target,
+            explicit_fx,
+        )
 
     from erpnext.setup.utils import get_exchange_rate
+
     try:
-        fx = get_exchange_rate(target, company_currency, nowdate())
+        fx = get_exchange_rate(
+            target,
+            company_currency,
+            nowdate(),
+        )
     except Exception:
         fx = None
-    if not fx:
+
+    if fx in (None, "", 0, 0.0):
         frappe.throw(
             f"This invoice would be in {target} but the company books in "
             f"{company_currency}, and no exchange rate is configured for "
-            f"{target} → {company_currency}. Add a Currency Exchange record, or "
-            f"pass an explicit conversion_rate (the payment-first flow, where "
-            f"the received amount and rate are already known)."
+            f"{target} → {company_currency}. Add a Currency Exchange record, "
+            "or pass an explicit conversion_rate (the payment-first flow, "
+            "where the received amount and rate are already known)."
         )
-    return company_currency, target, flt(fx)
+
+    resolved_fx = _validated_conversion_rate(
+        fx,
+        "Resolved exchange rate",
+    )
+
+    return (
+        company_currency,
+        target,
+        resolved_fx,
+    )
+
+
+def _currency_to_company_fx(
+    company,
+    currency,
+    *,
+    company_currency=None,
+    fx_cache=None,
+):
+    """Resolve one currency -> company-currency FX rate.
+
+    This helper is deliberately independent of invoice-target selection.
+    """
+    source = _currency_code(currency)
+    company_currency = (
+        _currency_code(company_currency)
+        or _currency_code(
+            frappe.get_cached_value(
+                "Company", company, "default_currency"
+            )
+        )
+    )
+
+    if not company_currency:
+        frappe.throw(
+            f"Company '{company}' has no Default Currency configured."
+        )
+    if not source:
+        frappe.throw(
+            "Cannot resolve an exchange rate because the source currency is blank."
+        )
+    if source == company_currency:
+        return 1.0
+
+    key = (company, source)
+    if fx_cache is not None and key in fx_cache:
+        return fx_cache[key]
+
+    from erpnext.setup.utils import get_exchange_rate
+
+    try:
+        fx = get_exchange_rate(source, company_currency, nowdate())
+    except Exception:
+        fx = None
+
+    if fx in (None, "", 0, 0.0):
+        frappe.throw(
+            f"No exchange rate configured for {source} → {company_currency}. "
+            "Add a Currency Exchange record before billing."
+        )
+
+    resolved = _validated_conversion_rate(
+        fx,
+        f"Exchange rate {source} → {company_currency}",
+    )
+    if fx_cache is not None:
+        fx_cache[key] = resolved
+    return resolved
+
+
+def _convert_billing_rate(
+    rate,
+    source_currency,
+    target_currency,
+    company,
+    customer,
+    *,
+    company_currency=None,
+    target_to_company=None,
+    fx_cache=None,
+):
+    """Restate one typed billing rate into target_currency.
+
+    All FX is expressed as currency -> company currency. Cross-currency
+    conversion is therefore:
+
+        amount_in_target =
+            amount_in_source
+            * source_to_company
+            / target_to_company
+
+    A non-zero rate without a source currency is invalid money and is
+    refused rather than relabelled.
+    """
+    value = flt(rate)
+    if not value:
+        return 0.0
+
+    source = (source_currency or "").strip()
+    target = (target_currency or "").strip()
+
+    if not source:
+        frappe.throw(
+            "A non-zero billing rate has no source currency. "
+            "Set the project's/Price List's currency before billing."
+        )
+    if not target:
+        frappe.throw(
+            "Cannot calculate a billing rate because the invoice currency "
+            "could not be resolved."
+        )
+
+    if source == target:
+        return value
+
+    company_currency = (
+        (company_currency or "").strip()
+        or frappe.get_cached_value(
+            "Company", company, "default_currency"
+        )
+    )
+    if not company_currency:
+        frappe.throw(
+            f"Company '{company}' has no Default Currency configured."
+        )
+
+    def to_company(currency_code):
+        if currency_code == company_currency:
+            return 1.0
+
+        if (
+            currency_code == target
+            and target_to_company not in (None, "")
+        ):
+            resolved = flt(target_to_company)
+            if resolved > 0:
+                return resolved
+
+        return _currency_to_company_fx(
+            company,
+            currency_code,
+            company_currency=company_currency,
+            fx_cache=fx_cache,
+        )
+
+    source_fx = to_company(source)
+    target_fx = to_company(target)
+
+    if source_fx <= 0 or target_fx <= 0:
+        frappe.throw(
+            f"Cannot convert billing rate from {source} to {target}: "
+            "the required exchange rate is invalid."
+        )
+
+    return flt(value * source_fx / target_fx)
+
+
+def _effective_billing_rate(
+    *,
+    row_rate,
+    row_currency,
+    project_rate,
+    project_currency,
+    client_rate,
+    company_currency,
+    target_currency,
+    company,
+    customer,
+    target_to_company=None,
+    fx_cache=None,
+):
+    """Resolve most-specific rate and preserve its source currency.
+
+    Hierarchy:
+      1. Timesheet row rate      -> Timesheet.currency
+      2. BP Project hourly rate  -> BP Project.currency
+      3. ERPNext Item Price      -> Item Price.currency
+
+    Timer-created Timesheets are deliberately kept in company currency,
+    but rows entered directly in ERPNext may legitimately use another
+    Timesheet currency. Never infer their unit from the project/company.
+    """
+    row_value = flt(row_rate)
+    project_value = flt(project_rate)
+
+    client_value = 0.0
+    client_currency = None
+    if client_rate and hasattr(client_rate, "get"):
+        client_value = flt(client_rate.get("rate"))
+        client_currency = client_rate.get("currency")
+
+    if row_value:
+        value = row_value
+        source_currency = row_currency
+    elif project_value:
+        value = project_value
+        source_currency = project_currency
+    elif client_value:
+        value = client_value
+        source_currency = client_currency
+    else:
+        return 0.0
+
+    return _convert_billing_rate(
+        value,
+        source_currency,
+        target_currency,
+        company,
+        customer,
+        company_currency=company_currency,
+        target_to_company=target_to_company,
+        fx_cache=fx_cache,
+    )
+
+
+def _validate_invoice_period_contract(period):
+    """Reject unsupported date-scoped invoice requests.
+
+    Invoice selection is intentionally the all-time currently-unbilled
+    billable balance. Keeping `period` in generate_invoice's public Python
+    signature lets legacy/external callers fail with an explicit financial
+    contract error instead of having the value silently ignored.
+    """
+    if period is None:
+        return
+
+    if isinstance(period, str) and not period.strip():
+        return
+
+    frappe.throw(
+        "Period-scoped invoice generation is not supported. "
+        "Omit 'period' to invoice all currently-unbilled billable hours. "
+        "Use the task filter when you need to invoice specific approved work."
+    )
 
 
 @frappe.whitelist()
@@ -596,15 +1136,18 @@ def generate_invoice(project, period=None, tasks=None,
     get_gl_entries uses `item.project or self.project`, so every contributing
     project's billed figure and GL rows stay correct with no extra work here.
 
-    The header `project` field is set only when invoicing exactly one project.
-    Leaving it blank for a batch is deliberate: a single header project would
-    be a lie about the other N-1, and it also keeps ERPNext's validate_proj_cust
-    (which only fires when a header project is set) from rejecting the invoice.
+    The header `project` is populated even for a batch, using the first
+    selected ERPNext Project, but ONLY as an ERPNext Timesheet-writeback safety
+    sentinel. It is not the business attribution for the invoice. Every invoice
+    item carries its own ERPNext Project and all BatchProjects reporting/history
+    must treat those item-level values as authoritative. See the writeback
+    safety comment below where the header is assigned.
 
-    `period` is accepted for call-signature symmetry with the Money tab's
-    period selector but doesn't scope what's invoiced: like the Money tab's
-    "unbilled" figure (intentionally all-time — "what could I invoice right
-    now"), this generates exactly that figure, not a date-windowed subset.
+    `period` remains in the public signature only for compatibility with
+    older/external callers. Period-scoped invoice generation is not currently
+    implemented: any non-empty value is rejected explicitly below. Omitting it
+    invoices the same all-time currently-unbilled balance shown by the Money
+    tab's Unbilled figure.
 
     Draft only — submission (and the ERPNext-side billed-hours writeback
     that follows from it) stays a deliberate human act in ERPNext. Mirrors
@@ -616,6 +1159,12 @@ def generate_invoice(project, period=None, tasks=None,
         _check_permission(_p, "BP Admin")
         access.require_capability(_p, "view_money")
     require_feature("billing_writeback")
+
+    # Financial selectors must never be accepted and then ignored. Validate
+    # this before candidate SQL, source reservation, pricing or draft creation.
+    _validate_invoice_period_contract(period)
+
+    expected_amount = _validated_expected_amount(amount)
 
     docs = [frappe.get_doc("BP Project", p) for p in project_names]
     doc = docs[0]
@@ -638,27 +1187,48 @@ def generate_invoice(project, period=None, tasks=None,
             "These projects belong to different clients (" + ", ".join(clients) +
             ") — one invoice can only bill one client."
         )
-    # Rates are denominated in each project's own currency, so bundling
-    # projects that disagree would put numbers in different units on the same
-    # invoice with a single currency label — silently wrong money.
-    proj_currencies = sorted({(d.currency or "").strip() for d in docs if (d.currency or "").strip()})
-    if len(proj_currencies) > 1:
+    # A Sales Invoice belongs to exactly one ERPNext ledger company.
+    # Normalize optional BP Project.company through the global default BEFORE
+    # candidate SQL so blank-company projects cannot make this choice depend
+    # on project order.
+    company = _validated_invoice_company(docs)
+
+    # Every source rate retains its own typed currency, so multiple project
+    # currencies are financially valid ONLY after one target invoice currency
+    # is chosen explicitly. Never pick one project's currency by list order.
+    proj_currencies = sorted({
+        (d.currency or "").strip()
+        for d in docs
+        if (d.currency or "").strip()
+    })
+
+    explicit_currency = _currency_code(currency)
+
+    if len(proj_currencies) > 1 and not explicit_currency:
         frappe.throw(
-            "These projects are priced in different currencies (" +
-            ", ".join(proj_currencies) + ") — one invoice can only be in one "
-            "currency. Invoice them separately, or pass an explicit currency "
-            "and conversion_rate."
+            "These projects are priced in different currencies ("
+            + ", ".join(proj_currencies)
+            + "). Choose an explicit invoice currency before combining them. "
+            "The conversion rate may be omitted when ERPNext has the required "
+            "Currency Exchange records."
         )
 
-    companies = sorted({d.company for d in docs if d.company})
-    if len(companies) > 1:
-        frappe.throw(
-            "These projects belong to different companies (" + ", ".join(companies) +
-            ") — one invoice can only post to one company."
-        )
+    # Validate a caller-supplied financial selector before candidate SQL or
+    # source reservation. The resolver later validates its relationship to
+    # the actual target/company currency.
+    explicit_conversion_rate = _validated_conversion_rate(
+        conversion_rate,
+        "Explicit conversion rate",
+    )
 
     erp_projects = [d.erpnext_project for d in docs]
-    rate_by_erp = {d.erpnext_project: flt(d.hourly_rate or 0) for d in docs}
+    project_rate_by_erp = {
+        d.erpnext_project: frappe._dict({
+            "rate": flt(d.hourly_rate or 0),
+            "currency": (d.currency or "").strip() or None,
+        })
+        for d in docs
+    }
     name_by_erp = {d.erpnext_project: d.project_name for d in docs}
     multi = len(docs) > 1
 
@@ -679,6 +1249,7 @@ def generate_invoice(project, period=None, tasks=None,
         """
         SELECT tsd.name, tsd.parent AS timesheet, tsd.custom_bp_task AS bp_task,
                tsd.hours, tsd.billing_hours, tsd.billing_rate, tsd.billing_amount,
+               ts.currency AS timesheet_currency,
                tsd.activity_type, tsd.description, tsd.from_time, tsd.to_time,
                tsd.project_name, tsd.project AS erp_project
         FROM `tabTimesheet Detail` tsd
@@ -702,25 +1273,15 @@ def generate_invoice(project, period=None, tasks=None,
             + " (Hours on tasks awaiting or refused approval are held back.)"
         )
 
-    # ERPNext stamps tsd.sales_invoice only when the SI is SUBMITTED, so the
-    # unbilled query above still returns these rows while a generated draft
-    # sits unsubmitted in ERPNext — a second click here would mint a duplicate
-    # draft double-billing the same hours. Refuse and point at the draft
-    # instead (same idempotency pattern as the SO button's custom_bp_project).
-    covering_draft = frappe.db.sql(
-        """
-        SELECT DISTINCT sit.parent
-        FROM `tabSales Invoice Timesheet` sit
-        JOIN `tabSales Invoice` si ON si.name = sit.parent AND si.docstatus = 0
-        WHERE sit.timesheet_detail IN %(details)s
-        """,
-        {"details": tuple(r.name for r in rows)},
+    # Serialize the exact financial source rows before any pricing or draft
+    # construction. These FOR UPDATE locks remain owned by this transaction
+    # until the Sales Invoice is inserted and the explicit commit near the end
+    # of this method completes. A second overlapping request therefore waits,
+    # then re-checks current committed state rather than minting another draft.
+    guard_timesheet_details(
+        [r.name for r in rows],
+        enforce_all_sources=True,
     )
-    if covering_draft:
-        frappe.throw(
-            f"Draft Sales Invoice {covering_draft[0][0]} already covers these hours — "
-            "submit or delete it in ERPNext first."
-        )
 
     # Same billing_rate-or-project-rate fallback the Money tab's unbilled
     # figure already uses (bp-gateway internal/insights/money.go) — a row with billing_rate=0 (e.g. a Timesheet Detail
@@ -739,49 +1300,61 @@ def generate_invoice(project, period=None, tasks=None,
     #      project for a year" case.
     #   4. nothing -> 0, and the caller is told rather than silently billing
     #      real hours at zero (see the zero-rate guard below).
-    # Resolved BEFORE rates are priced: converting a company-currency
-    # billing_rate into the invoice's currency needs to know that currency
+    # Resolved BEFORE rates are priced: converting any typed source rate
+    # into the invoice's currency needs to know that target currency
     # first. Decided explicitly, never defaulted silently — see
     # _resolve_invoice_currency() for why falling back to company currency
     # was actively wrong for foreign clients.
-    company = doc.company or frappe.defaults.get_global_default("company")
+    # `company` was normalized and validated across every selected project
+    # above. Never derive it again from the first project.
     company_currency, inv_currency, fx = _resolve_invoice_currency(
-        company, doc.client, currency, conversion_rate,
-        project_currency=(proj_currencies[0] if proj_currencies else None),
+        company,
+        doc.client,
+        explicit_currency,
+        explicit_conversion_rate,
+        project_currency=(
+            proj_currencies[0]
+            if len(proj_currencies) == 1
+            else None
+        ),
     )
 
     service_item = _service_item()
     client_rate = _price_list_rate(doc.client, service_item)
-    for r in rows:
-        # Timesheet Detail.billing_rate is stored in COMPANY currency (see
-        # timers.py's _rate_in_company_currency). When this invoice is in a
-        # different currency, restate it — otherwise a 6875 NPR/h row would be
-        # billed as 6875 USD/h. The project/client fallbacks are already in the
-        # project's own currency, so they need no conversion.
-        row_rate = flt(r.billing_rate)
-        if row_rate and inv_currency != company_currency and fx:
-            row_rate = row_rate / flt(fx)
-        eff_rate = (
-            row_rate
-            or rate_by_erp.get(r.erp_project, 0)
-            or (client_rate or 0)
-        )
-        r.eff_rate = eff_rate
-        r.eff_amount = round(flt(r.billing_hours or r.hours) * eff_rate, 2)
+    rate_fx_cache = {}
 
-    # Billing real hours at 0 permanently marks them billed for nothing —
-    # unrecoverable without a credit note, and ERPNext doesn't even unbill
-    # timesheets on a return (frappe/erpnext#51131). Refuse instead, and name
-    # the projects whose rate is missing so it's actionable.
-    zero_rate_projects = sorted({
-        name_by_erp.get(r.erp_project, r.erp_project) for r in rows if not r.eff_rate
-    })
-    if zero_rate_projects:
-        frappe.throw(
-            "No billing rate resolved for: " + ", ".join(zero_rate_projects) +
-            ". Set an hourly rate on the project, or a Price List rate for the "
-            "client, before invoicing — billing hours at zero can't be undone."
+    for r in rows:
+        project_rate = project_rate_by_erp.get(
+            r.erp_project, frappe._dict()
         )
+
+        eff_rate = _effective_billing_rate(
+            row_rate=r.billing_rate,
+            row_currency=r.timesheet_currency,
+            project_rate=project_rate.get("rate"),
+            project_currency=project_rate.get("currency"),
+            client_rate=client_rate,
+            company_currency=company_currency,
+            target_currency=inv_currency,
+            company=company,
+            customer=doc.client,
+            target_to_company=fx,
+            fx_cache=rate_fx_cache,
+        )
+
+        r.eff_rate = eff_rate
+        r.eff_amount = _billing_row_amount(
+            r,
+            eff_rate,
+        )
+
+    # The preview endpoint calls this same validator. A row with persisted
+    # zero billing_hours needs no rate; real billing hours must never silently
+    # become a zero-value financial source.
+    _validate_resolved_billing_rates(
+        rows,
+        name_by_erp,
+    )
 
     # Grouped by (project, task): one line per task, never merging the same
     # task key across projects, so each line can carry its own project tag.
@@ -844,7 +1417,7 @@ def generate_invoice(project, period=None, tasks=None,
     # configured for it. Let set_missing_values default to company currency.
 
     for (erp_project, bp_task), task_rows in by_task.items():
-        hours = round(sum(flt(r.billing_hours or r.hours) for r in task_rows), 2)
+        hours = round(sum(_authoritative_billing_hours(r) for r in task_rows), 2)
         # NOT `amount` — that's this function's own parameter (the
         # payment-first expected total). Reusing the name here silently
         # overwrote it with the last line's subtotal, so the assertion below
@@ -890,7 +1463,7 @@ def generate_invoice(project, period=None, tasks=None,
         si.append("timesheets", {
             "time_sheet": r.timesheet,
             "timesheet_detail": r.name,
-            "billing_hours": r.billing_hours or r.hours,
+            "billing_hours": _authoritative_billing_hours(r),
             "billing_amount": r.eff_amount,
             "activity_type": r.activity_type,
             "description": r.description,
@@ -923,20 +1496,18 @@ def generate_invoice(project, period=None, tasks=None,
     # the decimal is the failure mode being guarded against. If the computed
     # total differs we refuse and show both numbers, so a human fixes the
     # rates/hours — rather than silently writing an invoice that reconciles
-    # against nothing.
-    if amount not in (None, ""):
-        expected = flt(amount)
-        # From our own resolved rows, NOT si.items — item `amount` is only
-        # populated by calculate_taxes_and_totals() during validate(), which
-        # hasn't run yet at this point, so reading it here always yields 0.
-        computed = round(sum(r.eff_amount for r in rows), 2)
-        if abs(computed - expected) > 0.01:
-            frappe.throw(
-                f"Computed total {computed} {inv_currency} does not match the "
-                f"expected {expected} {inv_currency}. Nothing was created. "
-                "Adjust the hours or rates so the invoice matches the amount "
-                "actually received, then try again."
-            )
+    # Payment-first is a FINAL ERPNext document invariant, not a comparison
+    # against BatchProjects' intermediate row math. Store the already-received
+    # amount only in transient document flags. Frappe runs the Sales Invoice
+    # validate doc-event hook after ERPNext has calculated item amounts,
+    # taxes/charges and rounded totals, but before db_insert().
+    if expected_amount is not None:
+        si.flags.bp_expected_received_amount = (
+            expected_amount
+        )
+        si.flags.bp_expected_received_currency = (
+            inv_currency
+        )
 
     si.insert(ignore_permissions=True)
     # ProjectMoney.vue's "Open" toast action deep-links straight to
@@ -953,7 +1524,11 @@ def generate_invoice(project, period=None, tasks=None,
         "currency": si.currency,
         "conversion_rate": si.conversion_rate,
         "grand_total": si.grand_total,
-        "hours_invoiced": round(sum(flt(r.billing_hours or r.hours) for r in rows), 2),
+        # #34 validates payment-first against this same ERPNext payable
+        # concept. Keep grand_total for compatibility, but expose the value a
+        # customer actually owes after ERPNext rounding.
+        "payable_total": _sales_invoice_payable_total(si),
+        "hours_invoiced": round(sum(_authoritative_billing_hours(r) for r in rows), 2),
         # Per-project breakdown of what went onto this one invoice — the
         # batch caller needs it to show "6 projects, $600" without re-querying.
         "projects": [
@@ -965,7 +1540,7 @@ def generate_invoice(project, period=None, tasks=None,
                     sum(r.eff_amount for r in rows if r.erp_project == d.erpnext_project), 2
                 ),
                 "hours": round(
-                    sum(flt(r.billing_hours or r.hours) for r in rows
+                    sum(_authoritative_billing_hours(r) for r in rows
                         if r.erp_project == d.erpnext_project), 2
                 ),
             }
@@ -1001,11 +1576,24 @@ def get_batch_invoice_candidates():
     if not projects:
         return []
 
-    by_erp = {p.erpnext_project: p for p in projects}
+    by_erp = {
+        p.erpnext_project: p
+        for p in projects
+    }
+
+    name_by_erp = {
+        p.erpnext_project: p.project_name
+        for p in projects
+    }
     rows = frappe.db.sql(
         """
-        SELECT tsd.project AS erp_project, tsd.hours, tsd.billing_hours,
-               tsd.billing_rate
+        SELECT
+               tsd.name AS name,
+               tsd.project AS erp_project,
+               tsd.hours,
+               tsd.billing_hours,
+               tsd.billing_rate,
+               ts.currency AS timesheet_currency
         FROM `tabTimesheet Detail` tsd
         JOIN `tabTimesheet` ts ON ts.name = tsd.parent AND ts.docstatus = 1
         LEFT JOIN `tabBP Task` bt ON bt.name = tsd.custom_bp_task
@@ -1018,75 +1606,234 @@ def get_batch_invoice_candidates():
         as_dict=True,
     )
 
+    # Submitted Timesheets may still be reserved by a Draft Sales Invoice:
+    # ERPNext does not stamp Timesheet Detail.sales_invoice until submit.
+    # Use the same claimant reader as generation, but deliberately without
+    # FOR UPDATE because this endpoint is read-only.
+    claimed_details = (
+        get_live_claimed_timesheet_details(
+            [
+                r.get("name")
+                for r in rows
+                if r.get("name")
+            ]
+        )
+    )
+
+    if claimed_details:
+        rows = [
+            r
+            for r in rows
+            if r.get("name")
+            not in claimed_details
+        ]
+
     service_item = _service_item()
     client_rate_cache = {}
+    effective_company_cache = {}
     fx_cache = {}
+    preview_currency_cache = {}
     totals = {}
+
     for r in rows:
         p = by_erp.get(r.erp_project)
         if not p:
             continue
+
         if p.client not in client_rate_cache:
-            client_rate_cache[p.client] = _price_list_rate(p.client, service_item)
-        # Timesheet Detail.billing_rate is in COMPANY currency; this screen
-        # quotes the project's currency (which is what generate_invoice will
-        # actually bill in). Convert with the same rate, or the figure shown
-        # here differs from the invoice that gets created — the one thing this
-        # endpoint exists to guarantee against.
-        row_rate = flt(r.billing_rate)
-        pc = (p.currency or "").strip()
-        if row_rate and pc:
-            key = (pc, p.company)
-            if key not in fx_cache:
-                try:
-                    _cc, _tc, _fx = _resolve_invoice_currency(p.company, p.client, None, None, pc)
-                    fx_cache[key] = _fx if _tc != _cc else 1.0
-                except Exception:
-                    fx_cache[key] = 1.0
-            if fx_cache[key]:
-                row_rate = row_rate / flt(fx_cache[key])
-        eff_rate = (
-            row_rate
-            or flt(p.hourly_rate or 0)
-            or (client_rate_cache[p.client] or 0)
+            client_rate_cache[p.client] = _price_list_rate(
+                p.client, service_item
+            )
+
+        if p.name not in effective_company_cache:
+            effective_company_cache[p.name] = (
+                _effective_project_company(p)
+            )
+
+        effective_company = effective_company_cache[p.name]
+
+        project_currency = (p.currency or "").strip() or None
+        currency_key = (
+            effective_company,
+            p.client,
+            project_currency,
         )
-        hrs = flt(r.billing_hours or r.hours)
-        agg = totals.setdefault(r.erp_project, {"hours": 0.0, "amount": 0.0})
+
+        if currency_key not in preview_currency_cache:
+            company_currency, preview_currency, preview_fx = (
+                _resolve_invoice_currency(
+                    effective_company,
+                    p.client,
+                    None,
+                    None,
+                    project_currency,
+                )
+            )
+            preview_currency_cache[currency_key] = (
+                company_currency,
+                preview_currency,
+                preview_fx,
+            )
+
+        company_currency, preview_currency, preview_fx = (
+            preview_currency_cache[currency_key]
+        )
+
+        eff_rate = _effective_billing_rate(
+            row_rate=r.billing_rate,
+            row_currency=r.timesheet_currency,
+            project_rate=p.hourly_rate,
+            project_currency=project_currency,
+            client_rate=client_rate_cache[p.client],
+            company_currency=company_currency,
+            target_currency=preview_currency,
+            company=effective_company,
+            customer=p.client,
+            target_to_company=preview_fx,
+            fx_cache=fx_cache,
+        )
+
+        r.eff_rate = eff_rate
+
+        hrs = _authoritative_billing_hours(r)
+        agg = totals.setdefault(
+            r.erp_project,
+            {
+                "hours": 0.0,
+                "amount": 0.0,
+                "currency": preview_currency,
+            },
+        )
         agg["hours"] += hrs
-        agg["amount"] += hrs * eff_rate
+        agg["amount"] += _billing_row_amount(
+            r,
+            eff_rate,
+        )
+
+    # Same fail-closed contract as generate_invoice(). Do not advertise real
+    # billable hours as a valid zero-value candidate.
+    _validate_resolved_billing_rates(
+        rows,
+        name_by_erp,
+    )
 
     out = {}
     for erp, agg in totals.items():
         p = by_erp[erp]
-        entry = out.setdefault(p.client, {
-            "client": p.client, "company": p.company, "projects": [],
+        effective_company = effective_company_cache[p.name]
+        group_key = (
+            p.client,
+            effective_company,
+        )
+
+        entry = out.setdefault(group_key, {
+            "client": p.client,
+            "company": effective_company,
+            "projects": [],
             "currencies": set(),
         })
-        entry["currencies"].add((p.currency or "").strip() or None)
+        entry["currencies"].add(agg["currency"] or None)
         entry["projects"].append({
             "bp_project": p.name,
             "project_name": p.project_name,
             "erpnext_project": erp,
-            "currency": p.currency or None,
+            "company": effective_company,
+            "currency": agg["currency"] or None,
             "hours": round(agg["hours"], 2),
             "amount": round(agg["amount"], 2),
         })
 
     result = []
-    for client, entry in out.items():
-        currencies = sorted(c for c in entry["currencies"] if c)
+    for (client, company), entry in out.items():
+        currencies = sorted(
+            c
+            for c in entry["currencies"]
+            if c
+        )
+
+        currency_total_map = {}
+
+        for project_row in entry["projects"]:
+            code = project_row["currency"]
+
+            if not code:
+                continue
+
+            currency_total_map[code] = (
+                currency_total_map.get(code, 0.0)
+                + project_row["amount"]
+            )
+
+        currency_totals = [
+            {
+                "currency": code,
+                "amount": round(
+                    currency_total_map[code],
+                    2,
+                ),
+            }
+            for code in sorted(currency_total_map)
+        ]
+
+        mixed_currency = len(currencies) > 1
+
+        if mixed_currency:
+            sorted_projects = sorted(
+                entry["projects"],
+                key=lambda project_row: (
+                    project_row.get("currency") or "",
+                    project_row.get("project_name") or "",
+                    project_row.get("bp_project") or "",
+                ),
+            )
+        else:
+            sorted_projects = sorted(
+                entry["projects"],
+                key=lambda project_row: (
+                    -project_row["amount"],
+                    project_row.get("project_name") or "",
+                    project_row.get("bp_project") or "",
+                ),
+            )
+
         result.append({
             "client": client,
             "company": entry["company"],
-            # Surfaced so the screen can warn BEFORE the user selects a mix
-            # that generate_invoice would refuse — a batch must be one currency.
             "currencies": currencies,
-            "mixed_currency": len(currencies) > 1,
-            "projects": sorted(entry["projects"], key=lambda x: -x["amount"]),
-            "total_amount": round(sum(p["amount"] for p in entry["projects"]), 2),
-            "total_hours": round(sum(p["hours"] for p in entry["projects"]), 2),
+            "currency_totals": currency_totals,
+            "mixed_currency": mixed_currency,
+            "projects": sorted_projects,
+            # A scalar sum across unlike currencies is not money.
+            "total_amount": (
+                None
+                if mixed_currency
+                else round(
+                    sum(
+                        p["amount"]
+                        for p in entry["projects"]
+                    ),
+                    2,
+                )
+            ),
+            "total_hours": round(
+                sum(
+                    p["hours"]
+                    for p in entry["projects"]
+                ),
+                2,
+            ),
         })
-    result.sort(key=lambda c: -c["total_amount"])
+
+    # Do not rank independent customer/company groups by monetary totals when
+    # those totals may be denominated in unrelated currencies.
+    result.sort(
+        key=lambda entry: (
+            -entry["total_hours"],
+            entry["client"],
+            entry["company"],
+        )
+    )
+
     return result
 
 
@@ -1104,14 +1851,39 @@ def generate_milestone_invoice(milestone):
     access.require_capability(doc.project, "view_money")
     require_feature("billing_writeback")
 
+    # Billing eligibility was checked on an unlocked snapshot above only for
+    # authorization. Financial state is re-read after deterministic locks:
+    #
+    #     BP Project → BP Milestone
+    #
+    # Project-level serialization is required because percentage milestones
+    # share one 100%-of-budget invariant across different milestone rows.
+    from batch_projects.milestone_billing import (
+        DRAFT,
+        INVOICED,
+        assert_percent_capacity,
+        lock_generation_scope,
+    )
+
+    # IMPORTANT: use the rows returned by the locking reads themselves.
+    # Ordinary SELECT/get_doc calls after waiting on FOR UPDATE can still use
+    # the transaction's older repeatable-read snapshot.
+    project, doc = lock_generation_scope(
+        doc.project,
+        doc.name,
+    )
+
     if doc.status != "Completed":
         frappe.throw("Complete this milestone before invoicing it.")
     if not doc.billing_type or doc.billing_type == "None":
         frappe.throw("Set a billing type on this milestone before invoicing it.")
-    if doc.invoice_status == "Invoiced":
-        frappe.throw(f"This milestone was already invoiced as {doc.sales_invoice}.")
+    if doc.invoice_status in (DRAFT, INVOICED):
+        state = "draft invoice" if doc.invoice_status == DRAFT else "submitted invoice"
+        frappe.throw(
+            f"This milestone already has {state} {doc.sales_invoice}. "
+            "Delete/cancel that invoice before creating another."
+        )
 
-    project = frappe.get_doc("BP Project", doc.project)
     if not project.erpnext_project:
         frappe.throw(f"Link '{project.project_name}' to an ERPNext Project before invoicing it.")
     if not project.client:
@@ -1120,31 +1892,18 @@ def generate_milestone_invoice(milestone):
     if doc.billing_type == "Fixed Amount":
         amount = flt(doc.invoice_amount)
     else:
-        # Percent of Budget — guard against invoicing past 100% of this
-        # project's budget across all its milestones. Checked against
-        # already-INVOICED siblings at the moment of invoicing, not against
-        # every configured-but-not-yet-invoiced milestone — a project can
-        # have more milestones configured with a plausible percent than will
-        # ever actually run; the harm only happens at the irreversible act of
-        # actually invoicing past 100%, so that's where the guard belongs.
-        already = flt(frappe.db.sql(
-            """
-            SELECT SUM(invoice_percent) FROM `tabBP Milestone`
-            WHERE project = %(project)s AND billing_type = 'Percent of Budget'
-              AND invoice_status = 'Invoiced' AND name != %(name)s
-            """,
-            {"project": doc.project, "name": doc.name},
-        )[0][0] or 0)
-        total_pct = already + flt(doc.invoice_percent)
-        if total_pct > 100:
-            frappe.throw(
-                f"Invoicing this milestone at {flt(doc.invoice_percent)}% would bring this "
-                f"project's total invoiced-by-percent to {total_pct}%, over its 100% budget "
-                f"({already}% already invoiced across other milestones)."
-            )
+        # A Draft invoice already reserves part of this project's commercial
+        # budget even though it has not reached the ledger yet. Count Draft +
+        # Invoiced siblings while the BP Project row lock serializes different
+        # milestones racing for the same remaining percentage.
+        assert_percent_capacity(
+            doc.project,
+            doc.name,
+            doc.invoice_percent,
+        )
         amount = flt(project.budget_amount) * flt(doc.invoice_percent) / 100
 
-    company = project.company or frappe.defaults.get_global_default("company")
+    company = _effective_project_company(project)
     income_account = frappe.db.get_value("Company", company, "default_income_account")
     if not income_account:
         frappe.throw(f"Set a Default Income Account on Company '{company}' before invoicing.")
@@ -1169,6 +1928,7 @@ def generate_milestone_invoice(milestone):
     si.append("items", {
         "item_name": doc.title,
         "description": doc.title,
+        "project": project.erpnext_project,
         "qty": 1,
         "rate": amount,
         "income_account": income_account,
@@ -1190,8 +1950,15 @@ def generate_milestone_invoice(milestone):
     si.conversion_rate = fx
     si.insert(ignore_permissions=True)
 
-    doc.db_set("invoice_status", "Invoiced", update_modified=False)
-    doc.db_set("sales_invoice", si.name, update_modified=False)
+    frappe.db.set_value(
+        "BP Milestone",
+        doc.name,
+        {
+            "invoice_status": DRAFT,
+            "sales_invoice": si.name,
+        },
+        update_modified=False,
+    )
     # The "Open" toast action deep-links straight to /app/sales-invoice/<name>
     # — same zero-native-ERPNext-role gap ensure_erp_doc_access exists for,
     # but this invoice has no BP Task Reference/project-field trail for that
@@ -1202,7 +1969,12 @@ def generate_milestone_invoice(milestone):
         flags={"ignore_share_permission": True})
     frappe.db.commit()
 
-    return {"ok": True, "sales_invoice": si.name, "grand_total": si.grand_total}
+    return {
+        "ok": True,
+        "sales_invoice": si.name,
+        "grand_total": si.grand_total,
+        "invoice_status": DRAFT,
+    }
 
 
 @frappe.whitelist()
@@ -1268,6 +2040,18 @@ def generate_expense_invoice(project):
     if not rows:
         frappe.throw("Nothing to invoice — no unbilled billable expenses on this project.")
 
+    # The query above is discovery only. Another request may have selected the
+    # same sources at the same time. Lock the exact rows and continue ONLY from
+    # the authoritative current rows returned by the reservation guard.
+    #
+    # This is deliberately the same Repeatable Read rule as Timesheet billing:
+    # after waiting on FOR UPDATE, never fall back to the older candidate
+    # snapshot for financial fields.
+    rows = guard_expense_claim_details(
+        [r.name for r in rows],
+        doc.erpnext_project,
+    )
+
     for r in rows:
         r.eff_amount = round(
             flt(r.sanctioned_amount) * (1 + flt(r.markup_percent) / 100)
@@ -1279,7 +2063,7 @@ def generate_expense_invoice(project):
     for r in rows:
         by_type.setdefault(r.expense_type or "Other", []).append(r)
 
-    company = doc.company or frappe.defaults.get_global_default("company")
+    company = _effective_project_company(doc)
     income_account = frappe.db.get_value("Company", company, "default_income_account")
     if not income_account:
         frappe.throw(f"Set a Default Income Account on Company '{company}' before invoicing.")
@@ -1309,6 +2093,7 @@ def generate_expense_invoice(project):
         si.append("items", {
             "item_name": description,
             "description": description,
+            "project": doc.erpnext_project,
             "qty": 1,
             "rate": amount,
             "income_account": income_account,
@@ -1467,13 +2252,18 @@ _DOC_SPECS = {
                    "currency", "grand_total", "outstanding_amount"],
         "child_doctype": "Sales Invoice Item",
         "child_key": "items",
-        "child_fields": _ITEM_FIELDS,
+        # `project` is fetched only so the security projection below can scope
+        # a shared invoice to the requested project. It is removed before the
+        # curated response is returned.
+        "child_fields": _ITEM_FIELDS + ["project"],
     },
     "Purchase Invoice": {
         "header": ["name", "status", "posting_date", "supplier", "currency", "grand_total"],
         "child_doctype": "Purchase Invoice Item",
         "child_key": "items",
-        "child_fields": _ITEM_FIELDS,
+        # Same security projection as Sales Invoice: item.project is
+        # authoritative, with header fallback for blank legacy rows.
+        "child_fields": _ITEM_FIELDS + ["project"],
     },
     "Sales Order": {
         "header": ["name", "status", "transaction_date", "delivery_date", "customer",
@@ -1522,6 +2312,85 @@ def _erp_project_for(project: str) -> str:
     return erp_project
 
 
+def _scope_sales_invoice_items(
+    children,
+    header_project,
+    erp_project,
+):
+    """Return only Sales Invoice Item rows attributable to `erp_project`.
+
+    Blank item project inherits the header project for historical/single-project
+    invoices. The internal `project` field is removed again from the curated
+    response so the existing drawer wire shape stays stable.
+    """
+    scoped = []
+
+    for child in children:
+        item_project = (
+            child.get("project")
+            or header_project
+        )
+
+        if item_project != erp_project:
+            continue
+
+        row = dict(child)
+        row.pop("project", None)
+        scoped.append(row)
+
+    return scoped
+
+
+def _scope_purchase_invoice_items(
+    children,
+    header_project,
+    erp_project,
+):
+    """Return only Purchase Invoice Item rows attributable to `erp_project`.
+
+    ERPNext accounting uses item.project or the Purchase Invoice header
+    project. Mirror that exact precedence here, then remove the internal
+    project field so the existing curated Money Drawer wire shape is stable.
+    """
+    scoped = []
+
+    for child in children:
+        item_project = (
+            child.get("project")
+            or header_project
+        )
+
+        if item_project != erp_project:
+            continue
+
+        row = dict(child)
+        row.pop("project", None)
+        scoped.append(row)
+
+    return scoped
+
+
+def _scope_sales_invoice_timesheets(
+    rows,
+    detail_project_by_name,
+    erp_project,
+):
+    """Project-scope a shared invoice's backing Timesheet references.
+
+    Sales Invoice Timesheet itself does not carry project. Its
+    `timesheet_detail` pointer is authoritative, so resolve that exact source
+    row to Timesheet Detail.project before returning hours/amounts.
+    """
+    return [
+        row
+        for row in rows
+        if row.get("timesheet_detail")
+        and detail_project_by_name.get(
+            row.get("timesheet_detail")
+        ) == erp_project
+    ]
+
+
 def _tenant_ok(doctype: str, name: str, erp_project: str) -> bool:
     """THE security boundary: does this ERPNext doc actually belong to this
     project? Checked with raw field reads (frappe.db.get_value/exists) so a
@@ -1535,8 +2404,64 @@ def _tenant_ok(doctype: str, name: str, erp_project: str) -> bool:
         # No header project set — fall back to any time_logs row landing on
         # this project (mirrors how the timer itself stamps rows: project
         # is set per-row, parent_project is never set by our own code).
-        return bool(frappe.db.exists("Timesheet Detail", {"parent": name, "project": erp_project}))
-    return frappe.db.get_value(doctype, name, "project") == erp_project
+        return bool(frappe.db.exists(
+            "Timesheet Detail",
+            {
+                "parent": name,
+                "project": erp_project,
+            },
+        ))
+
+    if doctype == "Sales Invoice":
+        header_project = frappe.db.get_value(
+            "Sales Invoice",
+            name,
+            "project",
+        )
+
+        if header_project == erp_project:
+            return True
+
+        # Combined invoices carry business attribution on each item. Blank
+        # item projects inherit the header and are therefore already covered
+        # by the branch above.
+        return bool(frappe.db.exists(
+            "Sales Invoice Item",
+            {
+                "parent": name,
+                "project": erp_project,
+            },
+        ))
+
+    if doctype == "Purchase Invoice":
+        header_project = frappe.db.get_value(
+            "Purchase Invoice",
+            name,
+            "project",
+        )
+
+        if header_project == erp_project:
+            return True
+
+        # ERPNext posts PI accounting dimensions as item.project or the
+        # header project. A project named explicitly on an item therefore owns
+        # that slice of a shared PI even when the header names another project.
+        return bool(frappe.db.exists(
+            "Purchase Invoice Item",
+            {
+                "parent": name,
+                "project": erp_project,
+            },
+        ))
+
+    return (
+        frappe.db.get_value(
+            doctype,
+            name,
+            "project",
+        )
+        == erp_project
+    )
 
 
 @frappe.whitelist()
@@ -1590,6 +2515,32 @@ def get_erp_doc_summary(project, doctype, name):
         fields=spec["child_fields"], order_by="idx asc",
     )
 
+    if doctype == "Sales Invoice":
+        header_project = frappe.db.get_value(
+            "Sales Invoice",
+            name,
+            "project",
+        )
+
+        children = _scope_sales_invoice_items(
+            children,
+            header_project,
+            erp_project,
+        )
+
+    if doctype == "Purchase Invoice":
+        header_project = frappe.db.get_value(
+            "Purchase Invoice",
+            name,
+            "project",
+        )
+
+        children = _scope_purchase_invoice_items(
+            children,
+            header_project,
+            erp_project,
+        )
+
     if doctype == "Timesheet":
         task_names = list({c["custom_bp_task"] for c in children if c.get("custom_bp_task")})
         task_meta = {}
@@ -1613,18 +2564,79 @@ def get_erp_doc_summary(project, doctype, name):
         # revenue drawer a dead end (user-reported). Name-only pointers per
         # the non-transitivity rule: opening one re-enters this same gate.
         ts_rows = frappe.get_all(
-            "Sales Invoice Timesheet", filters={"parent": name},
-            fields=["time_sheet", "billing_hours", "billing_amount"],
+            "Sales Invoice Timesheet",
+            filters={"parent": name},
+            fields=[
+                "time_sheet",
+                "timesheet_detail",
+                "billing_hours",
+                "billing_amount",
+            ],
             order_by="idx asc",
         )
+
+        detail_names = list({
+            r.get("timesheet_detail")
+            for r in ts_rows
+            if r.get("timesheet_detail")
+        })
+
+        detail_project_by_name = {}
+
+        if detail_names:
+            detail_project_by_name = {
+                r["name"]: r["project"]
+                for r in frappe.get_all(
+                    "Timesheet Detail",
+                    filters={
+                        "name": [
+                            "in",
+                            detail_names,
+                        ],
+                    },
+                    fields=[
+                        "name",
+                        "project",
+                    ],
+                )
+            }
+
+        ts_rows = _scope_sales_invoice_timesheets(
+            ts_rows,
+            detail_project_by_name,
+            erp_project,
+        )
+
         grouped = {}
+
         for r in ts_rows:
-            if not r.time_sheet:
+            if not r.get("time_sheet"):
                 continue
-            g = grouped.setdefault(r.time_sheet, {"timesheet": r.time_sheet, "hours": 0.0, "amount": 0.0})
-            g["hours"] = round(g["hours"] + float(r.billing_hours or 0), 2)
-            g["amount"] = round(g["amount"] + float(r.billing_amount or 0), 2)
-        out["timesheets"] = list(grouped.values())
+
+            g = grouped.setdefault(
+                r["time_sheet"],
+                {
+                    "timesheet": r["time_sheet"],
+                    "hours": 0.0,
+                    "amount": 0.0,
+                },
+            )
+
+            g["hours"] = round(
+                g["hours"]
+                + float(r.get("billing_hours") or 0),
+                2,
+            )
+
+            g["amount"] = round(
+                g["amount"]
+                + float(r.get("billing_amount") or 0),
+                2,
+            )
+
+        out["timesheets"] = list(
+            grouped.values()
+        )
 
     return out
 

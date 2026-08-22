@@ -596,7 +596,7 @@ function onBarDown(e, row, mode) {
     origW: row.bar.milestone ? dayW.value : Math.max(dayW.value, row.bar.w - 3),
     origStart: win[0], origEnd: win[1],
     rowIdx: rowIndex.value[row.name],
-    hasStart: !!row.start_date, hasDue: !!row.due_date,
+    hasStart: !!(row.planned_start || row.start_date), hasDue: !!(row.planned_end || row.due_date),
     started: false, snapStart: null, snapEnd: null,
   }
   window.addEventListener('pointermove', onBarMove)
@@ -681,12 +681,16 @@ async function _applyDates(name, hasStart, hasDue, s, en) {
   const t = tasks.value.find(x => x.name === name)
   if (!t) return
   // Only touch the date fields the task actually uses — a deadline-only task
-  // (one date set) keeps being deadline-only when moved.
+  // (one date set) keeps being deadline-only when moved. A bar drag is a
+  // PLANNING act, so it writes the planned pair AND keeps the legacy
+  // start_date/due_date in sync (due-date chips/reminders keep working
+  // until the two axes are deliberately diverged per-task).
   const fields = {}
-  if (hasStart) fields.start_date = _isoDay(s)
-  if (hasDue) fields.due_date = _isoDay(en)
+  if (hasStart) { fields.planned_start = _isoDay(s); fields.start_date = _isoDay(s) }
+  if (hasDue) { fields.planned_end = _isoDay(en); fields.due_date = _isoDay(en) }
   if (!Object.keys(fields).length) return
-  const prev = { start_date: t.start_date, due_date: t.due_date }
+  const prev = { start_date: t.start_date, due_date: t.due_date,
+                 planned_start: t.planned_start, planned_end: t.planned_end }
   Object.assign(t, fields)
   tasks.value = [...tasks.value]        // rows/arrows recompute from committed state
   try {
@@ -765,25 +769,30 @@ const ctxDeps = computed(() => {
 
 function onCtxRemoveDep(d) { _removeEdge(d.from, d.to) }
 
-// "Remove from timeline" — clears both dates (backend maps "" → NULL for
-// Date fields). The bar disappears, so the toast carries its own Undo.
+// "Remove from timeline" — clears both planned and legacy dates (backend
+// maps "" → NULL for Date fields). The bar disappears, so the toast carries
+// its own Undo.
 async function onCtxClearDates(name) {
   ctxTask.value = null
   const t = tasks.value.find(x => x.name === name)
   if (!t) return
-  const prev = { start_date: t.start_date, due_date: t.due_date }
+  const prev = { start_date: t.start_date, due_date: t.due_date,
+                 planned_start: t.planned_start, planned_end: t.planned_end }
   t.start_date = null
   t.due_date = null
+  t.planned_start = null
+  t.planned_end = null
   tasks.value = [...tasks.value]
   try {
-    await updateTask(name, { start_date: '', due_date: '' })
+    await updateTask(name, { start_date: '', due_date: '', planned_start: '', planned_end: '' })
     toast.success('Removed from timeline', {
       action: {
         label: 'Undo',
         onClick: async () => {
           Object.assign(t, prev)
           tasks.value = [...tasks.value]
-          try { await updateTask(name, { start_date: prev.start_date || '', due_date: prev.due_date || '' }) }
+          try { await updateTask(name, { start_date: prev.start_date || '', due_date: prev.due_date || '',
+                                         planned_start: prev.planned_start || '', planned_end: prev.planned_end || '' }) }
           catch (err) { toast.error(err?.message || "Couldn't restore the dates") }
         },
       },
@@ -843,10 +852,13 @@ function parseDay(s) { return s ? new Date(s + 'T00:00:00') : null }
 function diffDays(a, b) { return Math.round((a - b) / DAY) }
 const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })()
 
-// task → its [start, end] window (fall back to whichever date exists)
+// task → its [start, end] window. The scheduling axis is planned_start /
+// planned_end (the plan); legacy rows carry their plan in start_date /
+// due_date, so those stay as fallbacks. Actual execution is tracked
+// separately in started_on/completed_on.
 function windowOf(t) {
-  const s = parseDay(t.start_date) || parseDay(t.due_date)
-  const e = parseDay(t.due_date) || parseDay(t.start_date)
+  const s = parseDay(t.planned_start || t.start_date) || parseDay(t.planned_end || t.due_date)
+  const e = parseDay(t.planned_end || t.due_date) || parseDay(t.planned_start || t.start_date)
   if (!s || !e) return null
   return e < s ? [e, s] : [s, e]
 }
@@ -1004,7 +1016,7 @@ function buildTaskRow(t, groupColor) {
     // mirrored it). A genuine 1-day task with both dates is a small BAR —
     // bars carry progress/avatars and will be resizable in XL-B; diamonds
     // can't be either.
-    const deadlineOnly = !(t.start_date && t.due_date)
+    const deadlineOnly = !((t.planned_start || t.start_date) && (t.planned_end || t.due_date))
     bar = { left: xOf(s), w: span * dayW.value, milestone: deadlineOnly }
   }
   let progress = null

@@ -1,0 +1,35 @@
+{
+  "name": "BP Task Sequence",
+  "module": "Batch Projects",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "issingle": 1,
+  "creation": "2026-08-14 00:00:00",
+  "modified": "2026-08-14 00:00:00",
+  "owner": "Administrator",
+  "modified_by": "Administrator",
+  "fields": [
+    {
+      "fieldname": "last_value",
+      "fieldtype": "Int",
+      "label": "Last Value",
+      "reqd": 0,
+      "read_only": 1,
+      "hidden": 1,
+      "default": "0",
+      "description": "Last issued global sequence number for BP Task.sequence_no. Bumped atomically by BP Task.before_insert (LAST_INSERT_ID pattern) — never edited by hand."
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "links": [],
+  "actions": [],
+  "custom": 0
+}

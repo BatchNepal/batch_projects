@@ -167,8 +167,8 @@ def publish_realtime_event(event: str, project: str, payload: dict) -> bool:
     fix: publish through the gateway's own plane instead.
 
     Deliberately NOT /v1/events (automation ingest) despite both ultimately
-    feeding the same Redis stream — that endpoint also LPushes to the
-    automation queue and gates on the "automations" feature; see
+    feeding Gateway-owned Redis transports — that endpoint writes to the
+    durable automation Stream and gates on the "automations" feature; see
     realtime.go's Publish doc comment for why reusing it would be wrong for
     a plane that can fire many times a second under active use (drawing
     collaboration, live board updates).

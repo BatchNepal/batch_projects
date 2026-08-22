@@ -8,11 +8,11 @@
     @click.stop="$emit('click')"
     @contextmenu.prevent="onContextMenu"
     :class="[
-      'group relative bg-overlay rounded-[7px] mb-3 py-4 px-3.5 cursor-grab active:cursor-grabbing select-none',
-      'border border-border tc-shadow',
+      'group relative bg-overlay rounded-[5px] mb-2.5 py-4 px-3.5 cursor-grab active:cursor-grabbing select-none',
+      'shadow-sm border-[1px] border-gray-200',
       'hover:border-border-secondary',
       'transition-[box-shadow,border-color,opacity,transform] duration-150 ease-[cubic-bezier(0.25,0.1,0.25,1)]',
-      isDragging ? 'opacity-40 scale-[0.97] rotate-1' : ''
+      isDragging ? 'opacity-60 scale-[0.97] rotate-1' : ''
     ]"
   >
   
@@ -28,11 +28,11 @@
     </h3>
     <p
       v-html="issue.description"
-      class="text-sm mt-1 line-clamp-2 font-medium text-muted leading-snug tracking-tight mb-3"
+      class="text-sm mt-1 line-clamp-2 font-medium text-gray-500 leading-snug tracking-tight mb-3"
     ></p>
 
     <!-- ERP references + billable -->
-    <div v-if="erpBadges.length || isBillable" class="flex items-center gap-1.5 mb-2 flex-wrap">
+    <div v-if="erpBadges.length || isBillable || issue.blocked_reason" class="flex items-center gap-1.5 mb-2 flex-wrap">
       <button
         v-for="g in erpBadges" :key="g.doctype"
         class="tc-erp-badge"
@@ -40,6 +40,11 @@
         @click.stop="$emit('open-erp-doc', g.items[0].ref_doctype, g.items[0].ref_name)"
       >{{ g.abbr }}<template v-if="g.n > 1">×{{ g.n }}</template></button>
       <span v-if="isBillable" class="tc-billable-badge" :title="`${issue.estimated_hours}h billable`">$</span>
+      <span v-if="issue.blocked_reason" class="tc-blocked-badge" :title="blockedMeta">
+        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.3 2.65a1.73 1.73 0 001.23 1.67L10.4 19.5a1.73 1.73 0 001.62 0l6.48-2.43a1.73 1.73 0 001.22-1.67V8.44a1.73 1.73 0 00-1.22-1.67l-6.48-2.43a1.73 1.73 0 00-1.62 0L3.94 6.77A1.73 1.73 0 002.7 8.44v6.96zM12 15.75h.008v.008H12v-.008z"/>
+        </svg>
+      </span>
       <button
         v-for="chip in mirrorChips" :key="chip.key"
         class="tc-mirror-chip"
@@ -272,6 +277,12 @@ const erpBadges = computed(() => {
 })
 const isBillable = computed(() => !!(props.issue.billable && props.issue.estimated_hours))
 
+const blockedMeta = computed(() => {
+  if (!props.issue.blocked_reason) return ''
+  const since = props.issue.blocked_since ? ` since ${new Date(props.issue.blocked_since).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''
+  return `${props.issue.blocked_reason}${since}`
+})
+
 function getLabelStyle (labelName) {
   const lbl = (store.projectLabels || []).find(l => l.label === labelName)
   if (!lbl)
@@ -402,6 +413,11 @@ function onContextMenu (e) {
   display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
   font-size:var(--text-xs); font-weight: 800; color: var(--success-soft-foreground);
   background: var(--success-soft); border-radius: var(--radius-sm);
+}
+.tc-blocked-badge {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  color: var(--warning-soft-foreground); background: var(--warning-soft);
+  border-radius: var(--radius-sm);
 }
 .tc-mirror-chip {
   display: inline-flex; align-items: center; height: 18px; padding: 0 6px;

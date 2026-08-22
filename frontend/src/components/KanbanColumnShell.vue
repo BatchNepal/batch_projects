@@ -25,14 +25,13 @@
 
   <div
     v-else
-    class="flex flex-col w-[330px] shrink-0 rounded-sm p-2.5 self-stretch border transition-colors duration-150"
-    :class="dragOver ? 'bg-accent-soft border-accent' : 'bg-background-secondary border-border'"
+    class="flex flex-col w-[350px] shrink-0 rounded-md py-2.5 px-2 self-stretch border transition-colors duration-150"
+    :class="dragOver ? 'bg-accent-soft border-accent' : 'bg-[#f5f5f7] border-gray-100'"
   >
     <div class="flex items-center justify-between mb-2.5 px-1.5 pb-2.5 pt-1 group">
       <div class="flex items-center gap-2.5">
         <div class="flex items-center gap-2">
-          <span v-if="color" class="inline-block size-2 rounded-full shrink-0" :style="{ background: color }" />
-          <p class="text-base font-semibold text-foreground uppercase">
+          <p class="text-base font-semibold text-[#667289] uppercase">
             {{ title }}
           </p>
         </div>
@@ -40,7 +39,7 @@
         <Transition name="kc-count" mode="out-in">
           <span
             :key="count"
-            class="text-xs font-medium text-muted px-2 py-0.5 rounded-full bg-default min-w-[20px] text-center"
+            class="text-xs font-medium text-muted px-1.5 py-0.5 rounded-full bg-gray-200  text-center"
           >
             {{ count }}
           </span>

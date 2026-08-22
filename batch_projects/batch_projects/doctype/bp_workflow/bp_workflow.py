@@ -11,6 +11,7 @@ Validation here is the SERVER-SIDE gate; the canvas UI should also validate
 client-side for UX, but this is the one that actually matters.
 """
 
+import hashlib
 import json
 
 import frappe
@@ -41,6 +42,20 @@ class BPWorkflow(Document):
         self._validate_doc_event_scope(nodes)
         self._validate_error_branches(nodes, edges)
         self._validate_no_cycles(node_ids, edges)
+        self._set_automation_definition_identity(nodes, edges)
+
+    def _set_automation_definition_identity(self, nodes, edges):
+        definition_hash = workflow_definition_hash(self, nodes, edges)
+        previous = self.get_doc_before_save()
+        previous_hash = previous.get("automation_definition_hash") if previous else None
+        previous_revision = int(previous.get("automation_revision") or 0) if previous else 0
+        if not previous:
+            self.automation_revision = max(1, int(self.automation_revision or 0))
+        elif previous_hash != definition_hash:
+            self.automation_revision = max(1, previous_revision + 1)
+        else:
+            self.automation_revision = max(1, previous_revision)
+        self.automation_definition_hash = definition_hash
 
     def _validate_json(self, fieldname):
         raw = self.get(fieldname)
@@ -207,3 +222,40 @@ def _parse(raw):
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         return []
+
+
+def workflow_definition_hash(workflow, nodes=None, edges=None):
+    """Hash only data that changes graph execution semantics."""
+    nodes = nodes if nodes is not None else _parse(workflow.nodes)
+    edges = edges if edges is not None else _parse(workflow.edges)
+    canonical = {
+        "is_active": bool(workflow.get("is_active")),
+        "scope": workflow.get("scope"),
+        "project": workflow.get("project"),
+        "project_filter": _parse(workflow.get("project_filter")),
+        "nodes": sorted((_canonical_node(node) for node in nodes), key=lambda node: node["id"]),
+        "edges": sorted((_canonical_edge(edge) for edge in edges), key=lambda edge: (
+            edge["source"], edge["target"], edge["source_handle"],
+        )),
+    }
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(encoded.encode()).hexdigest()
+
+
+def _canonical_node(node):
+    return {
+        "id": node.get("id"),
+        "type": node.get("type"),
+        "config": node.get("config") or {},
+        "disabled": bool(node.get("disabled")),
+        "retry": node.get("retry") or None,
+        "on_error": node.get("on_error") or "stop",
+    }
+
+
+def _canonical_edge(edge):
+    return {
+        "source": edge.get("source"),
+        "target": edge.get("target"),
+        "source_handle": edge.get("sourceHandle") or "",
+    }
