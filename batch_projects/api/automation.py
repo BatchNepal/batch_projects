@@ -304,6 +304,7 @@ def run_rule_node(
     action = actions[action_index]
 
     step = None
+    lock_name = None
     if idempotency_key:
         from batch_projects.workflow_execution import get_or_create_node_step
 
@@ -315,6 +316,61 @@ def run_rule_node(
                 "message": step["error_message"] or "previous attempt failed",
                 "error_code": step["error_code"] or "previous_attempt_failed",
             }}
+        # Commit the 'claimed' row now, before the conflict-retry loop below
+        # can touch it. MariaDB's REPEATABLE READ means a mid-transaction
+        # rollback never refreshes this transaction's read snapshot; only a
+        # plain rollback() does (it calls begin() to open a fresh
+        # transaction). The retry loop needs exactly that plain rollback on
+        # every attempt, to actually see a concurrent writer's committed
+        # change instead of re-reading the same stale row forever and
+        # exhausting retries on a race that already resolved. Confirmed live
+        # (2026-08-22): without this commit, that rollback silently discarded
+        # this row along with a retry that had actually succeeded, reported
+        # to the gateway as a permanent failure (RetryClass: RetryPermanent —
+        # a well-formed non-2xx reply is never retried) for an automation
+        # that had already happened.
+        frappe.db.commit()
+
+        # This commit is exactly what get_or_create_node_step's INSERT lock
+        # was relying on being held through: a second worker racing the same
+        # idempotency_key used to stay blocked on that row lock until this
+        # whole request committed (success) or rolled back (failure) — never
+        # seeing 'claimed' while we were still actually running the action.
+        # Committing early releases that lock immediately, so a second worker
+        # can now see 'claimed' and proceed to ALSO run the action while this
+        # one is still executing — safe for an idempotent action like Change
+        # Status, but a real double side effect for Add Comment/Notify/
+        # Create Issue. A session-scoped advisory lock (survives the retry
+        # loop's own commit/rollback cycles, unlike a row lock) closes that
+        # window: a second worker blocks here instead of racing into
+        # _execute. Bounded, not indefinite — a worker that's died holding it
+        # must not wedge every future redelivery of this key forever.
+        lock_name = f"bp_rule_node:{idempotency_key}"
+        acquired = frappe.db.sql("SELECT GET_LOCK(%s, %s)", (lock_name, 10))[0][0]
+        if not acquired:
+            return {"status": "Failed", "json": {
+                "message": "timed out waiting for another in-progress attempt of this exact action",
+                "error_code": "concurrent_execution_lock_timeout",
+            }}
+        try:
+            # Now holding the lock — but the OTHER worker may have finished
+            # (or even started and died) between our own claim above and
+            # acquiring it just now. FOR UPDATE bypasses REPEATABLE READ's
+            # snapshot, so this sees the true current row regardless of how
+            # long we waited for the lock.
+            current = frappe.db.sql(
+                "SELECT status, result_json FROM `tabBP Workflow Step` WHERE name=%s FOR UPDATE",
+                (step["step_id"],), as_dict=True,
+            )
+            if current and current[0].status in ("succeeded", "failed", "needs_review"):
+                cached = json.loads(current[0].result_json) if current[0].result_json else None
+                frappe.db.sql("SELECT RELEASE_LOCK(%s)", (lock_name,))
+                return cached or {"status": "Failed", "json": {
+                    "message": "previous attempt result unavailable", "error_code": "unavailable",
+                }}
+        except Exception:
+            frappe.db.sql("SELECT RELEASE_LOCK(%s)", (lock_name,))
+            raise
 
     depth = int(payload.get("depth", 0))
     frappe.flags.bp_automation_depth = depth + 1
@@ -326,7 +382,9 @@ def run_rule_node(
         # replaces) already handled exactly this with a bounded retry; this
         # entrypoint dropped it. Every task-saving action is check-and-skip
         # idempotent (see _execute's per-action-type guards), so re-running
-        # against a freshly loaded doc is safe.
+        # against a freshly loaded doc is safe. See the commit() above for
+        # why this must be a plain (transaction-restarting) rollback, not a
+        # savepoint — this step_ledger row is durable now, so it's safe.
         from frappe.exceptions import TimestampMismatchError
 
         status = message = None
@@ -360,18 +418,28 @@ def run_rule_node(
     finally:
         frappe.flags.bp_automation_depth = depth
 
-    if step is not None:
-        from batch_projects.workflow_execution import finish_node_step
+    try:
+        if step is not None:
+            from batch_projects.workflow_execution import finish_node_step
 
-        terminal = "failed" if result["status"] == "Failed" else "succeeded"
-        finish_node_step(
-            step["step_id"],
-            terminal,
-            result=result,
-            error_code=result["json"].get("error_code") if terminal == "failed" else None,
-            error_message=result["json"].get("message") if terminal == "failed" else None,
-        )
-    return result
+            # Deliberately uncaught: if this fails, the mutation above and
+            # this ledger's terminal state must fail TOGETHER (same
+            # transaction, same eventual rollback) — never a mutation that
+            # silently applied with no durable record of it, which would
+            # leave the step stuck 'claimed' and let the next redelivery of
+            # this exact key repeat the side effect.
+            terminal = "failed" if result["status"] == "Failed" else "succeeded"
+            finish_node_step(
+                step["step_id"],
+                terminal,
+                result=result,
+                error_code=result["json"].get("error_code") if terminal == "failed" else None,
+                error_message=result["json"].get("message") if terminal == "failed" else None,
+            )
+        return result
+    finally:
+        if lock_name:
+            frappe.db.sql("SELECT RELEASE_LOCK(%s)", (lock_name,))
 
 
 @frappe.whitelist()
@@ -1521,10 +1589,17 @@ def log_workflow_run(workflow=None, run_id=None, node_id=None, node_type=None, s
             attempt = 1
         _upsert_run_log(
             "BP Workflow Run",
-            {"execution": execution_id or run_id, "node_id": node_id, "attempt": attempt},
+            # Identity is (run_id, node_id, attempt) — run_id is a plain Data
+            # field, safe to match/insert on. execution is a Link to BP
+            # Workflow Execution and must stay out of the identity filter:
+            # coercing it to run_id here previously failed LinkValidationError
+            # whenever no real execution_id existed (run_id alone is not a
+            # BP Workflow Execution name) — found live by this file's own
+            # regression test after this rewrite.
+            {"run_id": run_id or execution_id, "node_id": node_id, "attempt": attempt},
             {
                 "workflow": workflow,
-                "run_id": run_id or execution_id,
+                "execution": execution_id or None,
                 "node_type": node_type,
                 "status": status,
                 "message": (message or "")[:500],
