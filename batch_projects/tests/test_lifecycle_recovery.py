@@ -174,6 +174,7 @@ class TestSeatCapacityAndTeamREST(FrappeTestCase):
             "email": email,
             "first_name": "P1",
             "enabled": 1,
+            "user_type": "System User",
         })
         doc.insert(ignore_permissions=True)
         self._users.append(email)
@@ -232,10 +233,18 @@ class TestSeatCapacityAndTeamREST(FrappeTestCase):
     @patch("batch_projects.api.board.frappe.db.sql")
     def test_update_project_members_uses_advisory_lock(self, sql, assert_seats):
         """update_project_members uses GET_LOCK for seat decision atomicity."""
+        real_sql = frappe.db.sql
+
+        def sql_side_effect(query, *args, **kwargs):
+            if "GET_LOCK" in str(query):
+                return [[1]]
+            if "RELEASE_LOCK" in str(query):
+                return [[1]]
+            return real_sql(query, *args, **kwargs)
+
+        sql.side_effect = sql_side_effect
         proj = self._make_project()
         user = self._make_user()
-        
-        sql.return_value = [[1]]  # GET_LOCK success
         
         with patch("batch_projects.api.board._check_permission"):
             with patch("batch_projects.api.board.frappe.get_doc") as get_doc:
@@ -295,8 +304,9 @@ class TestScheduleDataIntegrity(FrappeTestCase):
         self._task = doc.name
         return doc.name
 
+    @patch("batch_projects.api.automation_schedule_data._assert_gateway_service_caller")
     @patch.object(automation_schedule_data.frappe, "get_all")
-    def test_query_tasks_by_date_filters_trash(self, get_all):
+    def test_query_tasks_by_date_filters_trash(self, get_all, assert_caller):
         """query_tasks_by_date includes is_deleted:0."""
         get_all.return_value = []
         proj = self._make_project()
@@ -308,7 +318,8 @@ class TestScheduleDataIntegrity(FrappeTestCase):
         filters = get_all.call_args.kwargs["filters"]
         self.assertEqual(filters["is_deleted"], 0)
 
-    def test_get_recurring_task_returns_none_for_trashed(self):
+    @patch("batch_projects.api.automation_schedule_data._assert_gateway_service_caller")
+    def test_get_recurring_task_returns_none_for_trashed(self, assert_caller):
         """get_recurring_task returns None if task is trashed."""
         proj = self._make_project()
         task = self._make_task(proj, is_recurring=1)
@@ -318,15 +329,20 @@ class TestScheduleDataIntegrity(FrappeTestCase):
         result = automation_schedule_data.get_recurring_task(task)
         self.assertIsNone(result)
 
+    @patch("batch_projects.api.automation_schedule_data._assert_gateway_service_caller")
     @patch.object(automation_schedule_data.frappe.db, "sql")
-    def test_apply_task_occurrence_uses_for_update(self, sql):
+    def test_apply_task_occurrence_uses_for_update(self, sql, assert_caller):
         """apply_task_occurrence uses FOR UPDATE lock on source."""
+        real_sql = frappe.db.sql
+
+        def sql_side_effect(query, *args, **kwargs):
+            if "FOR UPDATE" in str(query):
+                return [frappe._dict(name="TASKX", is_deleted=0, is_recurring=1, project="PROJX")]
+            return real_sql(query, *args, **kwargs)
+
+        sql.side_effect = sql_side_effect
         proj = self._make_project()
         task = self._make_task(proj, is_recurring=1)
-        
-        sql.return_value = [
-            frappe._dict(name=task, is_deleted=0, is_recurring=1, project=proj)
-        ]
 
         mutation = {
             "idempotency_key": "test-occurrence-key-1",
