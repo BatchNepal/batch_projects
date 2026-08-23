@@ -1538,7 +1538,7 @@ def send_due_date_reminders():
     # total task count forever.
     tasks = frappe.get_all(
         "BP Task",
-        filters={"due_date": ["<=", soon_cutoff]},
+        filters={"due_date": ["<=", soon_cutoff], "is_deleted": 0},
         fields=["name", "task_key", "title", "project", "status", "due_date"],
     )
     completed_cache = {}
@@ -1596,7 +1596,7 @@ def send_daily_digest():
             continue
         tasks = frappe.get_all(
             "BP Task",
-            filters={"name": ["in", task_names]},
+            filters={"name": ["in", task_names], "is_deleted": 0},
             fields=["name", "task_key", "title", "status", "project", "due_date", "priority"],
         )
         due_today, overdue, open_tasks = [], [], []
@@ -1667,7 +1667,7 @@ def send_weekly_project_summary():
     for p in projects:
         comp = set(_completed_statuses(p.name))
         tasks = frappe.get_all(
-            "BP Task", filters={"project": p.name},
+            "BP Task", filters={"project": p.name, "is_deleted": 0},
             fields=["status", "due_date", "creation", "completed_on"],
         )
         if not tasks:
@@ -1747,7 +1747,7 @@ def run_due_soon_automations():
             completed = set()
         tasks = frappe.get_all(
             "BP Task",
-            filters={"project": project, "due_date": ["between", [str(today), str(horizon)]]},
+            filters={"project": project, "due_date": ["between", [str(today), str(horizon)]], "is_deleted": 0},
             fields=["name", "task_key", "status"],
         )
         for t in tasks:
@@ -1811,7 +1811,7 @@ def run_overdue_automations():
             completed = set()
         tasks = frappe.get_all(
             "BP Task",
-            filters={"project": project, "due_date": ["<", str(today)]},
+            filters={"project": project, "due_date": ["<", str(today)], "is_deleted": 0},
             fields=["name", "task_key", "status"],
         )
         for t in tasks:
