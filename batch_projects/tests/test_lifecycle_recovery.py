@@ -358,7 +358,7 @@ class TestScheduleDataIntegrity(FrappeTestCase):
         task = self._make_task(proj)
 
         mutation = {
-            "idempotency_key": "test-occurrence-key-1",
+            "idempotency_key": f"test-occurrence-key-{random_string(8)}",
             "recurrence_source": task,
             "project": proj,
             "title": "Occurrence",
