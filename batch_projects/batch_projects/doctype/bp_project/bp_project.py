@@ -76,6 +76,7 @@ class BPProject(Document):
         try:
             frappe.flags.in_bp_project_sync = True
             from batch_projects.api.erp_link import _auto_link_erpnext_project
+
             _auto_link_erpnext_project(self.name)
         except Exception:
             frappe.log_error(
@@ -98,9 +99,8 @@ class BPProject(Document):
         if not self.erpnext_project:
             return
 
-        changed = (
-            self.has_value_changed("status")
-            or self.has_value_changed("target_end_date")
+        changed = self.has_value_changed("status") or self.has_value_changed(
+            "target_end_date"
         )
         if not changed:
             return
@@ -108,6 +108,7 @@ class BPProject(Document):
         try:
             frappe.flags.in_bp_project_sync = True
             from batch_projects.api.erp_link import _sync_to_erpnext_project
+
             _sync_to_erpnext_project(self.name)
         except Exception:
             frappe.log_error(
@@ -132,24 +133,46 @@ class BPProject(Document):
         from batch_projects import access
 
         after = {m.user: access.normalize_role(m.role) for m in (self.members or [])}
-        before = {} if self.is_new() else {
-            r.user: access.normalize_role(r.role)
-            for r in frappe.get_all(
-                "BP Project Member", filters={"parent": self.name}, fields=["user", "role"]
-            )
-        }
+        before = (
+            {}
+            if self.is_new()
+            else {
+                r.user: access.normalize_role(r.role)
+                for r in frappe.get_all(
+                    "BP Project Member",
+                    filters={"parent": self.name},
+                    fields=["user", "role"],
+                )
+            }
+        )
 
         if after == before:
             return
 
         if self.is_new():
             if access.is_instance_admin() or after == {frappe.session.user: "Admin"}:
+                # Incremental seat check for new projects
+                from batch_projects.entitlements import (
+                    assert_seats_available,
+                    is_seated,
+                )
+
+                new_users = [u for u in after.keys() if not is_seated(u)]
+                if new_users:
+                    assert_seats_available(len(new_users))
                 return
             frappe.throw(
                 "Project members can't be set this way.", frappe.PermissionError
             )
 
         access.require(self.name, "Admin")
+
+        # Incremental seat check for member additions
+        from batch_projects.entitlements import assert_seats_available, is_seated
+
+        added_users = [u for u in (after.keys() - before.keys()) if not is_seated(u)]
+        if added_users:
+            assert_seats_available(len(added_users))
 
     def _validate_json_field(self, fieldname, expected_type):
         val = getattr(self, fieldname, None)
@@ -195,7 +218,14 @@ class BPProject(Document):
         if not isinstance(val, list):
             return DEFAULT_STATES
         # Normalize each state
-        DEFAULT_COLORS = ["#8993A4", "#0052CC", "#36B37E", "#FF5630", "#FFAB00", "#6554C0"]
+        DEFAULT_COLORS = [
+            "#8993A4",
+            "#0052CC",
+            "#36B37E",
+            "#FF5630",
+            "#FFAB00",
+            "#6554C0",
+        ]
         result = []
         for i, s in enumerate(val):
             # Each element may itself be encoded
@@ -247,10 +277,18 @@ class BPProject(Document):
         return [s["name"] for s in self.get_workflow_states()]
 
     def get_completed_statuses(self):
-        return [s["name"] for s in self.get_workflow_states() if s.get("category") == "completed"]
+        return [
+            s["name"]
+            for s in self.get_workflow_states()
+            if s.get("category") == "completed"
+        ]
 
     def get_started_statuses(self):
-        return [s["name"] for s in self.get_workflow_states() if s.get("category") == "started"]
+        return [
+            s["name"]
+            for s in self.get_workflow_states()
+            if s.get("category") == "started"
+        ]
 
     def check_transition(self, from_status, to_status, user=None):
         """Validate from_status -> to_status against this project's workflow
@@ -274,6 +312,7 @@ class BPProject(Document):
                 min_role = entry.get("min_role") if isinstance(entry, dict) else None
                 if min_role:
                     from batch_projects import access
+
                     if not access.has_at_least(self.name, min_role, user):
                         return (
                             f"You need at least {access.normalize_role(min_role)} access "
@@ -302,9 +341,14 @@ class BPProject(Document):
     def effort_label_abbr(self) -> str:
         """Short form for chart axes. 'pts' for Story Points, 'hrs' for Hours, etc."""
         label = self.effort_label().lower()
-        if "point" in label: return "pts"
-        if "hour" in label:  return "hrs"
-        if "unit" in label:  return "units"
-        if "day" in label:   return "days"
-        if "batch" in label: return "batch"
+        if "point" in label:
+            return "pts"
+        if "hour" in label:
+            return "hrs"
+        if "unit" in label:
+            return "units"
+        if "day" in label:
+            return "days"
+        if "batch" in label:
+            return "batch"
         return label[:4]

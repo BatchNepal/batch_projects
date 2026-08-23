@@ -23,7 +23,6 @@ and `has_permission` (single-document gate).
 import frappe
 import json
 
-
 # ─── ReBAC push-down ─────────────────────────────────────────────────────
 #
 # The gateway resolves each caller's allowed projects/tasks against its
@@ -32,6 +31,7 @@ import json
 # still does the actual filtering/pagination (see internal/proxy's Director
 # in bp-gateway for the write side and why task IDs are assignee-only, not
 # the full viewer closure).
+
 
 def _rebac_scope(user):
     """(allowed_projects, allowed_tasks) from the gateway's push-down
@@ -64,12 +64,16 @@ def _rebac_scope(user):
     if frappe.get_request_header("X-BP-Rebac-Active") != "1":
         return None
     try:
-        projects = json.loads(frappe.get_request_header("X-BP-Allowed-Projects") or "[]")
+        projects = json.loads(
+            frappe.get_request_header("X-BP-Allowed-Projects") or "[]"
+        )
         tasks = json.loads(frappe.get_request_header("X-BP-Allowed-Tasks") or "[]")
         if not isinstance(projects, list) or not isinstance(tasks, list):
             raise ValueError("non-list header payload")
     except (TypeError, ValueError):
-        frappe.log_error("rebac: malformed X-BP-Allowed-* header, denying", "bp_rebac_scope")
+        frappe.log_error(
+            "rebac: malformed X-BP-Allowed-* header, denying", "bp_rebac_scope"
+        )
         return [], []
     return projects, tasks
 
@@ -92,28 +96,39 @@ def get_accessible_projects(user: str | None = None):
     if user in cache:
         return cache[user]
 
-    member = set(frappe.get_all(
-        "BP Project Member", filters={"user": user}, pluck="parent"))
+    member = set(
+        frappe.get_all("BP Project Member", filters={"user": user}, pluck="parent")
+    )
 
     # Guests are scoped strictly to their explicit memberships — no workspace
     # or team fallback. Keeps invited externals out of every other project.
     from batch_projects import access
+
     if access.is_guest(user):
         cache[user] = member
         return member
 
     # workspace (and legacy blank) visibility = open to all System Users
-    workspace = set(frappe.get_all(
-        "BP Project", filters={"visibility": ["in", ["workspace", "", None]]},
-        pluck="name"))
+    workspace = set(
+        frappe.get_all(
+            "BP Project",
+            filters={"visibility": ["in", ["workspace", "", None]]},
+            pluck="name",
+        )
+    )
 
     team_projects = set()
-    user_teams = frappe.get_all("BP Team Member", filters={"user": user}, pluck="parent")
+    user_teams = frappe.get_all(
+        "BP Team Member", filters={"user": user}, pluck="parent"
+    )
     if user_teams:
-        team_projects = set(frappe.get_all(
-            "BP Project",
-            filters={"visibility": "team", "team": ["in", list(user_teams)]},
-            pluck="name"))
+        team_projects = set(
+            frappe.get_all(
+                "BP Project",
+                filters={"visibility": "team", "team": ["in", list(user_teams)]},
+                pluck="name",
+            )
+        )
 
     result = member | workspace | team_projects
     cache[user] = result
@@ -135,7 +150,9 @@ class _NoAccess:
 NO_ACCESSIBLE_PROJECTS = _NoAccess()
 
 
-def accessible_project_filter(base_filters: dict | None = None, user: str | None = None):
+def accessible_project_filter(
+    base_filters: dict | None = None, user: str | None = None
+):
     """Merge an accessible-projects restriction into `base_filters` for a
     `frappe.get_all("BP Project", filters=...)` call.
 
@@ -163,12 +180,13 @@ def accessible_project_filter(base_filters: dict | None = None, user: str | None
 
 # ─── permission_query_conditions hooks ───────────────────────────────────────
 
+
 def _project_in_clause(column: str, user: str) -> str:
     accessible = get_accessible_projects(user)
     if accessible is None:
-        return ""           # admin — no restriction
+        return ""  # admin — no restriction
     if not accessible:
-        return "1=0"        # access to nothing
+        return "1=0"  # access to nothing
     vals = ", ".join(frappe.db.escape(p) for p in accessible)
     return f"{column} in ({vals})"
 
@@ -181,7 +199,7 @@ def _project_in_clause_or_null(column: str, user: str) -> str:
     project access."""
     accessible = get_accessible_projects(user)
     if accessible is None:
-        return ""           # admin — no restriction
+        return ""  # admin — no restriction
     base = f"({column} is null or {column} = '')"
     if not accessible:
         return base
@@ -253,7 +271,9 @@ def bp_epic_query_conditions(user=None):
 def bp_report_query_conditions(user=None):
     """Reports: workspace reports (no project) are visible to all; project
     reports follow project access."""
-    return _project_in_clause_or_null("`tabBP Report`.`project`", user or frappe.session.user)
+    return _project_in_clause_or_null(
+        "`tabBP Report`.`project`", user or frappe.session.user
+    )
 
 
 def bp_project_query_conditions(user=None):
@@ -284,7 +304,9 @@ def bp_project_query_conditions(user=None):
 # Projects User could pull every project's milestones (including
 # invoice_amount/sales_invoice) via /api/resource directly.
 def bp_milestone_query_conditions(user=None):
-    return _project_in_clause("`tabBP Milestone`.`project`", user or frappe.session.user)
+    return _project_in_clause(
+        "`tabBP Milestone`.`project`", user or frappe.session.user
+    )
 
 
 def bp_risk_query_conditions(user=None):
@@ -292,7 +314,9 @@ def bp_risk_query_conditions(user=None):
 
 
 def bp_automation_run_query_conditions(user=None):
-    return _project_in_clause("`tabBP Automation Run`.`project`", user or frappe.session.user)
+    return _project_in_clause(
+        "`tabBP Automation Run`.`project`", user or frappe.session.user
+    )
 
 
 # BP Notification is scoped to its `recipient`, not a project — a user's own
@@ -326,12 +350,75 @@ def bp_notification_has_permission(doc, user=None, permission_type=None):
 # API to the same bar the app already enforces everywhere else.
 def bp_webhook_token_has_permission(doc, user=None, permission_type=None):
     from batch_projects import access
+
     user = user or frappe.session.user
     return access.is_instance_admin(user) or access.is_workspace_admin(user)
 
 
+def bp_team_query_conditions(user=None):
+    """BP Team query conditions: instance admins bypass; org System Users (non-guest)
+    may read any team; guests may read only teams where they are a BP Team Member."""
+    user = user or frappe.session.user
+    if _is_admin(user):
+        return ""
+    from batch_projects import access
+
+    if access.is_guest(user):
+        # Guests: only teams where they are a member
+        return f"""
+            `tabBP Team`.`name` IN (
+                SELECT parent FROM `tabBP Team Member` WHERE user = {frappe.db.escape(user)}
+            )
+        """
+    # Org System Users: any team (workspace model)
+    return ""
+
+
+def bp_team_has_permission(doc, user=None, permission_type=None):
+    """BP Team per-document gate: instance admins bypass; org System Users may read
+    any team; guests may read only teams where they are a BP Team Member; write/delete
+    require team membership with sufficient role."""
+    from batch_projects import access
+
+    user = user or frappe.session.user
+    if access.is_instance_admin(user):
+        return True
+
+    # New team creation: open to any System User (becomes the lead)
+    if doc.get("__islocal"):
+        return frappe.db.get_value("User", user, "user_type") == "System User"
+
+    # Read: org System Users may read any team; guests only their own
+    if permission_type == "read":
+        if access.is_guest(user):
+            member_row = frappe.db.get_value(
+                "BP Team Member", {"parent": doc.name, "user": user}, "role"
+            )
+            return bool(member_row)
+        # System User: workspace model — may read any team
+        return True
+
+    # Write/delete: require team membership with sufficient role
+    member_role = frappe.db.get_value(
+        "BP Team Member", {"parent": doc.name, "user": user}, "role"
+    )
+    if not member_role:
+        return False
+
+    # Map permission_type to required role: write/create -> Member, delete -> Admin
+    hierarchy = {"Admin": 3, "Manager": 2, "Member": 1}
+    if permission_type in ("write", "create"):
+        required = "Member"
+    elif permission_type in ("delete", "submit", "cancel"):
+        required = "Admin"
+    else:
+        required = "Viewer"
+    return hierarchy.get(member_role, 0) >= hierarchy.get(required, 0)
+
+
 def bp_webhook_token_query_conditions(user=None):
     from batch_projects import access
+
     user = user or frappe.session.user
     if access.is_instance_admin(user) or access.is_workspace_admin(user):
         return ""
@@ -357,11 +444,15 @@ def bp_drawing_query_conditions(user=None):
 
 
 def bp_intake_form_query_conditions(user=None):
-    return _project_in_clause("`tabBP Intake Form`.`project`", user or frappe.session.user)
+    return _project_in_clause(
+        "`tabBP Intake Form`.`project`", user or frappe.session.user
+    )
 
 
 def bp_invitation_query_conditions(user=None):
-    return _project_in_clause("`tabBP Invitation`.`project`", user or frappe.session.user)
+    return _project_in_clause(
+        "`tabBP Invitation`.`project`", user or frappe.session.user
+    )
 
 
 def bp_note_query_conditions(user=None):
@@ -369,15 +460,21 @@ def bp_note_query_conditions(user=None):
 
 
 def bp_share_link_query_conditions(user=None):
-    return _project_in_clause("`tabBP Share Link`.`project`", user or frappe.session.user)
+    return _project_in_clause(
+        "`tabBP Share Link`.`project`", user or frappe.session.user
+    )
 
 
 def bp_sla_policy_query_conditions(user=None):
-    return _project_in_clause("`tabBP SLA Policy`.`project`", user or frappe.session.user)
+    return _project_in_clause(
+        "`tabBP SLA Policy`.`project`", user or frappe.session.user
+    )
 
 
 def bp_task_template_query_conditions(user=None):
-    return _project_in_clause("`tabBP Task Template`.`project`", user or frappe.session.user)
+    return _project_in_clause(
+        "`tabBP Task Template`.`project`", user or frappe.session.user
+    )
 
 
 def bp_view_query_conditions(user=None):
@@ -386,42 +483,61 @@ def bp_view_query_conditions(user=None):
 
 # Optional `project` (some real rows are workspace-scoped) — null-safe:
 def bp_activity_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP Activity`.`project`", user or frappe.session.user)
+    return _project_in_clause_or_null(
+        "`tabBP Activity`.`project`", user or frappe.session.user
+    )
 
 
 def bp_audit_log_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP Audit Log`.`project`", user or frappe.session.user)
+    return _project_in_clause_or_null(
+        "`tabBP Audit Log`.`project`", user or frappe.session.user
+    )
 
 
 def bp_automation_rule_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP Automation Rule`.`project`", user or frappe.session.user)
+    return _project_in_clause_or_null(
+        "`tabBP Automation Rule`.`project`", user or frappe.session.user
+    )
 
 
 def bp_notification_mute_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP Notification Mute`.`project`", user or frappe.session.user)
+    return _project_in_clause_or_null(
+        "`tabBP Notification Mute`.`project`", user or frappe.session.user
+    )
 
 
 def bp_notification_rule_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP Notification Rule`.`project`", user or frappe.session.user)
+    return _project_in_clause_or_null(
+        "`tabBP Notification Rule`.`project`", user or frappe.session.user
+    )
 
 
 def bp_sla_breach_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP SLA Breach`.`project`", user or frappe.session.user)
+    return _project_in_clause_or_null(
+        "`tabBP SLA Breach`.`project`", user or frappe.session.user
+    )
 
 
 def bp_task_watcher_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP Task Watcher`.`project`", user or frappe.session.user)
+    return _project_in_clause_or_null(
+        "`tabBP Task Watcher`.`project`", user or frappe.session.user
+    )
 
 
 def bp_view_preference_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP View Preference`.`project`", user or frappe.session.user)
+    return _project_in_clause_or_null(
+        "`tabBP View Preference`.`project`", user or frappe.session.user
+    )
 
 
 def bp_workflow_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP Workflow`.`project`", user or frappe.session.user)
+    return _project_in_clause_or_null(
+        "`tabBP Workflow`.`project`", user or frappe.session.user
+    )
 
 
 # ─── has_permission hook (single-document gate) ───────────────────────────────
+
 
 def bp_doc_has_permission(doc, user=None, permission_type=None):
     """Per-document gate for the generic REST API / desk / reports — the

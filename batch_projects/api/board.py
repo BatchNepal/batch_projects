@@ -4,10 +4,16 @@ import re
 
 from batch_projects.events import (
     emit,
-    TASK_CREATED, TASK_UPDATED, TASK_STATUS_CHANGED, COMMENT_ADDED, COMMENT_EDITED,
-    COMMENT_DELETED, PROJECT_CREATED,
+    TASK_CREATED,
+    TASK_UPDATED,
+    TASK_STATUS_CHANGED,
+    COMMENT_ADDED,
+    COMMENT_EDITED,
+    COMMENT_DELETED,
+    PROJECT_CREATED,
     PROJECT_ROLE_CHANGED,
-    SPRINT_STARTED, SPRINT_COMPLETED
+    SPRINT_STARTED,
+    SPRINT_COMPLETED,
 )
 from batch_projects.batch_projects.doctype.bp_task.bp_task import (
     _validate_custom_field_values,
@@ -15,17 +21,18 @@ from batch_projects.batch_projects.doctype.bp_task.bp_task import (
 )
 from batch_projects.api import custom_fields as _custom_fields
 
- 
 # ─── PERMISSIONS ─────────────────────────────────────────────────────────────
 # The project-role hierarchy and effective-role resolution now live in the
 # single source of truth: batch_projects.access (ROLE_RANK). The thin wrappers
 # below keep the historic call sites (`_check_permission`, `_get_user_project_role`)
 # working while delegating all real logic there.
 
+
 def _get_user_project_role(project: str) -> str | None:
     """Effective project role (explicit membership, else visibility fallback).
     Delegates to the unified model in batch_projects.access."""
     from batch_projects import access
+
     return access.get_effective_role(project)
 
 
@@ -39,9 +46,11 @@ def get_my_capabilities(project):
     next user who hits the same cached board. Cheap enough to call on every
     project switch."""
     from batch_projects.gateway_guard import verify_gateway_request
+
     verify_gateway_request()
 
     from batch_projects import access
+
     role = access.get_effective_role(project)
     return {
         "role": role,
@@ -57,9 +66,11 @@ def _check_permission(project: str, required_role: str, allow_archived: bool = F
     relying on an accidental doctype-permission failure downstream.
     Also verifies the request came through the bp-gateway."""
     from batch_projects.gateway_guard import verify_gateway_request
+
     verify_gateway_request()
 
     from batch_projects import access
+
     access.require(project, required_role, allow_archived=allow_archived)
 
 
@@ -70,9 +81,11 @@ def _check_task_permission(task: str, project: str, required_role: str):
     scoped to exactly ONE task (get_task, update_task, the timer); never for
     anything that lists or touches sibling tasks or the project itself."""
     from batch_projects.gateway_guard import verify_gateway_request
+
     verify_gateway_request()
 
     from batch_projects import access
+
     access.require_task(task, project, required_role)
 
 
@@ -81,6 +94,7 @@ def _require_system_user():
     Also verifies the request came through the bp-gateway (gateway_guard.py).
     Direct-to-Frappe calls missing the gateway signature are rejected."""
     from batch_projects.gateway_guard import verify_gateway_request
+
     verify_gateway_request()
 
     user = frappe.session.user
@@ -101,14 +115,13 @@ def _check_team_permission(team: str, required_role: str = "Viewer"):
 
     _require_system_user()
 
-    role = frappe.db.get_value(
-        "BP Team Member", {"parent": team, "user": user}, "role"
-    )
+    role = frappe.db.get_value("BP Team Member", {"parent": team, "user": user}, "role")
 
     if required_role == "Viewer":
         # Org members may browse any team (workspace model); guests may only see
         # teams they actually belong to.
         from batch_projects import access
+
         if access.is_guest(user) and not role:
             frappe.throw("You don't have access to this team.", frappe.PermissionError)
         return
@@ -126,6 +139,7 @@ def _check_team_permission(team: str, required_role: str = "Viewer"):
 
 # ─── QUERY ENGINE ────────────────────────────────────────────────────────────
 
+
 def _deep_parse_json(raw):
     val = raw
     for _ in range(6):
@@ -139,7 +153,16 @@ def _deep_parse_json(raw):
 
 
 def _normalize_workflow_states(raw_states):
-    DEFAULT_COLORS = ["#8993A4","#0052CC","#36B37E","#FF5630","#FFAB00","#6554C0","#00B8D9","#403294"]
+    DEFAULT_COLORS = [
+        "#8993A4",
+        "#0052CC",
+        "#36B37E",
+        "#FF5630",
+        "#FFAB00",
+        "#6554C0",
+        "#00B8D9",
+        "#403294",
+    ]
 
     states = _deep_parse_json(raw_states)
     if not isinstance(states, list):
@@ -167,6 +190,7 @@ _VALID_TRANSITION_MIN_ROLES = ("Manager", "Admin")
 # them wholesale with no check for whether a removed/renamed entry still had
 # live tasks pointing at it.
 
+
 def _active_task_field_values(project, field) -> set[str]:
     """Distinct non-empty values of `field` currently in use by live tasks."""
     rows = frappe.get_all(
@@ -188,7 +212,9 @@ def _active_task_labels(project) -> set[str]:
     disappear."""
     used = set()
     for row in frappe.get_all(
-        "BP Task", filters=_task_filters({"project": project}), fields=["name", "labels"]
+        "BP Task",
+        filters=_task_filters({"project": project}),
+        fields=["name", "labels"],
     ):
         raw = row.get("labels")
         if not raw:
@@ -261,7 +287,8 @@ def _assert_no_duplicate_names(names: list, label: str) -> None:
     for name in names:
         if name in seen:
             frappe.throw(
-                f"Duplicate {label} name: {name}.", frappe.ValidationError,
+                f"Duplicate {label} name: {name}.",
+                frappe.ValidationError,
                 title=f"Duplicate {label}",
             )
         seen.add(name)
@@ -284,7 +311,11 @@ def _normalize_allowed_to(allowed, valid_names):
             if name not in valid_names:
                 continue
             min_role = entry.get("min_role")
-            cleaned.append({"name": name, "min_role": min_role} if min_role in _VALID_TRANSITION_MIN_ROLES else name)
+            cleaned.append(
+                {"name": name, "min_role": min_role}
+                if min_role in _VALID_TRANSITION_MIN_ROLES
+                else name
+            )
         elif entry in valid_names:
             cleaned.append(entry)
     return cleaned or None
@@ -322,6 +353,7 @@ def get_session_info():
 # REST/desk/report (get_list-based) layer, never these get_all call sites.
 # Every one of them needs this explicitly; there is no single choke point.
 
+
 def _task_filters(base=None, include_deleted=False):
     """Merge `base` with the default is_deleted=0 exclusion every BP Task
     list/count query needs. Pass include_deleted=True only for the trash
@@ -334,8 +366,15 @@ def _task_filters(base=None, include_deleted=False):
 
 
 @frappe.whitelist()
-def query_tasks(project, filters=None, group_by=None, sort_by="creation",
-                 sort_order="asc", limit=None, offset=0):
+def query_tasks(
+    project,
+    filters=None,
+    group_by=None,
+    sort_by="creation",
+    sort_order="asc",
+    limit=None,
+    offset=0,
+):
     _check_permission(project, "BP Viewer")
 
     if isinstance(filters, str):
@@ -393,21 +432,54 @@ def query_tasks(project, filters=None, group_by=None, sort_by="creation",
         ]
 
     fields = [
-        "name", "task_key", "title", "status", "priority", "task_type",
-        "epic", "sprint", "story_points", "due_date", "start_date",
-        "planned_start", "planned_end", "sequence_no",
-        "board_order", "board_rank", "parent_task", "team", "description",
-        "estimated_hours", "actual_hours", "billable",
-        "started_on", "completed_on", "completed_by", "resolution",
-        "blocked_reason", "blocked_since", "blocked_by",
-        "custom_field_values", "labels",
-        "reporter", "creation", "modified",
+        "name",
+        "task_key",
+        "title",
+        "status",
+        "priority",
+        "task_type",
+        "epic",
+        "sprint",
+        "story_points",
+        "due_date",
+        "start_date",
+        "planned_start",
+        "planned_end",
+        "sequence_no",
+        "board_order",
+        "board_rank",
+        "parent_task",
+        "team",
+        "description",
+        "estimated_hours",
+        "actual_hours",
+        "billable",
+        "started_on",
+        "completed_on",
+        "completed_by",
+        "resolution",
+        "blocked_reason",
+        "blocked_since",
+        "blocked_by",
+        "custom_field_values",
+        "labels",
+        "reporter",
+        "creation",
+        "modified",
     ]
 
     valid_sort_fields = {
-        "creation", "modified", "due_date", "start_date",
-        "planned_start", "planned_end", "sequence_no",
-        "priority", "title", "board_order", "story_points",
+        "creation",
+        "modified",
+        "due_date",
+        "start_date",
+        "planned_start",
+        "planned_end",
+        "sequence_no",
+        "priority",
+        "title",
+        "board_order",
+        "story_points",
     }
     sort_by = sort_by if sort_by in valid_sort_fields else "creation"
     sort_order = "asc" if sort_order not in ("asc", "desc") else sort_order
@@ -437,8 +509,16 @@ def query_tasks(project, filters=None, group_by=None, sort_by="creation",
     subtasks_raw = frappe.get_all(
         "BP Task",
         filters={"parent_task": ["in", issue_names], "is_deleted": 0},
-        fields=["name", "task_key", "title", "status", "priority",
-                "task_type", "due_date", "parent_task"],
+        fields=[
+            "name",
+            "task_key",
+            "title",
+            "status",
+            "priority",
+            "task_type",
+            "due_date",
+            "parent_task",
+        ],
         order_by="creation asc",
     )
     st_names = [st["name"] for st in subtasks_raw]
@@ -472,12 +552,14 @@ def query_tasks(project, filters=None, group_by=None, sort_by="creation",
     if filters.get("labels"):
         required_labels = set(filters["labels"])
         issues = [
-            i for i in issues
+            i
+            for i in issues
             if required_labels.intersection(set(i.get("labels") or []))
         ]
 
     if filters.get("custom_fields"):
         cf_filters = filters["custom_fields"]
+
         def _matches_cf(issue):
             cfv = issue.get("custom_field_values") or {}
             for field_id, expected in cf_filters.items():
@@ -489,6 +571,7 @@ def query_tasks(project, filters=None, group_by=None, sort_by="creation",
                     if actual != expected:
                         return False
             return True
+
         issues = [i for i in issues if _matches_cf(i)]
 
     if group_by:
@@ -508,7 +591,9 @@ def _group_issues(project, issues, group_by):
 
     if group_by == "status":
         proj = frappe.get_doc("BP Project", project)
-        ordered_keys = [s["name"] for s in _normalize_workflow_states(proj.get_workflow_states())]
+        ordered_keys = [
+            s["name"] for s in _normalize_workflow_states(proj.get_workflow_states())
+        ]
         for key in ordered_keys:
             groups[key] = []
         fallback_key = ordered_keys[0] if ordered_keys else "Unknown"
@@ -555,18 +640,17 @@ def _group_issues(project, issues, group_by):
             key = str(issue.get(group_by) or f"No {group_by}")
             groups.setdefault(key, []).append(issue)
 
-    result = [
-        {"key": k, "issues": v, "count": len(v)}
-        for k, v in groups.items()
-    ]
+    result = [{"key": k, "issues": v, "count": len(v)} for k, v in groups.items()]
     return {"groups": result, "total": sum(len(v) for v in groups.values())}
 
 
 # ─── PROJECTS ─────────────────────────────────────────────────────────────────
 
+
 @frappe.whitelist()
 def get_projects():
     from batch_projects.permissions import get_accessible_projects
+
     accessible = get_accessible_projects()  # None = admin (all)
     filters = {"status": "Active"}
     if accessible is not None:
@@ -578,13 +662,38 @@ def get_projects():
         "BP Project",
         filters=filters,
         fields=[
-            "name", "project_name", "key", "status", "lead",
-            "description", "workflow_states", "issue_types",
-            "custom_fields", "enabled_views", "pinned_views", "default_view", "company", "project_color",
-            "project_icon", "theme", "schema_version", "visibility", "project_type",
-            "client", "budget_amount", "hourly_rate", "retainer_hours",
-            "currency", "start_date", "target_end_date", "template_used", "team",
-            "source_sales_order", "source_lead", "source_opportunity", "source_quotation",
+            "name",
+            "project_name",
+            "key",
+            "status",
+            "lead",
+            "description",
+            "workflow_states",
+            "issue_types",
+            "custom_fields",
+            "enabled_views",
+            "pinned_views",
+            "default_view",
+            "company",
+            "project_color",
+            "project_icon",
+            "theme",
+            "schema_version",
+            "visibility",
+            "project_type",
+            "client",
+            "budget_amount",
+            "hourly_rate",
+            "retainer_hours",
+            "currency",
+            "start_date",
+            "target_end_date",
+            "template_used",
+            "team",
+            "source_sales_order",
+            "source_lead",
+            "source_opportunity",
+            "source_quotation",
         ],
         order_by="creation desc",
     )
@@ -609,7 +718,9 @@ def get_projects():
             as_dict=True,
         )
         for r in rows:
-            status_counts_by_project.setdefault(r["project"], {})[r["status"]] = r["cnt"]
+            status_counts_by_project.setdefault(r["project"], {})[r["status"]] = r[
+                "cnt"
+            ]
 
     for p in projects:
         by_status = status_counts_by_project.get(p["name"], {})
@@ -619,11 +730,13 @@ def get_projects():
         p["issue_count"] = total
         p["open_count"] = open_
         p["workflow_states"] = _parse_json(p.get("workflow_states"), [])
-        p["issue_types"]     = _parse_json(p.get("issue_types"), [])
-        p["custom_fields"]   = _parse_json(p.get("custom_fields"), [])
-        p["enabled_views"]   = _parse_json(p.get("enabled_views"), None) or get_template_views(p.get("template_used"))
-        p["pinned_views"]    = _parse_json(p.get("pinned_views"), None)
-        p["default_view"]    = p.get("default_view") or "summary"
+        p["issue_types"] = _parse_json(p.get("issue_types"), [])
+        p["custom_fields"] = _parse_json(p.get("custom_fields"), [])
+        p["enabled_views"] = _parse_json(
+            p.get("enabled_views"), None
+        ) or get_template_views(p.get("template_used"))
+        p["pinned_views"] = _parse_json(p.get("pinned_views"), None)
+        p["default_view"] = p.get("default_view") or "summary"
     return projects
 
 
@@ -633,19 +746,21 @@ def get_project(project):
     doc = frappe.get_doc("BP Project", project)
     data = doc.as_dict()
     data["workflow_states"] = _normalize_workflow_states(doc.get_workflow_states())
-    data["issue_types"]     = doc.get_issue_types()
-    data["custom_fields"]   = _custom_fields.get_project_fields(project, "all")
+    data["issue_types"] = doc.get_issue_types()
+    data["custom_fields"] = _custom_fields.get_project_fields(project, "all")
     hidden_cf_ids = _custom_fields.hidden_field_ids_for_project(project, "projects")
     data["custom_field_values"] = _custom_fields.strip_unviewable_field_values(
         _parse_json(doc.custom_field_values, {}), hidden_cf_ids
     )
-    data["enabled_views"]   = doc.get_enabled_views()
-    data["pinned_views"]    = doc.get_pinned_views()
-    data["labels"]          = _parse_json(doc.labels, [])
+    data["enabled_views"] = doc.get_enabled_views()
+    data["pinned_views"] = doc.get_pinned_views()
+    data["labels"] = _parse_json(doc.labels, [])
     data["members"] = [
         {
             "user": m.user,
-            "full_name": m.full_name or frappe.db.get_value("User", m.user, "full_name") or m.user,
+            "full_name": m.full_name
+            or frappe.db.get_value("User", m.user, "full_name")
+            or m.user,
             "role": m.role,
         }
         for m in doc.members
@@ -655,14 +770,31 @@ def get_project(project):
 
 # ─── PROJECT SETTINGS ─────────────────────────────────────────────────────────
 
+
 @frappe.whitelist()
-def update_project_general(project, project_name=None, key=None, description=None,
-                            project_color=None, project_icon=None, theme=None, lead=None,
-                            default_assignee=None, company=None, status=None,
-                            project_type=None, client=None, currency=None,
-                            hourly_rate=None, budget_amount=None, retainer_hours=None,
-                            default_view=None, pinned_views=None, enabled_views=None,
-                            health_override=None):
+def update_project_general(
+    project,
+    project_name=None,
+    key=None,
+    description=None,
+    project_color=None,
+    project_icon=None,
+    theme=None,
+    lead=None,
+    default_assignee=None,
+    company=None,
+    status=None,
+    project_type=None,
+    client=None,
+    currency=None,
+    hourly_rate=None,
+    budget_amount=None,
+    retainer_hours=None,
+    default_view=None,
+    pinned_views=None,
+    enabled_views=None,
+    health_override=None,
+):
     # An archived project is read-only (access._assert_not_archived), which
     # would make it permanently unrecoverable — the field that lifts the lock
     # lives behind the lock. A status-only edit is therefore allowed through;
@@ -670,11 +802,31 @@ def update_project_general(project, project_name=None, key=None, description=Non
     # second check below runs without the exemption.
     _check_permission(project, "BP Manager", allow_archived=True)
     if status is None or len(
-        [v for v in (project_name, key, description, project_color, project_icon,
-                     theme, lead, default_assignee, company, project_type, client,
-                     currency, hourly_rate, budget_amount, retainer_hours,
-                     default_view, pinned_views, enabled_views, health_override)
-         if v is not None]
+        [
+            v
+            for v in (
+                project_name,
+                key,
+                description,
+                project_color,
+                project_icon,
+                theme,
+                lead,
+                default_assignee,
+                company,
+                project_type,
+                client,
+                currency,
+                hourly_rate,
+                budget_amount,
+                retainer_hours,
+                default_view,
+                pinned_views,
+                enabled_views,
+                health_override,
+            )
+            if v is not None
+        ]
     ):
         _check_permission(project, "BP Manager")
 
@@ -700,20 +852,33 @@ def update_project_general(project, project_name=None, key=None, description=Non
                 frappe.throw(f"Project key '{key}' is already in use.")
         changes["key"] = key
 
-    if description   is not None: changes["description"]   = description
-    if project_color is not None: changes["project_color"] = project_color
-    if project_icon  is not None: changes["project_icon"]  = project_icon
-    if theme         is not None: changes["theme"]         = theme
+    if description is not None:
+        changes["description"] = description
+    if project_color is not None:
+        changes["project_color"] = project_color
+    if project_icon is not None:
+        changes["project_icon"] = project_icon
+    if theme is not None:
+        changes["theme"] = theme
     # Use form_dict check so "— auto" (empty string) can clear the override
-    if "health_override" in frappe.form_dict: changes["health_override"] = health_override or None
+    if "health_override" in frappe.form_dict:
+        changes["health_override"] = health_override or None
     # Use form_dict check so JS null can clear nullable Link fields
-    if "lead"             in frappe.form_dict: changes["lead"]             = lead or None
-    if "default_assignee" in frappe.form_dict: changes["default_assignee"] = default_assignee or None
-    if company is not None: changes["company"] = company or None
-    if status  is not None: changes["status"]  = status
+    if "lead" in frappe.form_dict:
+        changes["lead"] = lead or None
+    if "default_assignee" in frappe.form_dict:
+        changes["default_assignee"] = default_assignee or None
+    if company is not None:
+        changes["company"] = company or None
+    if status is not None:
+        changes["status"] = status
 
     if enabled_views is not None:
-        parsed = _parse_json(enabled_views, enabled_views) if isinstance(enabled_views, str) else enabled_views
+        parsed = (
+            _parse_json(enabled_views, enabled_views)
+            if isinstance(enabled_views, str)
+            else enabled_views
+        )
         if isinstance(parsed, list):
             changes["enabled_views"] = json.dumps(parsed)
 
@@ -726,18 +891,32 @@ def update_project_general(project, project_name=None, key=None, description=Non
     if pinned_views is not None:
         # Header tab strip order — same valid set as default_view, plus money
         # (default_view can't land on money since it's never a landing tab).
-        pinned_views = _parse_json(pinned_views, pinned_views) if isinstance(pinned_views, str) else pinned_views
+        pinned_views = (
+            _parse_json(pinned_views, pinned_views)
+            if isinstance(pinned_views, str)
+            else pinned_views
+        )
         valid = set(doc.get_enabled_views() or []) | {"summary", "files", "money"}
-        cleaned = [v for v in (pinned_views or []) if v in valid] if isinstance(pinned_views, list) else []
+        cleaned = (
+            [v for v in (pinned_views or []) if v in valid]
+            if isinstance(pinned_views, list)
+            else []
+        )
         changes["pinned_views"] = json.dumps(cleaned) if cleaned else None
 
     # Billing fields
-    if project_type   is not None: changes["project_type"]   = project_type
-    if "client"       in frappe.form_dict: changes["client"] = client or None
-    if currency       is not None: changes["currency"]       = currency or "USD"
-    if hourly_rate    is not None: changes["hourly_rate"]    = float(hourly_rate) if hourly_rate else None
-    if budget_amount  is not None: changes["budget_amount"]  = float(budget_amount) if budget_amount else None
-    if retainer_hours is not None: changes["retainer_hours"] = int(retainer_hours) if retainer_hours else None
+    if project_type is not None:
+        changes["project_type"] = project_type
+    if "client" in frappe.form_dict:
+        changes["client"] = client or None
+    if currency is not None:
+        changes["currency"] = currency or "USD"
+    if hourly_rate is not None:
+        changes["hourly_rate"] = float(hourly_rate) if hourly_rate else None
+    if budget_amount is not None:
+        changes["budget_amount"] = float(budget_amount) if budget_amount else None
+    if retainer_hours is not None:
+        changes["retainer_hours"] = int(retainer_hours) if retainer_hours else None
 
     if changes:
         # set_value does a targeted SQL UPDATE — bypasses child-table validation
@@ -750,35 +929,37 @@ def update_project_general(project, project_name=None, key=None, description=Non
         # this, name/color/icon/theme/etc edits here are invisible on next
         # load until the cache TTL expires on its own.
         from batch_projects.cache import invalidate_project
+
         invalidate_project(project)
         # Drop access.py's per-request archived memo — un-archiving and then
         # writing in the same request must see Active, not the stale lock.
         if "status" in changes:
             from batch_projects import access
+
             access.invalidate_archived_cache(project)
 
     return {
-        "name":             doc.name,
-        "project_name":     doc.project_name,
-        "key":              doc.key,
-        "description":      doc.description,
-        "project_color":    doc.project_color,
-        "project_icon":     doc.project_icon,
-        "theme":            doc.theme,
-        "health_override":  doc.health_override,
-        "lead":             doc.lead,
+        "name": doc.name,
+        "project_name": doc.project_name,
+        "key": doc.key,
+        "description": doc.description,
+        "project_color": doc.project_color,
+        "project_icon": doc.project_icon,
+        "theme": doc.theme,
+        "health_override": doc.health_override,
+        "lead": doc.lead,
         "default_assignee": doc.default_assignee,
-        "company":          doc.company,
-        "status":           doc.status,
-        "project_type":     doc.project_type,
-        "client":           doc.client,
-        "currency":         doc.currency,
-        "hourly_rate":      doc.hourly_rate,
-        "budget_amount":    doc.budget_amount,
-        "retainer_hours":   doc.retainer_hours,
-        "default_view":     doc.get("default_view") or "summary",
-        "enabled_views":    doc.get_enabled_views(),
-        "pinned_views":     doc.get_pinned_views(),
+        "company": doc.company,
+        "status": doc.status,
+        "project_type": doc.project_type,
+        "client": doc.client,
+        "currency": doc.currency,
+        "hourly_rate": doc.hourly_rate,
+        "budget_amount": doc.budget_amount,
+        "retainer_hours": doc.retainer_hours,
+        "default_view": doc.get("default_view") or "summary",
+        "enabled_views": doc.get_enabled_views(),
+        "pinned_views": doc.get_pinned_views(),
     }
 
 
@@ -800,20 +981,24 @@ def purge_project(project, confirm_key=None):
     _check_permission(project, "BP Admin", allow_archived=True)
 
     from batch_projects import access
+
     if not access.is_project_archived(project):
         frappe.throw(
             "Only an archived project can be purged. Archive it first — that "
             "step is reversible, this one is not.",
-            frappe.ValidationError, title="Archive first",
+            frappe.ValidationError,
+            title="Archive first",
         )
 
     blockers = _project_financial_blockers(project)
     if blockers:
         frappe.throw(
             "This project can't be purged — it has financial records that must "
-            "stay auditable: " + ", ".join(blockers) +
-            ". It stays archived, which preserves the history.",
-            frappe.ValidationError, title="Financial records exist",
+            "stay auditable: "
+            + ", ".join(blockers)
+            + ". It stays archived, which preserves the history.",
+            frappe.ValidationError,
+            title="Financial records exist",
         )
 
     # Name must be typed back, same as any irreversible destructive action.
@@ -821,11 +1006,17 @@ def purge_project(project, confirm_key=None):
     if (confirm_key or "").strip() != key:
         frappe.throw(
             f'Type the project name ("{key}") to confirm permanent deletion.',
-            frappe.ValidationError, title="Confirmation required",
+            frappe.ValidationError,
+            title="Confirmation required",
         )
 
-    frappe.delete_doc("BP Project", project, force=True, ignore_permissions=True,
-                      delete_permanently=True)
+    frappe.delete_doc(
+        "BP Project",
+        project,
+        force=True,
+        ignore_permissions=True,
+        delete_permanently=True,
+    )
     frappe.db.commit()
     access.invalidate_archived_cache(project)
     return {"purged": project}
@@ -928,11 +1119,14 @@ def update_project_workflow(project, workflow_states):
     existing = existing_raw if isinstance(existing_raw, list) else []
     old_by_name = {
         s.get("name"): str(s.get("category") or "unstarted").lower()
-        for s in existing if isinstance(s, dict) and s.get("name")
+        for s in existing
+        if isinstance(s, dict) and s.get("name")
     }
     new_names = {s["name"] for s in states}
     used_statuses = _active_task_field_values(project, "status")
-    _assert_schema_names_survive(set(old_by_name) - new_names, used_statuses, "workflow state")
+    _assert_schema_names_survive(
+        set(old_by_name) - new_names, used_statuses, "workflow state"
+    )
 
     # A lifecycle-category change is effectively a migration for every task
     # currently in that state — timestamps/resolution derived from the old
@@ -940,7 +1134,8 @@ def update_project_workflow(project, workflow_states):
     # apply. Block it while tasks are still there rather than silently stranding
     # their derived data.
     changed_category = {
-        name for name in old_by_name.keys() & new_names
+        name
+        for name in old_by_name.keys() & new_names
         if old_by_name[name] != next(s["category"] for s in states if s["name"] == name)
     }
     blocked_category = sorted(changed_category & used_statuses)
@@ -962,13 +1157,21 @@ def update_project_workflow(project, workflow_states):
             s["allowed_to"] = cleaned
         else:
             s.pop("allowed_to", None)
-    frappe.db.set_value("BP Project", project, {
-        "workflow_states": json.dumps(states),
-        "schema_version": (frappe.db.get_value("BP Project", project, "schema_version") or 0) + 1,
-        "modified": frappe.utils.now(),
-    })
+    frappe.db.set_value(
+        "BP Project",
+        project,
+        {
+            "workflow_states": json.dumps(states),
+            "schema_version": (
+                frappe.db.get_value("BP Project", project, "schema_version") or 0
+            )
+            + 1,
+            "modified": frappe.utils.now(),
+        },
+    )
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
+
     invalidate_project(project)
     return states
 
@@ -982,8 +1185,10 @@ def update_project_issue_types(project, issue_types):
     clean = []
     for t in types:
         if isinstance(t, str):
-            try: t = json.loads(t)
-            except: continue
+            try:
+                t = json.loads(t)
+            except:
+                continue
         if isinstance(t, dict) and t.get("name"):
             clean.append(t)
     if not clean:
@@ -994,16 +1199,24 @@ def update_project_issue_types(project, issue_types):
         frappe.db.get_value("BP Project", project, "issue_types") or "[]"
     )
     existing = existing_raw if isinstance(existing_raw, list) else []
-    old_names = {t.get("name") for t in existing if isinstance(t, dict) and t.get("name")}
+    old_names = {
+        t.get("name") for t in existing if isinstance(t, dict) and t.get("name")
+    }
     new_names = {t["name"] for t in clean}
     _assert_schema_names_survive(
-        old_names - new_names, _active_task_field_values(project, "task_type"), "task type"
+        old_names - new_names,
+        _active_task_field_values(project, "task_type"),
+        "task type",
     )
 
-    frappe.db.set_value("BP Project", project, {
-        "issue_types": json.dumps(clean),
-        "modified": frappe.utils.now(),
-    })
+    frappe.db.set_value(
+        "BP Project",
+        project,
+        {
+            "issue_types": json.dumps(clean),
+            "modified": frappe.utils.now(),
+        },
+    )
     frappe.db.commit()
     return clean
 
@@ -1021,14 +1234,16 @@ def update_project_labels(project, labels):
     )
     if not isinstance(existing_raw, list):
         frappe.throw(
-            "Current project labels are invalid.", frappe.ValidationError,
+            "Current project labels are invalid.",
+            frappe.ValidationError,
             title="Invalid label catalog",
         )
     if any(not isinstance(row, dict) for row in existing_raw):
         frappe.throw(
             "Current project labels use an invalid schema. Repair them "
             "before editing labels.",
-            frappe.ValidationError, title="Invalid label catalog",
+            frappe.ValidationError,
+            title="Invalid label catalog",
         )
     current = existing_raw
 
@@ -1069,10 +1284,14 @@ def update_project_labels(project, labels):
             title="Label is still in use",
         )
 
-    frappe.db.set_value("BP Project", project, {
-        "labels": json.dumps(incoming),
-        "modified": frappe.utils.now(),
-    })
+    frappe.db.set_value(
+        "BP Project",
+        project,
+        {
+            "labels": json.dumps(incoming),
+            "modified": frappe.utils.now(),
+        },
+    )
     frappe.db.commit()
     return incoming
 
@@ -1080,9 +1299,14 @@ def update_project_labels(project, labels):
 @frappe.whitelist()
 def get_workflow_templates():
     from batch_projects.batch_projects.doctype.bp_project.bp_project import (
-        WORKFLOW_TEMPLATES, DEFAULT_ISSUE_TYPES
+        WORKFLOW_TEMPLATES,
+        DEFAULT_ISSUE_TYPES,
     )
-    return {"workflow_templates": WORKFLOW_TEMPLATES, "default_issue_types": DEFAULT_ISSUE_TYPES}
+
+    return {
+        "workflow_templates": WORKFLOW_TEMPLATES,
+        "default_issue_types": DEFAULT_ISSUE_TYPES,
+    }
 
 
 @frappe.whitelist()
@@ -1093,10 +1317,12 @@ def get_project_templates():
     from batch_projects.setup.project_templates import (
         get_project_templates as _get_project_templates,
     )
+
     return _get_project_templates()
 
 
 # ─── GANTT / SCHEDULE AXIS ─────────────────────────────────────────────────────
+
 
 @frappe.whitelist()
 def get_gantt(project):
@@ -1110,6 +1336,7 @@ def get_gantt(project):
             project = alt
     _check_permission(project, "BP Viewer")
     from batch_projects.entitlements import require_workspace_feature
+
     require_workspace_feature("gantt")
     proj = frappe.get_doc("BP Project", project)
     states = _normalize_workflow_states(proj.get_workflow_states())
@@ -1120,10 +1347,25 @@ def get_gantt(project):
         "BP Task",
         filters=_task_filters({"project": project}),
         fields=[
-            "name", "task_key", "title", "status", "priority", "task_type",
-            "start_date", "due_date", "planned_start", "planned_end",
-            "blocked_reason", "epic", "parent_task", "sprint",
-            "estimated_hours", "actual_hours", "billable", "board_order", "labels",
+            "name",
+            "task_key",
+            "title",
+            "status",
+            "priority",
+            "task_type",
+            "start_date",
+            "due_date",
+            "planned_start",
+            "planned_end",
+            "blocked_reason",
+            "epic",
+            "parent_task",
+            "sprint",
+            "estimated_hours",
+            "actual_hours",
+            "billable",
+            "board_order",
+            "labels",
         ],
         order_by="start_date asc, due_date asc, creation asc",
     )
@@ -1145,8 +1387,11 @@ def get_gantt(project):
             assignee_map.setdefault(a["parent"], []).append(a["user"])
         users = list({u for lst in assignee_map.values() for u in lst})
         if users:
-            for u in frappe.get_all("User", filters={"name": ["in", users]},
-                                    fields=["name", "full_name", "user_image"]):
+            for u in frappe.get_all(
+                "User",
+                filters={"name": ["in", users]},
+                fields=["name", "full_name", "user_image"],
+            ):
                 full_names[u["name"]] = {
                     "name": u["full_name"] or u["name"],
                     "image": u.get("user_image") or None,
@@ -1162,7 +1407,14 @@ def get_gantt(project):
                 "parent": ["in", names],
                 "link_type": ["in", ["blocks", "is blocked by"]],
             },
-            fields=["parent", "linked_task", "link_type", "dep_type", "lag_days", "link_metadata"],
+            fields=[
+                "parent",
+                "linked_task",
+                "link_type",
+                "dep_type",
+                "lag_days",
+                "link_metadata",
+            ],
         ):
             if l["linked_task"] not in valid:
                 continue
@@ -1174,21 +1426,27 @@ def get_gantt(project):
             if frm == to or key in seen:
                 continue
             seen.add(key)
-            edges.append({
-                "from": frm, "to": to,
-                # Pre-dep_type rows are NULL — they were all created as plain
-                # finish-to-start blocks.
-                "dep_type": l.get("dep_type") or "FS",
-                "lag": frappe.utils.cint(l.get("lag_days") or 0),
-                "link_metadata": l.get("link_metadata"),
-            })
+            edges.append(
+                {
+                    "from": frm,
+                    "to": to,
+                    # Pre-dep_type rows are NULL — they were all created as plain
+                    # finish-to-start blocks.
+                    "dep_type": l.get("dep_type") or "FS",
+                    "lag": frappe.utils.cint(l.get("lag_days") or 0),
+                    "link_metadata": l.get("link_metadata"),
+                }
+            )
 
     # Epic titles/colors for Gantt grouping.
     epic_names = list({t["epic"] for t in tasks if t.get("epic")})
     epic_meta = {}
     if epic_names:
-        for ep in frappe.get_all("BP Epic", filters={"name": ["in", epic_names]},
-                                 fields=["name", "title", "color"]):
+        for ep in frappe.get_all(
+            "BP Epic",
+            filters={"name": ["in", epic_names]},
+            fields=["name", "title", "color"],
+        ):
             epic_meta[ep["name"]] = ep
 
     for t in tasks:
@@ -1214,12 +1472,15 @@ def get_gantt(project):
         "project": {
             "name": proj.name,
             "start_date": str(proj.start_date) if proj.start_date else None,
-            "target_end_date": str(proj.target_end_date) if proj.target_end_date else None,
+            "target_end_date": (
+                str(proj.target_end_date) if proj.target_end_date else None
+            ),
         },
     }
 
 
 # ─── BOARD ────────────────────────────────────────────────────────────────────
+
 
 @frappe.whitelist()
 def get_board(project, show_child_issues=False):
@@ -1238,7 +1499,9 @@ def get_board(project, show_child_issues=False):
     proj = frappe.get_doc("BP Project", project)
     states = _normalize_workflow_states(proj.get_workflow_states())
 
-    board_filters = {} if frappe.parse_json(show_child_issues) else {"parent_task": None}
+    board_filters = (
+        {} if frappe.parse_json(show_child_issues) else {"parent_task": None}
+    )
 
     result = query_tasks(
         project=project,
@@ -1252,8 +1515,11 @@ def get_board(project, show_child_issues=False):
     # Resolved health (manual override, else derived from overdue/completion —
     # same formula the gateway portfolio rollup uses, via _project_health_label).
     from datetime import date
+
     today_str = date.today().isoformat()
-    completed_names = {s["name"] for s in states if s.get("category") in ("completed", "cancelled")}
+    completed_names = {
+        s["name"] for s in states if s.get("category") in ("completed", "cancelled")
+    }
     _total = _done = _overdue = 0
     for col in result.get("groups", []):
         is_done_col = col["key"] in completed_names
@@ -1263,7 +1529,9 @@ def get_board(project, show_child_issues=False):
                 _done += 1
             elif iss.get("due_date") and str(iss["due_date"]) < today_str:
                 _overdue += 1
-    resolved_health = _project_health_label(proj.health_override, _total, _done, _overdue)
+    resolved_health = _project_health_label(
+        proj.health_override, _total, _done, _overdue
+    )
 
     # Bundle all system users so frontend doesn't need a separate get_members call
     all_users = frappe.get_all(
@@ -1304,7 +1572,9 @@ def get_board(project, show_child_issues=False):
             "budget_amount": proj.budget_amount,
             "retainer_hours": proj.retainer_hours,
             "start_date": str(proj.start_date) if proj.start_date else None,
-            "target_end_date": str(proj.target_end_date) if proj.target_end_date else None,
+            "target_end_date": (
+                str(proj.target_end_date) if proj.target_end_date else None
+            ),
             "source_sales_order": proj.source_sales_order or "",
             "source_lead": proj.source_lead or "",
             "source_opportunity": proj.source_opportunity or "",
@@ -1331,7 +1601,9 @@ def get_board(project, show_child_issues=False):
             {
                 "user": m.user,
                 "role": m.role,
-                "full_name": next((u["full_name"] for u in user_list if u["user"] == m.user), m.user),
+                "full_name": next(
+                    (u["full_name"] for u in user_list if u["user"] == m.user), m.user
+                ),
             }
             for m in (proj.members or [])
         ],
@@ -1358,13 +1630,18 @@ def _completing_into_blocked(doc, new_status, force):
     completed = set(proj.get_completed_statuses())
     if new_status not in completed or doc.status in completed:
         return None
-    blocker_names = [l.linked_task for l in (doc.get("links") or [])
-                     if l.link_type == "is blocked by" and l.linked_task]
+    blocker_names = [
+        l.linked_task
+        for l in (doc.get("links") or [])
+        if l.link_type == "is blocked by" and l.linked_task
+    ]
     if not blocker_names:
         return None
     blockers = [
-        b for b in frappe.get_all(
-            "BP Task", filters={"name": ["in", blocker_names]},
+        b
+        for b in frappe.get_all(
+            "BP Task",
+            filters={"name": ["in", blocker_names]},
             fields=["name", "task_key", "title", "status"],
         )
         if b["status"] not in completed
@@ -1375,6 +1652,7 @@ def _completing_into_blocked(doc, new_status, force):
 @frappe.whitelist()
 def update_task_status(issue, status, board_order=None, force=False):
     from batch_projects.cache import invalidate_project
+
     doc = frappe.get_doc("BP Task", issue)
     _check_permission(doc.project, "BP Member")
     blockers = _completing_into_blocked(doc, status, _as_bool(force))
@@ -1403,8 +1681,9 @@ def move_task(issue, status=None, prev=None, next=None, force=False):
     from batch_projects.cache import invalidate_project
     from batch_projects import rank as rankutil
     from batch_projects.events import emit, TASK_MOVED
+    from batch_projects.task_validation import require_live_task
 
-    doc = frappe.get_doc("BP Task", issue)
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
 
     old_status = doc.status
@@ -1428,27 +1707,32 @@ def move_task(issue, status=None, prev=None, next=None, force=False):
         r = rankutil.rank_between(_rank(prev), _rank(next))
         if r is None:  # neighbours are adjacent — rebalance the column and retry
             rankutil.rebalance_column(doc.project, target_status)
-            r = rankutil.rank_between(_rank(prev), _rank(next)) \
-                or rankutil.end_rank(doc.project, target_status)
+            r = rankutil.rank_between(_rank(prev), _rank(next)) or rankutil.end_rank(
+                doc.project, target_status
+            )
 
         doc.board_rank = r
         doc.save(ignore_permissions=True)
 
     invalidate_project(doc.project)
 
-    emit(TASK_MOVED, {
-        "project": doc.project,
-        "task": doc.name,
-        "task_key": doc.task_key,
-        "old_status": old_status,
-        "new_status": doc.status,
-        "board_rank": doc.board_rank,
-    })
+    emit(
+        TASK_MOVED,
+        {
+            "project": doc.project,
+            "task": doc.name,
+            "task_key": doc.task_key,
+            "old_status": old_status,
+            "new_status": doc.status,
+            "board_rank": doc.board_rank,
+        },
+    )
 
     return {"ok": True, "board_rank": doc.board_rank}
 
 
 # ─── APPROVALS ────────────────────────────────────────────────────────────────
+
 
 @frappe.whitelist()
 def request_approval(issue, approver):
@@ -1462,21 +1746,31 @@ def request_approval(issue, approver):
     doc.save(ignore_permissions=True)
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
+
     invalidate_project(doc.project)
     from batch_projects.events import emit, TASK_APPROVAL_REQUESTED
-    emit(TASK_APPROVAL_REQUESTED, {
-        "project": doc.project, "task": doc.name, "task_key": doc.task_key,
-        "approver": approver,
-    })
+
+    emit(
+        TASK_APPROVAL_REQUESTED,
+        {
+            "project": doc.project,
+            "task": doc.name,
+            "task_key": doc.task_key,
+            "approver": approver,
+        },
+    )
     return {"ok": True, "approval_status": "Pending", "approver": approver}
 
 
 @frappe.whitelist()
 def approve_task(issue):
     """Approve a task. Only the designated approver may approve."""
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
     from frappe.utils import now_datetime
+
     user = frappe.session.user
     if doc.approver and doc.approver != user:
         if "System Manager" not in frappe.get_roles(user):
@@ -1489,21 +1783,31 @@ def approve_task(issue):
     doc.save(ignore_permissions=True)
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
+
     invalidate_project(doc.project)
     from batch_projects.events import emit, TASK_APPROVAL_DECIDED
-    emit(TASK_APPROVAL_DECIDED, {
-        "project": doc.project, "task": doc.name, "task_key": doc.task_key,
-        "decision": "Approved",
-    })
+
+    emit(
+        TASK_APPROVAL_DECIDED,
+        {
+            "project": doc.project,
+            "task": doc.name,
+            "task_key": doc.task_key,
+            "decision": "Approved",
+        },
+    )
     return {"ok": True, "approval_status": "Approved"}
 
 
 @frappe.whitelist()
 def reject_task(issue, reason=None):
     """Reject a task. Only the designated approver may reject."""
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
     from frappe.utils import now_datetime
+
     user = frappe.session.user
     if doc.approver and doc.approver != user:
         if "System Manager" not in frappe.get_roles(user):
@@ -1518,32 +1822,54 @@ def reject_task(issue, reason=None):
     # Log the rejection reason as a comment
     if reason:
         from batch_projects.events import emit, COMMENT_ADDED
-        activity = frappe.get_doc({
-            "doctype": "BP Activity",
-            "task": issue,
-            "action_type": "Comment",
-            "comment_text": f"Rejection reason: {reason}",
-            "user": frappe.session.user,
-        })
+
+        activity = frappe.get_doc(
+            {
+                "doctype": "BP Activity",
+                "task": issue,
+                "action_type": "Comment",
+                "comment_text": f"Rejection reason: {reason}",
+                "user": frappe.session.user,
+            }
+        )
         activity.insert(ignore_permissions=True)
-        emit(COMMENT_ADDED, {"project": doc.project, "task": issue,
-              "task_key": doc.task_key, "comment_text": activity.comment_text,
-              "activity": activity.name, "mentions": []})
+        emit(
+            COMMENT_ADDED,
+            {
+                "project": doc.project,
+                "task": issue,
+                "task_key": doc.task_key,
+                "comment_text": activity.comment_text,
+                "activity": activity.name,
+                "mentions": [],
+            },
+        )
     from batch_projects.cache import invalidate_project
+
     invalidate_project(doc.project)
     from batch_projects.events import emit as _emit, TASK_APPROVAL_DECIDED
-    _emit(TASK_APPROVAL_DECIDED, {
-        "project": doc.project, "task": doc.name, "task_key": doc.task_key,
-        "decision": "Rejected", "reason": reason,
-    })
+
+    _emit(
+        TASK_APPROVAL_DECIDED,
+        {
+            "project": doc.project,
+            "task": doc.name,
+            "task_key": doc.task_key,
+            "decision": "Rejected",
+            "reason": reason,
+        },
+    )
     return {"ok": True, "approval_status": "Rejected"}
 
 
 # ─── ISSUES ───────────────────────────────────────────────────────────────────
 
+
 @frappe.whitelist()
 def get_task(issue):
     doc = frappe.get_doc("BP Task", issue)
+    if doc.is_deleted:
+        frappe.throw("Task has been trashed.", frappe.PermissionError)
     _check_task_permission(issue, doc.project, "BP Viewer")
     data = doc.as_dict()
     hidden_cf_ids = _custom_fields.hidden_field_ids_for_project(doc.project, "tasks")
@@ -1556,11 +1882,17 @@ def get_task(issue):
     # this task — hours_source tells the UI whether the field is still open
     # to manual entry or is now timesheet-driven.
     from batch_projects.timesheet_sync import task_has_timesheet_rows
+
     data["hours_source"] = "timesheet" if task_has_timesheet_rows(issue) else "manual"
 
     # Assignees
     data["assignees"] = [
-        {"user": a.user, "full_name": a.full_name or frappe.db.get_value("User", a.user, "full_name") or a.user}
+        {
+            "user": a.user,
+            "full_name": a.full_name
+            or frappe.db.get_value("User", a.user, "full_name")
+            or a.user,
+        }
         for a in doc.assignees
     ]
 
@@ -1571,7 +1903,9 @@ def get_task(issue):
     # Assignee. Resolved here, beside assignees, so every identity in the
     # payload is a name by the time it reaches the UI.
     data["reporter_name"] = (
-        frappe.db.get_value("Employee", doc.reporter, "employee_name") if doc.reporter else None
+        frappe.db.get_value("Employee", doc.reporter, "employee_name")
+        if doc.reporter
+        else None
     ) or doc.reporter
     data["approver_name"] = (
         frappe.db.get_value("User", doc.approver, "full_name") if doc.approver else None
@@ -1592,10 +1926,14 @@ def get_task(issue):
         {
             "link_type": l.link_type,
             "linked_task": l.linked_task,
-            "linked_task_key": (live.get(l.linked_task) or {}).get("task_key") or l.linked_task_key,
-            "linked_task_title": (live.get(l.linked_task) or {}).get("title") or l.linked_task_title,
-            "linked_task_status": (live.get(l.linked_task) or {}).get("status") or l.linked_task_status,
-            "linked_task_project": (live.get(l.linked_task) or {}).get("project") or l.get("linked_task_project"),
+            "linked_task_key": (live.get(l.linked_task) or {}).get("task_key")
+            or l.linked_task_key,
+            "linked_task_title": (live.get(l.linked_task) or {}).get("title")
+            or l.linked_task_title,
+            "linked_task_status": (live.get(l.linked_task) or {}).get("status")
+            or l.linked_task_status,
+            "linked_task_project": (live.get(l.linked_task) or {}).get("project")
+            or l.get("linked_task_project"),
             # Scheduling + integration metadata — round-trips to the SPA so a
             # drawn dependency keeps its type/lag and integrations can read
             # back their own provenance blob.
@@ -1608,7 +1946,9 @@ def get_task(issue):
 
     # Epic
     if doc.epic:
-        epic = frappe.db.get_value("BP Epic", doc.epic, ["title", "color"], as_dict=True)
+        epic = frappe.db.get_value(
+            "BP Epic", doc.epic, ["title", "color"], as_dict=True
+        )
         if epic:
             data["epic_title"] = epic["title"]
             data["epic_color"] = epic["color"]
@@ -1617,8 +1957,17 @@ def get_task(issue):
     data["activity"] = frappe.get_all(
         "BP Activity",
         filters={"task": issue},
-        fields=["name", "action_type", "field_name", "old_value", "new_value",
-                "comment_text", "user", "guest_name", "creation"],
+        fields=[
+            "name",
+            "action_type",
+            "field_name",
+            "old_value",
+            "new_value",
+            "comment_text",
+            "user",
+            "guest_name",
+            "creation",
+        ],
         order_by="creation asc",
     )
 
@@ -1636,7 +1985,12 @@ def get_task(issue):
             fields=["user", "full_name"],
         )
         st["assignees"] = [
-            {"user": r["user"], "full_name": r["full_name"] or frappe.db.get_value("User", r["user"], "full_name") or r["user"]}
+            {
+                "user": r["user"],
+                "full_name": r["full_name"]
+                or frappe.db.get_value("User", r["user"], "full_name")
+                or r["user"],
+            }
             for r in st_rows
         ]
     data["subtasks"] = subtasks_raw
@@ -1658,18 +2012,28 @@ def get_task(issue):
     # no attachments, same "field-level, not surface-level" treatment as the
     # custom-field stripping just above.
     from batch_projects import access
+
     if access.has_capability(doc.project, "view_files"):
         data["attachments"] = frappe.get_all(
             "File",
             filters={"attached_to_doctype": "BP Task", "attached_to_name": issue},
-            fields=["name", "file_name", "file_url", "file_size", "is_private", "creation"],
+            fields=[
+                "name",
+                "file_name",
+                "file_url",
+                "file_size",
+                "is_private",
+                "creation",
+            ],
             order_by="creation asc",
         )
     else:
         data["attachments"] = []
 
     # Watch state
-    watcher_users = frappe.get_all("BP Task Watcher", filters={"task": issue}, pluck="user")
+    watcher_users = frappe.get_all(
+        "BP Task Watcher", filters={"task": issue}, pluck="user"
+    )
     data["watching"] = frappe.session.user in watcher_users
     data["watcher_count"] = len(watcher_users)
 
@@ -1677,12 +2041,28 @@ def get_task(issue):
 
 
 @frappe.whitelist()
-def create_task(project, title, status=None, priority="Medium", task_type="Task",
-                 assignees=None, epic=None, description=None, story_points=None,
-                 due_date=None, start_date=None, planned_start=None, planned_end=None,
-                 parent_task=None,
-                 estimated_hours=None, custom_field_values=None,
-                 labels=None, sprint=None, billable=0, team=None):
+def create_task(
+    project,
+    title,
+    status=None,
+    priority="Medium",
+    task_type="Task",
+    assignees=None,
+    epic=None,
+    description=None,
+    story_points=None,
+    due_date=None,
+    start_date=None,
+    planned_start=None,
+    planned_end=None,
+    parent_task=None,
+    estimated_hours=None,
+    custom_field_values=None,
+    labels=None,
+    sprint=None,
+    billable=0,
+    team=None,
+):
 
     _check_permission(project, "BP Member")
 
@@ -1703,31 +2083,39 @@ def create_task(project, title, status=None, priority="Medium", task_type="Task"
         states = _normalize_workflow_states(proj.get_workflow_states())
         status = states[0]["name"] if states else "To Do"
 
-    doc = frappe.get_doc({
-        "doctype": "BP Task",
-        "project": project,
-        "title": title,
-        "status": status,
-        "priority": priority,
-        "task_type": task_type,
-        "epic": epic,
-        "sprint": sprint,
-        "description": description,
-        "story_points": int(story_points) if story_points else 0,
-        "due_date": due_date,
-        "start_date": start_date,
-        "planned_start": planned_start,
-        "planned_end": planned_end,
-        "parent_task": parent_task,
-        "estimated_hours": float(estimated_hours) if estimated_hours else None,
-        "billable": billable,
-        "team": team,
-        "custom_field_values": json.dumps(custom_field_values) if custom_field_values else None,
-        "labels": json.dumps(labels) if labels else None,
-        "assignees": [{"user": a["user"] if isinstance(a, dict) else a} for a in (assignees or [])],
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Task",
+            "project": project,
+            "title": title,
+            "status": status,
+            "priority": priority,
+            "task_type": task_type,
+            "epic": epic,
+            "sprint": sprint,
+            "description": description,
+            "story_points": int(story_points) if story_points else 0,
+            "due_date": due_date,
+            "start_date": start_date,
+            "planned_start": planned_start,
+            "planned_end": planned_end,
+            "parent_task": parent_task,
+            "estimated_hours": float(estimated_hours) if estimated_hours else None,
+            "billable": billable,
+            "team": team,
+            "custom_field_values": (
+                json.dumps(custom_field_values) if custom_field_values else None
+            ),
+            "labels": json.dumps(labels) if labels else None,
+            "assignees": [
+                {"user": a["user"] if isinstance(a, dict) else a}
+                for a in (assignees or [])
+            ],
+        }
+    )
     doc.insert(ignore_permissions=True)
     from batch_projects.cache import invalidate_project
+
     invalidate_project(project)
     return doc.as_dict()
 
@@ -1752,16 +2140,37 @@ def create_task(project, title, status=None, priority="Medium", task_type="Task"
 #     caller of this path; no reason for a bare Member to set them directly.
 # Extend THIS set, not the exclusion list, when a new field needs to be
 # editable through update_task/bulk_update_tasks.
-_MEMBER_WRITABLE_FIELDS = frozenset({
-    "title", "description", "status", "priority", "task_type",
-    "epic", "sprint", "milestone", "team", "due_date", "start_date",
-    "planned_start", "planned_end", "blocked_reason",
-    "story_points", "estimated_hours", "billable", "is_unplanned",
-    "needs_triage", "is_recurring", "recurrence_frequency", "recurrence_end_date",
-    "resolution",
-    # Handled by dedicated branches below, not the generic setattr:
-    "custom_field_values", "labels", "assignees",
-})
+_MEMBER_WRITABLE_FIELDS = frozenset(
+    {
+        "title",
+        "description",
+        "status",
+        "priority",
+        "task_type",
+        "epic",
+        "sprint",
+        "milestone",
+        "team",
+        "due_date",
+        "start_date",
+        "planned_start",
+        "planned_end",
+        "blocked_reason",
+        "story_points",
+        "estimated_hours",
+        "billable",
+        "is_unplanned",
+        "needs_triage",
+        "is_recurring",
+        "recurrence_frequency",
+        "recurrence_end_date",
+        "resolution",
+        # Handled by dedicated branches below, not the generic setattr:
+        "custom_field_values",
+        "labels",
+        "assignees",
+    }
+)
 
 
 @frappe.whitelist()
@@ -1769,7 +2178,9 @@ def update_task(issue, fields, force=False):
     if isinstance(fields, str):
         fields = json.loads(fields)
 
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+
+    doc = require_live_task(issue)
     _check_task_permission(issue, doc.project, "BP Member")
 
     # Same view-independent blocker guard for status changes via the generic path.
@@ -1803,19 +2214,25 @@ def update_task(issue, fields, force=False):
             if isinstance(v, str):
                 v = json.loads(v)
             doc.set("assignees", [])
-            for a in (v or []):
+            for a in v or []:
                 user = a.get("user") if isinstance(a, dict) else a
                 if not user:
                     continue
                 full_name = frappe.db.get_value("User", user, "full_name") or user
-                doc.append("assignees", {
-                    "user": user,
-                    "full_name": full_name,
-                })
+                doc.append(
+                    "assignees",
+                    {
+                        "user": user,
+                        "full_name": full_name,
+                    },
+                )
 
         elif hasattr(doc, k):
-            if v == "" and doc.meta.get_field(k) and \
-               doc.meta.get_field(k).fieldtype in ("Date", "Datetime"):
+            if (
+                v == ""
+                and doc.meta.get_field(k)
+                and doc.meta.get_field(k).fieldtype in ("Date", "Datetime")
+            ):
                 v = None
             setattr(doc, k, v)
 
@@ -1828,6 +2245,7 @@ def update_task(issue, fields, force=False):
     # ~1s apart per single update_task() call) — removed, not re-added.
     doc.save(ignore_permissions=True)
     from batch_projects.cache import invalidate_project
+
     invalidate_project(doc.project)
 
     result = doc.as_dict()
@@ -1884,16 +2302,20 @@ def bulk_update_tasks(issues, fields):
 
                 if k == "assignees":
                     existing_users = {a.user for a in doc.assignees}
-                    for a in (v or []):
+                    for a in v or []:
                         user = a.get("user") if isinstance(a, dict) else a
                         if not user or user in existing_users:
                             continue
-                        full_name = frappe.db.get_value("User", user, "full_name") or user
+                        full_name = (
+                            frappe.db.get_value("User", user, "full_name") or user
+                        )
                         doc.append("assignees", {"user": user, "full_name": full_name})
                         existing_users.add(user)
 
                 elif k == "labels":
-                    doc.labels = json.dumps(v if not isinstance(v, str) else json.loads(v))
+                    doc.labels = json.dumps(
+                        v if not isinstance(v, str) else json.loads(v)
+                    )
 
                 elif hasattr(doc, k):
                     setattr(doc, k, v)
@@ -1908,6 +2330,7 @@ def bulk_update_tasks(issues, fields):
             failed.append({"name": issue, "reason": str(e)[:200]})
 
     from batch_projects.cache import invalidate_project
+
     for p in projects_touched:
         invalidate_project(p)
 
@@ -1943,6 +2366,7 @@ def bulk_delete_tasks(issues):
             failed.append({"name": issue, "reason": str(e)[:200]})
 
     from batch_projects.cache import invalidate_project
+
     for p in projects_touched:
         invalidate_project(p)
 
@@ -1956,20 +2380,36 @@ def _hard_delete_task(doc_or_name):
     """Actually destroy a task row — the only path that does. Used by
     permanently_delete_task and the daily purge job. delete_task itself no
     longer calls this directly; it soft-deletes (see below)."""
-    doc = doc_or_name if hasattr(doc_or_name, "delete") else frappe.get_doc("BP Task", doc_or_name)
+    doc = (
+        doc_or_name
+        if hasattr(doc_or_name, "delete")
+        else frappe.get_doc("BP Task", doc_or_name)
+    )
     issue = doc.name
 
-    for activity in frappe.get_all("BP Activity", filters={"task": issue}, pluck="name"):
+    for activity in frappe.get_all(
+        "BP Activity", filters={"task": issue}, pluck="name"
+    ):
         frappe.delete_doc("BP Activity", activity, ignore_permissions=True, force=True)
 
     if frappe.db.table_exists("BP Notification"):
-        for notif in frappe.get_all("BP Notification", filters={"task": issue}, pluck="name"):
-            frappe.delete_doc("BP Notification", notif, ignore_permissions=True, force=True)
+        for notif in frappe.get_all(
+            "BP Notification", filters={"task": issue}, pluck="name"
+        ):
+            frappe.delete_doc(
+                "BP Notification", notif, ignore_permissions=True, force=True
+            )
 
-    for watcher in frappe.get_all("BP Task Watcher", filters={"task": issue}, pluck="name"):
-        frappe.delete_doc("BP Task Watcher", watcher, ignore_permissions=True, force=True)
+    for watcher in frappe.get_all(
+        "BP Task Watcher", filters={"task": issue}, pluck="name"
+    ):
+        frappe.delete_doc(
+            "BP Task Watcher", watcher, ignore_permissions=True, force=True
+        )
 
-    for subtask in frappe.get_all("BP Task", filters={"parent_task": issue}, pluck="name"):
+    for subtask in frappe.get_all(
+        "BP Task", filters={"parent_task": issue}, pluck="name"
+    ):
         _hard_delete_task(subtask)
 
     doc.delete(ignore_permissions=True)
@@ -1990,7 +2430,9 @@ def delete_task(issue):
     if doc.is_deleted:
         return {"ok": True, "trashed": True}
 
-    for subtask in frappe.get_all("BP Task", filters={"parent_task": issue, "is_deleted": 0}, pluck="name"):
+    for subtask in frappe.get_all(
+        "BP Task", filters={"parent_task": issue, "is_deleted": 0}, pluck="name"
+    ):
         delete_task(subtask)
 
     # frappe.db.set_value, not doc.save() — this is a system flag flip, not
@@ -2000,13 +2442,19 @@ def delete_task(issue):
     # notification to every watcher for what the user experiences as a
     # delete, not an edit. Same reasoning timesheet_sync.py documents for
     # actual_hours.
-    frappe.db.set_value("BP Task", issue, {
-        "is_deleted": 1,
-        "deleted_on": frappe.utils.now_datetime(),
-        "deleted_by": frappe.session.user,
-    }, update_modified=False)
+    frappe.db.set_value(
+        "BP Task",
+        issue,
+        {
+            "is_deleted": 1,
+            "deleted_on": frappe.utils.now_datetime(),
+            "deleted_by": frappe.session.user,
+        },
+        update_modified=False,
+    )
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
+
     invalidate_project(project)
     return {"ok": True, "trashed": True}
 
@@ -2020,15 +2468,25 @@ def restore_task(issue):
     if not doc.is_deleted:
         return {"ok": True, "restored": True}
 
-    frappe.db.set_value("BP Task", issue, {
-        "is_deleted": 0, "deleted_on": None, "deleted_by": None,
-    }, update_modified=False)
+    frappe.db.set_value(
+        "BP Task",
+        issue,
+        {
+            "is_deleted": 0,
+            "deleted_on": None,
+            "deleted_by": None,
+        },
+        update_modified=False,
+    )
 
-    for subtask in frappe.get_all("BP Task", filters={"parent_task": issue, "is_deleted": 1}, pluck="name"):
+    for subtask in frappe.get_all(
+        "BP Task", filters={"parent_task": issue, "is_deleted": 1}, pluck="name"
+    ):
         restore_task(subtask)
 
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
+
     invalidate_project(doc.project)
     return {"ok": True, "restored": True}
 
@@ -2040,8 +2498,16 @@ def list_deleted_tasks(project):
     return frappe.get_all(
         "BP Task",
         filters={"project": project, "is_deleted": 1},
-        fields=["name", "task_key", "title", "status", "priority",
-                "parent_task", "deleted_on", "deleted_by"],
+        fields=[
+            "name",
+            "task_key",
+            "title",
+            "status",
+            "priority",
+            "parent_task",
+            "deleted_on",
+            "deleted_by",
+        ],
         order_by="deleted_on desc",
     )
 
@@ -2058,6 +2524,7 @@ def permanently_delete_task(issue):
     _hard_delete_task(doc)
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
+
     invalidate_project(project)
     return {"ok": True}
 
@@ -2067,6 +2534,7 @@ def permanently_delete_task(issue):
 # No migration needed — the field already exists.
 
 import uuid
+
 
 def _get_checklist(task):
     doc = frappe.get_doc("BP Task", task)
@@ -2185,23 +2653,26 @@ def duplicate_task(issue):
     states = _normalize_workflow_states(proj.get_workflow_states())
     default_status = states[0]["name"] if states else "To Do"
 
-    doc = frappe.get_doc({
-        "doctype": "BP Task",
-        "project": src.project,
-        "title": f"Copy of {src.title}",
-        "status": default_status,
-        "priority": src.priority,
-        "task_type": src.task_type,
-        "epic": src.epic,
-        "description": src.description,
-        "story_points": src.story_points,
-        "estimated_hours": src.estimated_hours,
-        "billable": src.billable,
-        "custom_field_values": src.custom_field_values,
-        "labels": src.labels,
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Task",
+            "project": src.project,
+            "title": f"Copy of {src.title}",
+            "status": default_status,
+            "priority": src.priority,
+            "task_type": src.task_type,
+            "epic": src.epic,
+            "description": src.description,
+            "story_points": src.story_points,
+            "estimated_hours": src.estimated_hours,
+            "billable": src.billable,
+            "custom_field_values": src.custom_field_values,
+            "labels": src.labels,
+        }
+    )
     doc.insert(ignore_permissions=True)
     from batch_projects.cache import invalidate_project
+
     invalidate_project(src.project)
     return doc.as_dict()
 
@@ -2250,24 +2721,35 @@ def move_task_to_project(issue, target_project):
     frappe.db.commit()
 
     from batch_projects.cache import invalidate_project
+
     invalidate_project(old_project)
     invalidate_project(target_project)
 
     from batch_projects.events import emit, TASK_UPDATED
-    emit(TASK_UPDATED, {
-        "project": target_project,
-        "task": doc.name,
-        "task_key": doc.task_key,
-        "changes": [{"field": "project", "from": old_key, "to": doc.task_key}],
-    })
 
-    return {"name": doc.name, "task_key": doc.task_key, "project": target_project, "old_key": old_key}
+    emit(
+        TASK_UPDATED,
+        {
+            "project": target_project,
+            "task": doc.name,
+            "task_key": doc.task_key,
+            "changes": [{"field": "project", "from": old_key, "to": doc.task_key}],
+        },
+    )
+
+    return {
+        "name": doc.name,
+        "task_key": doc.task_key,
+        "project": target_project,
+        "old_key": old_key,
+    }
 
 
 # ─── EXPORT DATA ───────────────────────────────────────────────────────────────
 # Called by bp-gateway as the service account — not reachable by a browser
 # session. Returns raw task rows as JSON; the gateway handles xlsx/pdf generation
 # and the paid-tier gate.
+
 
 def _assert_service_caller():
     """Only the bridge service account (System Manager / Administrator) may call."""
@@ -2296,6 +2778,7 @@ def get_member_projects(user=None):
     if user == "Administrator" or "System Manager" in frappe.get_roles(user):
         return {"all": True, "projects": []}
     from batch_projects.permissions import get_accessible_projects
+
     accessible = get_accessible_projects(user=user)
     return {"all": False, "projects": sorted(accessible or [])}
 
@@ -2342,8 +2825,11 @@ def sync_rebac_state(resource, offset=0, limit=500):
         # hook, so this exclusion has to be explicit here too, same as every
         # other BP Task get_all call site.
         rows = frappe.get_all(
-            doctype, fields=fields, filters=_task_filters(),
-            limit_start=offset, limit_page_length=limit,
+            doctype,
+            fields=fields,
+            filters=_task_filters(),
+            limit_start=offset,
+            limit_page_length=limit,
             order_by="creation asc",
         )
     elif resource == "task_assignees":
@@ -2367,8 +2853,10 @@ def sync_rebac_state(resource, offset=0, limit=500):
         )
     else:
         rows = frappe.get_all(
-            doctype, fields=fields,
-            limit_start=offset, limit_page_length=limit,
+            doctype,
+            fields=fields,
+            limit_start=offset,
+            limit_page_length=limit,
             order_by="creation asc",
         )
     if resource == "project_members":
@@ -2377,6 +2865,7 @@ def sync_rebac_state(resource, offset=0, limit=500):
         # spelling model.fga's relation names are lowercased from
         # ("admin"/"manager"/"member"/"viewer"), same as access.normalize_role.
         from batch_projects.access import normalize_role
+
         for r in rows:
             r["role"] = normalize_role(r.get("role"))
 
@@ -2396,50 +2885,85 @@ def get_export_data(project, view=None):
 
     # Match the column set exportCsv uses: key, title, plus visible columns
     # We use a fixed sensible default set since we don't have the user's visibleCols
-    tasks = frappe.get_all("BP Task", filters={"project": project},
-        fields=["name", "task_key", "title", "status", "priority", "task_type",
-                "due_date", "start_date", "story_points",
-                "epic", "sprint", "milestone", "estimated_hours", "actual_hours",
-                "billable", "labels", "creation", "modified"],
-        order_by="creation asc")
+    tasks = frappe.get_all(
+        "BP Task",
+        filters={"project": project},
+        fields=[
+            "name",
+            "task_key",
+            "title",
+            "status",
+            "priority",
+            "task_type",
+            "due_date",
+            "start_date",
+            "story_points",
+            "epic",
+            "sprint",
+            "milestone",
+            "estimated_hours",
+            "actual_hours",
+            "billable",
+            "labels",
+            "creation",
+            "modified",
+        ],
+        order_by="creation asc",
+    )
 
     rows = []
     for t in tasks:
         # Resolve assignee names from child table
         assignee_names = []
         try:
-            alist = frappe.get_all("BP Task Assignee", filters={"parent": t["name"]}, fields=["user", "full_name"])
+            alist = frappe.get_all(
+                "BP Task Assignee",
+                filters={"parent": t["name"]},
+                fields=["user", "full_name"],
+            )
             for a in alist:
-                name = a.get("full_name", "") or frappe.db.get_value("User", a.get("user", ""), "full_name") or a.get("user", "")
+                name = (
+                    a.get("full_name", "")
+                    or frappe.db.get_value("User", a.get("user", ""), "full_name")
+                    or a.get("user", "")
+                )
                 if name:
                     assignee_names.append(name)
         except Exception:
             pass
 
-        epic_title = frappe.db.get_value("BP Epic", t["epic"], "title") if t.get("epic") else ""
-        sprint_name = frappe.db.get_value("BP Sprint", t["sprint"], "sprint_name") if t.get("sprint") else ""
+        epic_title = (
+            frappe.db.get_value("BP Epic", t["epic"], "title") if t.get("epic") else ""
+        )
+        sprint_name = (
+            frappe.db.get_value("BP Sprint", t["sprint"], "sprint_name")
+            if t.get("sprint")
+            else ""
+        )
         milestone_name = t.get("milestone", "")
 
-        rows.append({
-            "key": t.get("task_key", ""),
-            "title": t.get("title", ""),
-            "status": t.get("status", ""),
-            "priority": t.get("priority", ""),
-            "type": t.get("task_type", ""),
-            "assignee": "; ".join(assignee_names),
-            "due_date": str(t.get("due_date") or ""),
-            "start_date": str(t.get("start_date") or ""),
-            "story_points": t.get("story_points", 0),
-            "epic": epic_title or (t.get("epic") or ""),
-            "sprint": sprint_name or (t.get("sprint") or ""),
-            "milestone": milestone_name,
-            "estimated_hours": t.get("estimated_hours") or "",
-            "actual_hours": t.get("actual_hours") or "",
-            "billable": "Yes" if t.get("billable") else "No",
-            "labels": t.get("labels") or "",
-            "created": str(t.get("creation") or ""),
-            "modified": str(t.get("modified") or ""),
-        })
+        rows.append(
+            {
+                "key": t.get("task_key", ""),
+                "title": t.get("title", ""),
+                "status": t.get("status", ""),
+                "priority": t.get("priority", ""),
+                "type": t.get("task_type", ""),
+                "assignee": "; ".join(assignee_names),
+                "due_date": str(t.get("due_date") or ""),
+                "start_date": str(t.get("start_date") or ""),
+                "story_points": t.get("story_points", 0),
+                "epic": epic_title or (t.get("epic") or ""),
+                "sprint": sprint_name or (t.get("sprint") or ""),
+                "milestone": milestone_name,
+                "estimated_hours": t.get("estimated_hours") or "",
+                "actual_hours": t.get("actual_hours") or "",
+                "billable": "Yes" if t.get("billable") else "No",
+                "labels": t.get("labels") or "",
+                "created": str(t.get("creation") or ""),
+                "modified": str(t.get("modified") or ""),
+            }
+        )
 
     return rows
 
@@ -2449,10 +2973,6 @@ def get_export_data(project, view=None):
 _VIEW_TYPE_MAP = {"board": "Board", "list": "List", "timeline": "Timeline"}
 
 
-
-
-
-
 @frappe.whitelist()
 def get_views(project):
     """Return the current user's saved views for a project."""
@@ -2460,8 +2980,15 @@ def get_views(project):
     views = frappe.get_all(
         "BP View",
         filters={"project": project, "owner": frappe.session.user},
-        fields=["name", "view_name", "view_type", "filters", "is_default",
-                "subscribed", "subscription_frequency"],
+        fields=[
+            "name",
+            "view_name",
+            "view_type",
+            "filters",
+            "is_default",
+            "subscribed",
+            "subscription_frequency",
+        ],
         order_by="creation asc",
     )
     return [_serialize_view(v) for v in views]
@@ -2481,19 +3008,26 @@ def save_view(project, view_name, config, view_type="board", is_default=0):
     if int(is_default or 0):
         _clear_default_views(project, frappe.session.user)
 
-    doc = frappe.get_doc({
-        "doctype": "BP View",
-        "view_name": view_name.strip(),
-        "project": project,
-        "view_type": _VIEW_TYPE_MAP.get((view_type or "board").lower(), "Board"),
-        "filters": json.dumps(config),
-        "is_default": 1 if int(is_default or 0) else 0,
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP View",
+            "view_name": view_name.strip(),
+            "project": project,
+            "view_type": _VIEW_TYPE_MAP.get((view_type or "board").lower(), "Board"),
+            "filters": json.dumps(config),
+            "is_default": 1 if int(is_default or 0) else 0,
+        }
+    )
     doc.insert(ignore_permissions=True)
-    return _serialize_view({
-        "name": doc.name, "view_name": doc.view_name, "view_type": doc.view_type,
-        "filters": doc.filters, "is_default": doc.is_default,
-    })
+    return _serialize_view(
+        {
+            "name": doc.name,
+            "view_name": doc.view_name,
+            "view_type": doc.view_type,
+            "filters": doc.filters,
+            "is_default": doc.is_default,
+        }
+    )
 
 
 @frappe.whitelist()
@@ -2513,12 +3047,15 @@ def update_view(view, view_name=None, config=None, is_default=None):
             _clear_default_views(doc.project, frappe.session.user)
         doc.is_default = 1 if int(is_default) else 0
     doc.save(ignore_permissions=True)
-    return _serialize_view({
-        "name": doc.name, "view_name": doc.view_name, "view_type": doc.view_type,
-        "filters": doc.filters, "is_default": doc.is_default,
-    })
-
-
+    return _serialize_view(
+        {
+            "name": doc.name,
+            "view_name": doc.view_name,
+            "view_type": doc.view_type,
+            "filters": doc.filters,
+            "is_default": doc.is_default,
+        }
+    )
 
 
 @frappe.whitelist()
@@ -2531,7 +3068,10 @@ def subscribe_view(view, subscribed=1, frequency="Weekly"):
     if frequency in ("Daily", "Weekly"):
         doc.subscription_frequency = frequency
     doc.save(ignore_permissions=True)
-    return {"subscribed": bool(doc.subscribed), "subscription_frequency": doc.subscription_frequency}
+    return {
+        "subscribed": bool(doc.subscribed),
+        "subscription_frequency": doc.subscription_frequency,
+    }
 
 
 # ── Mirror columns ───────────────────────────────────────────────────────────
@@ -2539,48 +3079,56 @@ def subscribe_view(view, subscribed=1, frequency="Weekly"):
 # columns. Never expose anything outside this map.
 MIRROR_SCHEMA = {
     "Sales Order": [
-        {"fieldname": "status",           "label": "Status",      "fieldtype": "Status"},
-        {"fieldname": "grand_total",      "label": "Total",       "fieldtype": "Currency"},
-        {"fieldname": "transaction_date", "label": "Date",        "fieldtype": "Date"},
-        {"fieldname": "delivery_date",    "label": "Delivery",    "fieldtype": "Date"},
-        {"fieldname": "customer",         "label": "Customer",    "fieldtype": "Text"},
-        {"fieldname": "per_billed",       "label": "% Billed",    "fieldtype": "Percent"},
+        {"fieldname": "status", "label": "Status", "fieldtype": "Status"},
+        {"fieldname": "grand_total", "label": "Total", "fieldtype": "Currency"},
+        {"fieldname": "transaction_date", "label": "Date", "fieldtype": "Date"},
+        {"fieldname": "delivery_date", "label": "Delivery", "fieldtype": "Date"},
+        {"fieldname": "customer", "label": "Customer", "fieldtype": "Text"},
+        {"fieldname": "per_billed", "label": "% Billed", "fieldtype": "Percent"},
     ],
     "Sales Invoice": [
-        {"fieldname": "status",             "label": "Status",      "fieldtype": "Status"},
-        {"fieldname": "grand_total",        "label": "Total",       "fieldtype": "Currency"},
-        {"fieldname": "outstanding_amount", "label": "Outstanding", "fieldtype": "Currency"},
-        {"fieldname": "due_date",           "label": "Due",         "fieldtype": "Date"},
-        {"fieldname": "customer",           "label": "Customer",    "fieldtype": "Text"},
+        {"fieldname": "status", "label": "Status", "fieldtype": "Status"},
+        {"fieldname": "grand_total", "label": "Total", "fieldtype": "Currency"},
+        {
+            "fieldname": "outstanding_amount",
+            "label": "Outstanding",
+            "fieldtype": "Currency",
+        },
+        {"fieldname": "due_date", "label": "Due", "fieldtype": "Date"},
+        {"fieldname": "customer", "label": "Customer", "fieldtype": "Text"},
     ],
     "Purchase Order": [
-        {"fieldname": "status",        "label": "Status",   "fieldtype": "Status"},
-        {"fieldname": "grand_total",   "label": "Total",    "fieldtype": "Currency"},
-        {"fieldname": "supplier",      "label": "Supplier", "fieldtype": "Text"},
+        {"fieldname": "status", "label": "Status", "fieldtype": "Status"},
+        {"fieldname": "grand_total", "label": "Total", "fieldtype": "Currency"},
+        {"fieldname": "supplier", "label": "Supplier", "fieldtype": "Text"},
         {"fieldname": "schedule_date", "label": "Expected", "fieldtype": "Date"},
     ],
     "Purchase Invoice": [
-        {"fieldname": "status",             "label": "Status",      "fieldtype": "Status"},
-        {"fieldname": "grand_total",        "label": "Total",       "fieldtype": "Currency"},
-        {"fieldname": "outstanding_amount", "label": "Outstanding", "fieldtype": "Currency"},
-        {"fieldname": "supplier",           "label": "Supplier",    "fieldtype": "Text"},
+        {"fieldname": "status", "label": "Status", "fieldtype": "Status"},
+        {"fieldname": "grand_total", "label": "Total", "fieldtype": "Currency"},
+        {
+            "fieldname": "outstanding_amount",
+            "label": "Outstanding",
+            "fieldtype": "Currency",
+        },
+        {"fieldname": "supplier", "label": "Supplier", "fieldtype": "Text"},
     ],
     "Customer": [
-        {"fieldname": "customer_group", "label": "Group",     "fieldtype": "Text"},
-        {"fieldname": "territory",      "label": "Territory", "fieldtype": "Text"},
+        {"fieldname": "customer_group", "label": "Group", "fieldtype": "Text"},
+        {"fieldname": "territory", "label": "Territory", "fieldtype": "Text"},
     ],
     "Supplier": [
-        {"fieldname": "supplier_group", "label": "Group",   "fieldtype": "Text"},
-        {"fieldname": "country",        "label": "Country", "fieldtype": "Text"},
+        {"fieldname": "supplier_group", "label": "Group", "fieldtype": "Text"},
+        {"fieldname": "country", "label": "Country", "fieldtype": "Text"},
     ],
     "Quotation": [
-        {"fieldname": "status",      "label": "Status",      "fieldtype": "Status"},
-        {"fieldname": "grand_total", "label": "Total",       "fieldtype": "Currency"},
-        {"fieldname": "valid_till",  "label": "Valid till",  "fieldtype": "Date"},
+        {"fieldname": "status", "label": "Status", "fieldtype": "Status"},
+        {"fieldname": "grand_total", "label": "Total", "fieldtype": "Currency"},
+        {"fieldname": "valid_till", "label": "Valid till", "fieldtype": "Date"},
     ],
     "Stock Entry": [
         {"fieldname": "stock_entry_type", "label": "Type", "fieldtype": "Text"},
-        {"fieldname": "posting_date",     "label": "Date", "fieldtype": "Date"},
+        {"fieldname": "posting_date", "label": "Date", "fieldtype": "Date"},
     ],
 }
 
@@ -2603,7 +3151,11 @@ def get_mirror_schema():
 # cross-project shared reference data, same reasoning as
 # search_erp_documents' own allowlist — left unscoped.
 _MIRROR_PROJECT_SCOPED_DOCTYPES = {
-    "Sales Order", "Sales Invoice", "Purchase Order", "Purchase Invoice", "Stock Entry",
+    "Sales Order",
+    "Sales Invoice",
+    "Purchase Order",
+    "Purchase Invoice",
+    "Stock Entry",
 }
 
 
@@ -2619,7 +3171,13 @@ def get_mirror_values(doctype, names, project=None):
     if not names:
         return {}
     fields = ["name"] + [f["fieldname"] for f in MIRROR_SCHEMA[doctype]]
-    if doctype in {"Sales Order", "Sales Invoice", "Purchase Order", "Purchase Invoice", "Quotation"}:
+    if doctype in {
+        "Sales Order",
+        "Sales Invoice",
+        "Purchase Order",
+        "Purchase Invoice",
+        "Quotation",
+    }:
         fields.append("currency")
 
     filters = {"name": ["in", names]}
@@ -2635,6 +3193,7 @@ def get_mirror_values(doctype, names, project=None):
 
 # ─── BACKLOG + SPRINT TASK MOVE ───────────────────────────────────────────────
 
+
 @frappe.whitelist()
 def get_backlog(project):
     """
@@ -2644,6 +3203,7 @@ def get_backlog(project):
     _check_permission(project, "BP Viewer")
 
     from batch_projects.cache import get as cache_get, set as cache_set, VIEW_BACKLOG
+
     cached = cache_get(VIEW_BACKLOG, project)
     if cached is not None:
         return cached
@@ -2652,10 +3212,23 @@ def get_backlog(project):
         "BP Task",
         filters=_task_filters({"project": project, "parent_task": ["in", ["", None]]}),
         fields=[
-            "name", "task_key", "title", "status", "priority", "task_type",
-            "sprint", "epic", "story_points", "actual_points", "is_unplanned",
-            "due_date", "start_date", "labels", "custom_field_values",
-            "billable", "estimated_hours",
+            "name",
+            "task_key",
+            "title",
+            "status",
+            "priority",
+            "task_type",
+            "sprint",
+            "epic",
+            "story_points",
+            "actual_points",
+            "is_unplanned",
+            "due_date",
+            "start_date",
+            "labels",
+            "custom_field_values",
+            "billable",
+            "estimated_hours",
         ],
         order_by="board_rank asc, creation asc",
     )
@@ -2669,10 +3242,12 @@ def get_backlog(project):
         )
         assignee_map = {}
         for a in assignees:
-            assignee_map.setdefault(a["parent"], []).append({
-                "user": a["user"],
-                "full_name": a["full_name"] or a["user"],
-            })
+            assignee_map.setdefault(a["parent"], []).append(
+                {
+                    "user": a["user"],
+                    "full_name": a["full_name"] or a["user"],
+                }
+            )
         refs_map = _fetch_task_refs(issue_names)
         epics = _fetch_epics(issues)
         for issue in issues:
@@ -2708,34 +3283,43 @@ def move_task_to_sprint(issue, sprint):
     doc.save(ignore_permissions=True)
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
+
     invalidate_project(doc.project)
     return {"task": doc.name, "sprint": doc.sprint}
 
 
 # ─── COMMENTS ─────────────────────────────────────────────────────────────────
 
+
 @frappe.whitelist()
 def add_comment(issue, comment_text):
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
 
-    activity = frappe.get_doc({
-        "doctype": "BP Activity",
-        "task": issue,
-        "action_type": "Comment",
-        "comment_text": comment_text,
-        "user": frappe.session.user,
-    })
+    activity = frappe.get_doc(
+        {
+            "doctype": "BP Activity",
+            "task": issue,
+            "action_type": "Comment",
+            "comment_text": comment_text,
+            "user": frappe.session.user,
+        }
+    )
     activity.insert(ignore_permissions=True)
 
-    emit(COMMENT_ADDED, {
-        "project": doc.project,
-        "task": issue,
-        "task_key": doc.task_key,
-        "comment_text": comment_text,
-        "activity": activity.name,
-        "mentions": _parse_mentions(comment_text),
-    })
+    emit(
+        COMMENT_ADDED,
+        {
+            "project": doc.project,
+            "task": issue,
+            "task_key": doc.task_key,
+            "comment_text": comment_text,
+            "activity": activity.name,
+            "mentions": _parse_mentions(comment_text),
+        },
+    )
 
     return {"ok": True, "activity": activity.name}
 
@@ -2791,25 +3375,31 @@ def edit_comment(activity, comment_text):
     # a mention. Separate from the mentions_only emit below: that one exists
     # purely to route notifications to the newly-mentioned users, not to
     # signal the edit itself, which used to have no broadcast at all.
-    emit(COMMENT_EDITED, {
-        "project": task.project,
-        "task": doc.task,
-        "task_key": task.task_key,
-        "comment_text": comment_text,
-        "activity": doc.name,
-    })
-
-    if new_mentions:
-        emit(COMMENT_ADDED, {
+    emit(
+        COMMENT_EDITED,
+        {
             "project": task.project,
             "task": doc.task,
             "task_key": task.task_key,
             "comment_text": comment_text,
             "activity": doc.name,
-            "mentions": new_mentions,
-            # only the newly-mentioned should be notified, not all task recipients
-            "mentions_only": True,
-        })
+        },
+    )
+
+    if new_mentions:
+        emit(
+            COMMENT_ADDED,
+            {
+                "project": task.project,
+                "task": doc.task,
+                "task_key": task.task_key,
+                "comment_text": comment_text,
+                "activity": doc.name,
+                "mentions": new_mentions,
+                # only the newly-mentioned should be notified, not all task recipients
+                "mentions_only": True,
+            },
+        )
 
     frappe.db.commit()
     return {"ok": True, "activity": doc.name, "comment_text": doc.comment_text}
@@ -2834,12 +3424,15 @@ def delete_comment(activity):
 
     # See edit_comment's comment on why emit() must precede the commit, not
     # follow it: _broadcast registers on frappe.db.after_commit.
-    emit(COMMENT_DELETED, {
-        "project": task.project,
-        "task": doc.task,
-        "task_key": task.task_key,
-        "activity": activity_name,
-    })
+    emit(
+        COMMENT_DELETED,
+        {
+            "project": task.project,
+            "task": doc.task,
+            "task_key": task.task_key,
+            "activity": activity_name,
+        },
+    )
 
     frappe.db.commit()
 
@@ -2847,6 +3440,7 @@ def delete_comment(activity):
 
 
 # ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
 
 @frappe.whitelist()
 def get_muted_items():
@@ -2858,7 +3452,9 @@ def get_muted_items():
     )
     return {
         "tasks": [r["task"] for r in rows if r.get("task")],
-        "projects": [r["project"] for r in rows if r.get("project") and not r.get("task")],
+        "projects": [
+            r["project"] for r in rows if r.get("project") and not r.get("task")
+        ],
     }
 
 
@@ -2880,12 +3476,19 @@ def set_mute(task=None, project=None, muted=1):
 
     if int(muted):
         if not existing:
-            frappe.get_doc({
-                "doctype": "BP Notification Mute",
-                "user": user,
-                "task": task or None,
-                "project": project or (frappe.db.get_value("BP Task", task, "project") if task else None),
-            }).insert(ignore_permissions=True)
+            frappe.get_doc(
+                {
+                    "doctype": "BP Notification Mute",
+                    "user": user,
+                    "task": task or None,
+                    "project": project
+                    or (
+                        frappe.db.get_value("BP Task", task, "project")
+                        if task
+                        else None
+                    ),
+                }
+            ).insert(ignore_permissions=True)
         return {"muted": True}
     else:
         for name in existing:
@@ -2907,14 +3510,26 @@ def get_notifications(limit=30, offset=0, unread_only=False, on_date=None):
         filters["is_read"] = 0
     if on_date:
         on_date = frappe.utils.getdate(on_date)
-        filters["creation"] = ["between", [f"{on_date} 00:00:00", f"{on_date} 23:59:59"]]
+        filters["creation"] = [
+            "between",
+            [f"{on_date} 00:00:00", f"{on_date} 23:59:59"],
+        ]
 
     notifications = frappe.get_all(
         "BP Notification",
         filters=filters,
         fields=[
-            "name", "notification_type", "task", "task_key", "task_title",
-            "project", "actor", "actor_name", "message", "is_read", "read_at",
+            "name",
+            "notification_type",
+            "task",
+            "task_key",
+            "task_title",
+            "project",
+            "actor",
+            "actor_name",
+            "message",
+            "is_read",
+            "read_at",
             "creation",
         ],
         order_by="creation desc",
@@ -2980,11 +3595,14 @@ def mark_all_notifications_read():
     user = frappe.session.user
     now = frappe.utils.now()
 
-    frappe.db.sql("""
+    frappe.db.sql(
+        """
         UPDATE `tabBP Notification`
         SET is_read = 1, read_at = %s
         WHERE recipient = %s AND is_read = 0
-    """, (now, user))
+    """,
+        (now, user),
+    )
     frappe.db.commit()
 
     return {"ok": True, "unread_count": 0}
@@ -3016,36 +3634,55 @@ def get_epics(project):
     completed = _get_completed_statuses_by_project(project)
     for epic in epics:
         total = frappe.db.count("BP Task", _task_filters({"epic": epic["name"]}))
-        done  = frappe.db.count("BP Task", _task_filters({"epic": epic["name"], "status": ["in", completed]}))
+        done = frappe.db.count(
+            "BP Task",
+            _task_filters({"epic": epic["name"], "status": ["in", completed]}),
+        )
         epic["total_issues"] = total
-        epic["done_issues"]  = done
-        epic["progress"]     = round((done / total * 100) if total > 0 else 0, 1)
+        epic["done_issues"] = done
+        epic["progress"] = round((done / total * 100) if total > 0 else 0, 1)
     return epics
 
 
 @frappe.whitelist()
-def create_epic(project, title, color=None, description=None,
-                start_date=None, end_date=None, status=None):
+def create_epic(
+    project,
+    title,
+    color=None,
+    description=None,
+    start_date=None,
+    end_date=None,
+    status=None,
+):
     _check_permission(project, "BP Member")
     if not (title or "").strip():
         frappe.throw("Epic title is required.")
-    doc = frappe.get_doc({
-        "doctype": "BP Epic",
-        "project": project,
-        "title": title.strip(),
-        "color": color or "#6366f1",
-        "description": description or "",
-        "start_date": start_date or None,
-        "end_date": end_date or None,
-        "status": status or "Open",
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Epic",
+            "project": project,
+            "title": title.strip(),
+            "color": color or "#6366f1",
+            "description": description or "",
+            "start_date": start_date or None,
+            "end_date": end_date or None,
+            "status": status or "Open",
+        }
+    )
     doc.insert(ignore_permissions=True)
     from batch_projects.cache import invalidate_project
+
     invalidate_project(project)
     return {
-        "name": doc.name, "title": doc.title, "status": doc.status,
-        "color": doc.color, "start_date": doc.start_date, "end_date": doc.end_date,
-        "total_issues": 0, "done_issues": 0, "progress": 0,
+        "name": doc.name,
+        "title": doc.title,
+        "status": doc.status,
+        "color": doc.color,
+        "start_date": doc.start_date,
+        "end_date": doc.end_date,
+        "total_issues": 0,
+        "done_issues": 0,
+        "progress": 0,
     }
 
 
@@ -3059,12 +3696,16 @@ def update_epic(epic, fields):
         if k in ("name", "project", "doctype", "cmd") or k.startswith("_"):
             continue
         if hasattr(doc, k):
-            if v == "" and doc.meta.get_field(k) and \
-               doc.meta.get_field(k).fieldtype in ("Date", "Datetime"):
+            if (
+                v == ""
+                and doc.meta.get_field(k)
+                and doc.meta.get_field(k).fieldtype in ("Date", "Datetime")
+            ):
                 v = None
             setattr(doc, k, v)
     doc.save(ignore_permissions=True)
     from batch_projects.cache import invalidate_project
+
     invalidate_project(doc.project)
     return {"ok": True, "name": doc.name, "title": doc.title}
 
@@ -3078,6 +3719,7 @@ def delete_epic(epic):
     frappe.db.set_value("BP Task", {"epic": epic}, "epic", None, update_modified=False)
     doc.delete(ignore_permissions=True)
     from batch_projects.cache import invalidate_project
+
     invalidate_project(project)
     return {"ok": True}
     """Create a copy of an existing task. Resets status to the project default;
@@ -3090,25 +3732,29 @@ def delete_epic(epic):
     states = _normalize_workflow_states(proj.get_workflow_states())
     default_status = states[0]["name"] if states else "To Do"
 
-    doc = frappe.get_doc({
-        "doctype": "BP Task",
-        "project": src.project,
-        "title": f"Copy of {src.title}",
-        "status": default_status,
-        "priority": src.priority,
-        "task_type": src.task_type,
-        "epic": src.epic,
-        "description": src.description,
-        "story_points": src.story_points,
-        "estimated_hours": src.estimated_hours,
-        "billable": src.billable,
-        "custom_field_values": src.custom_field_values,
-        "labels": src.labels,
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Task",
+            "project": src.project,
+            "title": f"Copy of {src.title}",
+            "status": default_status,
+            "priority": src.priority,
+            "task_type": src.task_type,
+            "epic": src.epic,
+            "description": src.description,
+            "story_points": src.story_points,
+            "estimated_hours": src.estimated_hours,
+            "billable": src.billable,
+            "custom_field_values": src.custom_field_values,
+            "labels": src.labels,
+        }
+    )
     doc.insert(ignore_permissions=True)
     from batch_projects.cache import invalidate_project
+
     invalidate_project(src.project)
     return doc.as_dict()
+
 
 # ─── SAVED REPORTS ──────────────────────────────────────────────────────────────
 
@@ -3118,33 +3764,58 @@ def get_saved_reports():
     """List saved reports visible to the user: workspace reports + reports on
     projects they can access."""
     from batch_projects.permissions import get_accessible_projects
+
     accessible = get_accessible_projects()
     rows = frappe.get_all(
         "BP Report",
-        fields=["name", "report_name", "icon", "color", "starred", "pinned",
-                "project", "milestone", "period", "schedule_enabled",
-                "schedule_frequency", "schedule_day", "schedule_hour",
-                "schedule_recipients", "last_sent", "modified", "owner"],
+        fields=[
+            "name",
+            "report_name",
+            "icon",
+            "color",
+            "starred",
+            "pinned",
+            "project",
+            "milestone",
+            "period",
+            "schedule_enabled",
+            "schedule_frequency",
+            "schedule_day",
+            "schedule_hour",
+            "schedule_recipients",
+            "last_sent",
+            "modified",
+            "owner",
+        ],
         order_by="modified desc",
     )
     out = []
     for r in rows:
         if accessible is None or not r.project or r.project in accessible:
-            out.append({
-                "id": r.name, "report_name": r.report_name,
-                "icon": r.icon or "BarChart3", "color": r.color or None,
-                "starred": bool(r.starred), "pinned": bool(r.pinned),
-                "scope": r.project or "all",
-                "project": r.project or None, "milestone": r.milestone or None,
-                "period": r.period or "last_30_days",
-                "schedule_enabled": bool(r.schedule_enabled),
-                "schedule_frequency": r.schedule_frequency or "Weekly",
-                "schedule_day": r.schedule_day or "Monday",
-                "schedule_hour": r.schedule_hour if r.schedule_hour is not None else 8,
-                "schedule_recipients": r.schedule_recipients or "",
-                "last_sent": str(r.last_sent) if r.last_sent else None,
-                "modified": str(r.modified), "owner": r.owner,
-            })
+            out.append(
+                {
+                    "id": r.name,
+                    "report_name": r.report_name,
+                    "icon": r.icon or "BarChart3",
+                    "color": r.color or None,
+                    "starred": bool(r.starred),
+                    "pinned": bool(r.pinned),
+                    "scope": r.project or "all",
+                    "project": r.project or None,
+                    "milestone": r.milestone or None,
+                    "period": r.period or "last_30_days",
+                    "schedule_enabled": bool(r.schedule_enabled),
+                    "schedule_frequency": r.schedule_frequency or "Weekly",
+                    "schedule_day": r.schedule_day or "Monday",
+                    "schedule_hour": (
+                        r.schedule_hour if r.schedule_hour is not None else 8
+                    ),
+                    "schedule_recipients": r.schedule_recipients or "",
+                    "last_sent": str(r.last_sent) if r.last_sent else None,
+                    "modified": str(r.modified),
+                    "owner": r.owner,
+                }
+            )
     return out
 
 
@@ -3157,7 +3828,6 @@ def get_saved_report(report):
 
 
 @frappe.whitelist()
-
 def resolve_report_recipients(recipients_str, project):
     """Split a `schedule_recipients` string into (allowed, dropped) email
     addresses. `allowed` = resolves to an enabled User with at least Viewer
@@ -3173,7 +3843,9 @@ def resolve_report_recipients(recipients_str, project):
     from batch_projects import access
     from batch_projects.permissions import get_accessible_projects
 
-    candidates = [e.strip() for e in re.split(r"[,\n;]+", recipients_str or "") if "@" in e]
+    candidates = [
+        e.strip() for e in re.split(r"[,\n;]+", recipients_str or "") if "@" in e
+    ]
     allowed, dropped = [], []
     for addr in candidates:
         user = frappe.db.get_value("User", {"email": addr, "enabled": 1}, "name")
@@ -3199,6 +3871,7 @@ def _assert_recipients_authorized(recipients_str, project, caller):
     if not recipients_str:
         return
     from batch_projects import access
+
     _, dropped = resolve_report_recipients(recipients_str, project)
     if not dropped:
         return
@@ -3214,11 +3887,23 @@ def _assert_recipients_authorized(recipients_str, project, caller):
 
 
 @frappe.whitelist()
-def save_report(report_name=None, project=None, milestone=None, period="last_30_days",
-                icon="BarChart3", color=None, layout=None, report=None,
-                starred=None, pinned=None, schedule_enabled=None,
-                schedule_frequency=None, schedule_day=None, schedule_hour=None,
-                schedule_recipients=None):
+def save_report(
+    report_name=None,
+    project=None,
+    milestone=None,
+    period="last_30_days",
+    icon="BarChart3",
+    color=None,
+    layout=None,
+    report=None,
+    starred=None,
+    pinned=None,
+    schedule_enabled=None,
+    schedule_frequency=None,
+    schedule_day=None,
+    schedule_hour=None,
+    schedule_recipients=None,
+):
     """Create (report omitted) or update (report given) a saved report."""
     project = project or None
     if project:
@@ -3228,48 +3913,74 @@ def save_report(report_name=None, project=None, milestone=None, period="last_30_
         doc = frappe.get_doc("BP Report", report)
         if doc.project:
             _check_permission(doc.project, "BP Member")
-        if report_name is not None: doc.report_name = report_name
-        if project is not None or report_name is not None: doc.project = project
-        if milestone is not None: doc.milestone = milestone or None
-        if period is not None: doc.period = period
-        if icon is not None: doc.icon = icon
-        if color is not None: doc.color = color
-        if starred is not None: doc.starred = _as_bool(starred)
-        if pinned is not None: doc.pinned = _as_bool(pinned)
-        if schedule_enabled is not None: doc.schedule_enabled = _as_bool(schedule_enabled)
-        if schedule_frequency is not None: doc.schedule_frequency = schedule_frequency
-        if schedule_day is not None: doc.schedule_day = schedule_day
-        if schedule_hour is not None: doc.schedule_hour = frappe.utils.cint(schedule_hour)
+        if report_name is not None:
+            doc.report_name = report_name
+        if project is not None or report_name is not None:
+            doc.project = project
+        if milestone is not None:
+            doc.milestone = milestone or None
+        if period is not None:
+            doc.period = period
+        if icon is not None:
+            doc.icon = icon
+        if color is not None:
+            doc.color = color
+        if starred is not None:
+            doc.starred = _as_bool(starred)
+        if pinned is not None:
+            doc.pinned = _as_bool(pinned)
+        if schedule_enabled is not None:
+            doc.schedule_enabled = _as_bool(schedule_enabled)
+        if schedule_frequency is not None:
+            doc.schedule_frequency = schedule_frequency
+        if schedule_day is not None:
+            doc.schedule_day = schedule_day
+        if schedule_hour is not None:
+            doc.schedule_hour = frappe.utils.cint(schedule_hour)
         if schedule_recipients is not None:
-            _assert_recipients_authorized(schedule_recipients, doc.project, frappe.session.user)
+            _assert_recipients_authorized(
+                schedule_recipients, doc.project, frappe.session.user
+            )
             doc.schedule_recipients = schedule_recipients
         if layout is not None:
             doc.layout = layout if isinstance(layout, str) else json.dumps(layout)
         doc.save(ignore_permissions=True)
     else:
         if schedule_recipients:
-            _assert_recipients_authorized(schedule_recipients, project, frappe.session.user)
-        doc = frappe.get_doc({
-            "doctype": "BP Report",
-            "report_name": report_name or "Untitled report",
-            "project": project, "milestone": milestone or None,
-            "period": period, "icon": icon, "color": color,
-            "starred": _as_bool(starred) if starred is not None else 0,
-            "pinned": _as_bool(pinned) if pinned is not None else 0,
-            "schedule_enabled": _as_bool(schedule_enabled) if schedule_enabled is not None else 0,
-            "schedule_frequency": schedule_frequency or "Weekly",
-            "schedule_day": schedule_day or "Monday",
-            "schedule_hour": frappe.utils.cint(schedule_hour) if schedule_hour is not None else 8,
-            "schedule_recipients": schedule_recipients or "",
-            "layout": layout if isinstance(layout, str) else json.dumps(layout or []),
-        })
+            _assert_recipients_authorized(
+                schedule_recipients, project, frappe.session.user
+            )
+        doc = frappe.get_doc(
+            {
+                "doctype": "BP Report",
+                "report_name": report_name or "Untitled report",
+                "project": project,
+                "milestone": milestone or None,
+                "period": period,
+                "icon": icon,
+                "color": color,
+                "starred": _as_bool(starred) if starred is not None else 0,
+                "pinned": _as_bool(pinned) if pinned is not None else 0,
+                "schedule_enabled": (
+                    _as_bool(schedule_enabled) if schedule_enabled is not None else 0
+                ),
+                "schedule_frequency": schedule_frequency or "Weekly",
+                "schedule_day": schedule_day or "Monday",
+                "schedule_hour": (
+                    frappe.utils.cint(schedule_hour) if schedule_hour is not None else 8
+                ),
+                "schedule_recipients": schedule_recipients or "",
+                "layout": (
+                    layout if isinstance(layout, str) else json.dumps(layout or [])
+                ),
+            }
+        )
         doc.insert(ignore_permissions=True)
     frappe.db.commit()
     return _report_out(doc, with_layout=True)
 
 
 @frappe.whitelist()
-
 @frappe.whitelist()
 def delete_saved_report(report):
     doc = frappe.get_doc("BP Report", report)
@@ -3281,7 +3992,6 @@ def delete_saved_report(report):
 
 
 @frappe.whitelist()
-
 @frappe.whitelist()
 def get_milestone_report(milestone):
     """Milestone rollup — the ERP moat: not just task completion %, but the
@@ -3295,8 +4005,17 @@ def get_milestone_report(milestone):
     tasks = frappe.get_all(
         "BP Task",
         filters={"milestone": milestone},
-        fields=["name", "task_key", "title", "status", "story_points",
-                "estimated_hours", "actual_hours", "billable", "due_date"],
+        fields=[
+            "name",
+            "task_key",
+            "title",
+            "status",
+            "story_points",
+            "estimated_hours",
+            "actual_hours",
+            "billable",
+            "due_date",
+        ],
     )
 
     total = len(tasks)
@@ -3356,14 +4075,17 @@ def get_project_budget_summary(project):
     _check_permission(project, "BP Viewer")
     proj = frappe.get_doc("BP Project", project)
 
-    act_hours = frappe.db.sql(
-        """SELECT SUM(actual_hours) FROM `tabBP Task` WHERE project = %s AND is_deleted = 0""",
-        (project,),
-    )[0][0] or 0
+    act_hours = (
+        frappe.db.sql(
+            """SELECT SUM(actual_hours) FROM `tabBP Task` WHERE project = %s AND is_deleted = 0""",
+            (project,),
+        )[0][0]
+        or 0
+    )
 
-    rate   = float(proj.hourly_rate or 0)
+    rate = float(proj.hourly_rate or 0)
     budget = float(proj.budget_amount or 0)
-    cost   = round(float(act_hours) * rate, 2)
+    cost = round(float(act_hours) * rate, 2)
 
     return {
         "project": project,
@@ -3380,6 +4102,7 @@ def get_project_budget_summary(project):
 # Column layout / density / ERP columns for the List (and other grid) views.
 # Stored per-user, per-project, per-view so the layout follows the user across
 # devices instead of living in browser localStorage.
+
 
 def _resolve_project(project):
     """Accept either a project name or its short key (the UI route uses the key)."""
@@ -3410,7 +4133,6 @@ def get_view_prefs(project, view="list"):
         return {}
 
 
-
 @frappe.whitelist()
 def save_view_prefs(project, prefs, view="list"):
     """Upsert the current user's view preferences for a project view."""
@@ -3433,28 +4155,28 @@ def save_view_prefs(project, prefs, view="list"):
     if name:
         doc = frappe.get_doc("BP View Preference", name)
     else:
-        doc = frappe.get_doc({
-            "doctype": "BP View Preference",
-            "user": user,
-            "project": project,
-            "view": view,
-        })
+        doc = frappe.get_doc(
+            {
+                "doctype": "BP View Preference",
+                "user": user,
+                "project": project,
+                "view": view,
+            }
+        )
     doc.prefs = json.dumps(prefs)
     doc.save(ignore_permissions=True)
     return prefs
 
 
-
-
-
-
 # ─── SPRINTS ──────────────────────────────────────────────────────────────────
+
 
 @frappe.whitelist()
 def get_sprints(project):
     _check_permission(project, "BP Viewer")
 
     from batch_projects.cache import get as cache_get, set as cache_set, VIEW_SPRINTS
+
     cached = cache_get(VIEW_SPRINTS, project)
     if cached is not None:
         return cached
@@ -3505,7 +4227,9 @@ def get_sprints(project):
     # Completed statuses for this project
     raw_states = frappe.db.get_value("BP Project", project, "workflow_states") or "[]"
     states = _parse_json(raw_states, [])
-    done_statuses = [s["name"] for s in states if s.get("category") in ("completed", "cancelled")]
+    done_statuses = [
+        s["name"] for s in states if s.get("category") in ("completed", "cancelled")
+    ]
 
     completed_map = {}
     if done_statuses:
@@ -3546,9 +4270,9 @@ def get_sprints(project):
         velocity_map = {r["sprint"]: (r["pts"] or 0) for r in velocity_rows}
 
     for sprint in sprints:
-        sprint["issue_count"]      = total_map.get(sprint["name"], 0)
-        sprint["completed_count"]  = completed_map.get(sprint["name"], 0)
-        sprint["total_points"]     = points_map.get(sprint["name"], 0)
+        sprint["issue_count"] = total_map.get(sprint["name"], 0)
+        sprint["completed_count"] = completed_map.get(sprint["name"], 0)
+        sprint["total_points"] = points_map.get(sprint["name"], 0)
         sprint["completed_points"] = velocity_map.get(sprint["name"], 0)
 
     cache_set(VIEW_SPRINTS, project, sprints)
@@ -3566,20 +4290,25 @@ def get_sprint_capacity(sprint):
     _check_permission(doc.project, "BP Viewer")
 
     tasks = frappe.get_all(
-        "BP Task", filters={"sprint": sprint},
+        "BP Task",
+        filters={"sprint": sprint, "is_deleted": 0},
         fields=["name", "estimated_hours"],
     )
     task_names = [t["name"] for t in tasks]
     hours_by_task = {t["name"]: (t["estimated_hours"] or 0) for t in tasks}
 
-    assignee_rows = frappe.get_all(
-        "BP Task Assignee",
-        filters={"parent": ["in", task_names]},
-        fields=["parent", "user", "full_name"],
-    ) if task_names else []
+    assignee_rows = (
+        frappe.get_all(
+            "BP Task Assignee",
+            filters={"parent": ["in", task_names]},
+            fields=["parent", "user", "full_name"],
+        )
+        if task_names
+        else []
+    )
 
-    allocated = {}   # user -> hours
-    names = {}       # user -> full_name
+    allocated = {}  # user -> hours
+    names = {}  # user -> full_name
     task_count = {}  # user -> count
     for row in assignee_rows:
         u = row["user"]
@@ -3604,7 +4333,9 @@ def get_sprint_capacity(sprint):
         "sprint": sprint,
         "sprint_name": doc.sprint_name,
         "members": members,
-        "unassigned_task_count": sum(1 for t in tasks if t["name"] not in {r["parent"] for r in assignee_rows}),
+        "unassigned_task_count": sum(
+            1 for t in tasks if t["name"] not in {r["parent"] for r in assignee_rows}
+        ),
     }
 
 
@@ -3624,7 +4355,9 @@ def get_standup(sprint, entry_date=None):
         order_by="modified asc",
     )
     for e in entries:
-        e["full_name"] = frappe.db.get_value("User", e["user"], "full_name") or e["user"]
+        e["full_name"] = (
+            frappe.db.get_value("User", e["user"], "full_name") or e["user"]
+        )
 
     mine = next((e for e in entries if e["user"] == frappe.session.user), None)
     return {"date": entry_date, "entries": entries, "mine": mine}
@@ -3641,14 +4374,21 @@ def save_standup(sprint, entry_date=None, yesterday=None, today=None, blockers=N
     user = frappe.session.user
 
     existing = frappe.db.get_value(
-        "BP Standup Entry", {"sprint": sprint, "user": user, "entry_date": entry_date}, "name"
+        "BP Standup Entry",
+        {"sprint": sprint, "user": user, "entry_date": entry_date},
+        "name",
     )
     if existing:
         entry = frappe.get_doc("BP Standup Entry", existing)
     else:
-        entry = frappe.get_doc({
-            "doctype": "BP Standup Entry", "sprint": sprint, "user": user, "entry_date": entry_date,
-        })
+        entry = frappe.get_doc(
+            {
+                "doctype": "BP Standup Entry",
+                "sprint": sprint,
+                "user": user,
+                "entry_date": entry_date,
+            }
+        )
     entry.yesterday = yesterday or ""
     entry.today = today or ""
     entry.blockers = blockers or ""
@@ -3657,81 +4397,84 @@ def save_standup(sprint, entry_date=None, yesterday=None, today=None, blockers=N
     return {"name": entry.name}
 
 
-
-
 def _activity_text(a):
-	t = a.get("action_type") or "updated"
-	key = a.get("task_key") or ""
-	old = a.get("old_value") or ""
-	new = a.get("new_value") or ""
-	if t == "Status Change":
-		return f"moved {key} from {old} → {new}"
-	if t == "Assignment":
-		return f"assigned {key} to {new}" if new else f"updated assignment on {key}"
-	if t == "Comment":
-		return f"commented on {key}"
-	if t == "Attachment":
-		return f"attached a file to {key}"
-	if t == "Field Edit":
-		return f"updated {old} on {key}"
-	if t == "Created":
-		return f"created {key}"
-	return f"updated {key}"
-
-
+    t = a.get("action_type") or "updated"
+    key = a.get("task_key") or ""
+    old = a.get("old_value") or ""
+    new = a.get("new_value") or ""
+    if t == "Status Change":
+        return f"moved {key} from {old} → {new}"
+    if t == "Assignment":
+        return f"assigned {key} to {new}" if new else f"updated assignment on {key}"
+    if t == "Comment":
+        return f"commented on {key}"
+    if t == "Attachment":
+        return f"attached a file to {key}"
+    if t == "Field Edit":
+        return f"updated {old} on {key}"
+    if t == "Created":
+        return f"created {key}"
+    return f"updated {key}"
 
 
 def _all_tracked_users():
-	"""Union of BP Project Member + BP Team Member users (deduped)."""
-	rows = frappe.db.sql(
-		"""
+    """Union of BP Project Member + BP Team Member users (deduped)."""
+    rows = frappe.db.sql(
+        """
 		SELECT DISTINCT user FROM `tabBP Project Member`
 		WHERE user IS NOT NULL AND user != ''
 		UNION
 		SELECT user FROM `tabBP Team Member`
 		WHERE user IS NOT NULL AND user != ''
 		""",
-		as_dict=True,
-	)
-	return [r.user for r in rows]
+        as_dict=True,
+    )
+    return [r.user for r in rows]
 
 
-
-
-def _append_link(doc, other, link_type, dep_type=None, lag_days=None, link_metadata=None):
+def _append_link(
+    doc, other, link_type, dep_type=None, lag_days=None, link_metadata=None
+):
     """Append a link row to ``doc`` pointing at ``other`` (idempotent)."""
     for l in doc.get("links", []):
         if l.linked_task == other.name and l.link_type == link_type:
             return False
-    doc.append("links", {
-        "link_type": link_type,
-        "linked_task": other.name,
-        "linked_task_key": other.task_key,
-        "linked_task_title": other.title,
-        "linked_task_status": other.status,
-        "linked_task_project": other.project,
-        # Scheduling + integration metadata ride along when provided (the
-        # Gantt sends dep_type/lag_days for drawn dependencies; integrations
-        # may attach link_metadata). Defaults keep older callers unchanged.
-        "dep_type": dep_type or "FS",
-        "lag_days": lag_days if lag_days is not None else 0,
-        "link_metadata": link_metadata,
-    })
+    doc.append(
+        "links",
+        {
+            "link_type": link_type,
+            "linked_task": other.name,
+            "linked_task_key": other.task_key,
+            "linked_task_title": other.title,
+            "linked_task_status": other.status,
+            "linked_task_project": other.project,
+            # Scheduling + integration metadata ride along when provided (the
+            # Gantt sends dep_type/lag_days for drawn dependencies; integrations
+            # may attach link_metadata). Defaults keep older callers unchanged.
+            "dep_type": dep_type or "FS",
+            "lag_days": lag_days if lag_days is not None else 0,
+            "link_metadata": link_metadata,
+        },
+    )
     return True
 
 
-
-
 def _avatar_color(key):
-	colors = ["#2563EB", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4", "#EC4899"]
-	if not key:
-		return colors[0]
-	h = 0
-	for c in key:
-		h = ord(c) + ((h << 5) - h)
-	return colors[abs(h) % len(colors)]
-
-
+    colors = [
+        "#2563EB",
+        "#10B981",
+        "#F59E0B",
+        "#EF4444",
+        "#8B5CF6",
+        "#06B6D4",
+        "#EC4899",
+    ]
+    if not key:
+        return colors[0]
+    h = 0
+    for c in key:
+        h = ord(c) + ((h << 5) - h)
+    return colors[abs(h) % len(colors)]
 
 
 def _blocks_reaches(start, target):
@@ -3756,13 +4499,13 @@ def _blocks_reaches(start, target):
     return False
 
 
-
-
 def _clear_default_views(project, user):
-    for v in frappe.get_all("BP View", filters={"project": project, "owner": user, "is_default": 1}, pluck="name"):
+    for v in frappe.get_all(
+        "BP View",
+        filters={"project": project, "owner": user, "is_default": 1},
+        pluck="name",
+    ):
         frappe.db.set_value("BP View", v, "is_default", 0, update_modified=False)
-
-
 
 
 def _coerce_json(value, default):
@@ -3778,88 +4521,69 @@ def _coerce_json(value, default):
     return json.dumps(value)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def _get_member_capacities(users):
-	"""
-	Returns {user: weekly_hours} for the given users.
-	Reads capacity_hours_per_sprint from BP Team Member (first team wins).
-	Falls back to 40h/week when no team membership exists.
-	"""
-	if not users:
-		return {}
-	rows = frappe.db.sql(
-		"""
+    """
+    Returns {user: weekly_hours} for the given users.
+    Reads capacity_hours_per_sprint from BP Team Member (first team wins).
+    Falls back to 40h/week when no team membership exists.
+    """
+    if not users:
+        return {}
+    rows = frappe.db.sql(
+        """
 		SELECT user, capacity_hours_per_sprint
 		FROM `tabBP Team Member`
 		WHERE user IN %(users)s
 		ORDER BY creation ASC
 		""",
-		{"users": users},
-		as_dict=True,
-	)
-	caps = {}
-	for r in rows:
-		if r.user not in caps:
-			caps[r.user] = float(r.capacity_hours_per_sprint or 40)
-	return {u: caps.get(u, 40.0) for u in users}
-
-
+        {"users": users},
+        as_dict=True,
+    )
+    caps = {}
+    for r in rows:
+        if r.user not in caps:
+            caps[r.user] = float(r.capacity_hours_per_sprint or 40)
+    return {u: caps.get(u, 40.0) for u in users}
 
 
 def _get_personal_stats(user, days=14):
-	"""Daily completed-task counts for sparkline over last N days."""
-	from datetime import date, timedelta
-	today = date.today()
-	cutoff = (today - timedelta(days=days)).isoformat()
+    """Daily completed-task counts for sparkline over last N days."""
+    from datetime import date, timedelta
 
-	assigned = frappe.get_all(
-		"BP Task Assignee",
-		filters={"user": user},
-		fields=["parent"],
-	)
-	names = [a["parent"] for a in assigned] or ["__none__"]
+    today = date.today()
+    cutoff = (today - timedelta(days=days)).isoformat()
 
-	# Build completed statuses across all projects
-	all_completed = set()
-	try:
-		rows = frappe.db.sql(
-			"""
+    assigned = frappe.get_all(
+        "BP Task Assignee",
+        filters={"user": user},
+        fields=["parent"],
+    )
+    names = [a["parent"] for a in assigned] or ["__none__"]
+
+    # Build completed statuses across all projects
+    all_completed = set()
+    try:
+        rows = frappe.db.sql(
+            """
 			SELECT DISTINCT t.project
 			FROM `tabBP Task` t
 			WHERE t.name IN %(names)s
 			""",
-			{"names": names},
-			as_dict=True,
-		)
-		for r in rows:
-			all_completed.update(_get_completed_statuses_by_project(r.project))
-	except Exception:
-		all_completed = {"Done", "Closed", "Cancelled"}
+            {"names": names},
+            as_dict=True,
+        )
+        for r in rows:
+            all_completed.update(_get_completed_statuses_by_project(r.project))
+    except Exception:
+        all_completed = {"Done", "Closed", "Cancelled"}
 
-	if not all_completed:
-		all_completed = {"Done", "Closed"}
+    if not all_completed:
+        all_completed = {"Done", "Closed"}
 
-	# Daily completed count
-	try:
-		rows = frappe.db.sql(
-			"""
+    # Daily completed count
+    try:
+        rows = frappe.db.sql(
+            """
 			SELECT DATE(modified) AS day, COUNT(*) AS cnt
 			FROM `tabBP Task`
 			WHERE name IN %(names)s
@@ -3869,28 +4593,28 @@ def _get_personal_stats(user, days=14):
 			GROUP BY DATE(modified)
 			ORDER BY day ASC
 			""",
-			{"names": names, "statuses": list(all_completed), "cutoff": cutoff},
-			as_dict=True,
-		)
-	except Exception:
-		rows = []
+            {"names": names, "statuses": list(all_completed), "cutoff": cutoff},
+            as_dict=True,
+        )
+    except Exception:
+        rows = []
 
-	day_map = {str(r.day): int(r.cnt) for r in rows}
+    day_map = {str(r.day): int(r.cnt) for r in rows}
 
-	sparkline = []
-	total_completed = 0
-	for i in range(days):
-		d = (today - timedelta(days=days - 1 - i)).isoformat()
-		cnt = day_map.get(d, 0)
-		sparkline.append(cnt)
-		total_completed += cnt
+    sparkline = []
+    total_completed = 0
+    for i in range(days):
+        d = (today - timedelta(days=days - 1 - i)).isoformat()
+        cnt = day_map.get(d, 0)
+        sparkline.append(cnt)
+        total_completed += cnt
 
-	# Hours logged from Timesheet (best-effort)
-	total_hours = 0.0
-	try:
-		if frappe.db.table_exists("Timesheet Detail"):
-			res = frappe.db.sql(
-				"""
+    # Hours logged from Timesheet (best-effort)
+    total_hours = 0.0
+    try:
+        if frappe.db.table_exists("Timesheet Detail"):
+            res = frappe.db.sql(
+                """
 				SELECT SUM(td.hours) AS h
 				FROM `tabTimesheet Detail` td
 				JOIN `tabTimesheet` ts ON ts.name = td.parent AND ts.docstatus = 1
@@ -3898,21 +4622,19 @@ def _get_personal_stats(user, days=14):
 				WHERE COALESCE(e.user_id, ts.owner) = %(user)s
 				  AND td.from_time >= %(cutoff)s
 				""",
-				{"user": user, "cutoff": cutoff},
-				as_dict=True,
-			)
-			total_hours = float(res[0].h or 0) if res else 0.0
-	except Exception:
-		pass
+                {"user": user, "cutoff": cutoff},
+                as_dict=True,
+            )
+            total_hours = float(res[0].h or 0) if res else 0.0
+    except Exception:
+        pass
 
-	return {
-		"sparkline": sparkline,
-		"total_completed": total_completed,
-		"total_hours": round(total_hours, 1),
-		"days": days,
-	}
-
-
+    return {
+        "sparkline": sparkline,
+        "total_completed": total_completed,
+        "total_hours": round(total_hours, 1),
+        "days": days,
+    }
 
 
 @frappe.whitelist()
@@ -3920,11 +4642,10 @@ def _invalidate_sprint_cache(project: str):
     """Invalidate board + backlog + sprints cache after any sprint mutation."""
     try:
         from batch_projects.cache import invalidate_project
+
         invalidate_project(project)
     except Exception:
         pass
-
-
 
 
 def _report_out(doc, with_layout=False):
@@ -3942,7 +4663,9 @@ def _report_out(doc, with_layout=False):
         "schedule_enabled": bool(doc.get("schedule_enabled")),
         "schedule_frequency": doc.get("schedule_frequency") or "Weekly",
         "schedule_day": doc.get("schedule_day") or "Monday",
-        "schedule_hour": doc.get("schedule_hour") if doc.get("schedule_hour") is not None else 8,
+        "schedule_hour": (
+            doc.get("schedule_hour") if doc.get("schedule_hour") is not None else 8
+        ),
         "schedule_recipients": doc.get("schedule_recipients") or "",
         "last_sent": str(doc.get("last_sent")) if doc.get("last_sent") else None,
         "modified": str(doc.modified),
@@ -3953,66 +4676,71 @@ def _report_out(doc, with_layout=False):
     return out
 
 
-
-
 @frappe.whitelist()
 def _resolve_scope(scope):
-	"""
-	Normalise scope into (filters_patch, proj_name, proj_names_list).
-	scope: 'all' | single project name/key | list of project names/keys
-	Returns (filters_patch dict, proj_name_or_None, resolved_list_or_None)
-	"""
-	# The frontend may send a JSON-stringified list (e.g. '["Proj A"]').
-	if isinstance(scope, str):
-		st = scope.strip()
-		if st.startswith("[") and st.endswith("]"):
-			try:
-				scope = json.loads(st)
-			except Exception:
-				pass
-	if isinstance(scope, list) and len(scope) == 1:
-		scope = scope[0]
+    """
+    Normalise scope into (filters_patch, proj_name, proj_names_list).
+    scope: 'all' | single project name/key | list of project names/keys
+    Returns (filters_patch dict, proj_name_or_None, resolved_list_or_None)
+    """
+    # The frontend may send a JSON-stringified list (e.g. '["Proj A"]').
+    if isinstance(scope, str):
+        st = scope.strip()
+        if st.startswith("[") and st.endswith("]"):
+            try:
+                scope = json.loads(st)
+            except Exception:
+                pass
+    if isinstance(scope, list) and len(scope) == 1:
+        scope = scope[0]
 
-	if not scope or scope == "all":
-		_require_system_user()
-		# Access filter: scope=="all" used to
-		# return an unfiltered {} — every caller of this helper
-		# (get_widget_data, query_bql_group_by, get_report_tasks) then
-		# aggregated task data across EVERY project in the org regardless
-		# of `visibility`/membership. Scope "all" must mean "all projects
-		# I can see", not "all projects that exist".
-		from batch_projects.permissions import get_accessible_projects
-		accessible = get_accessible_projects()  # None = admin (all)
-		if accessible is None:
-			return {}, None, None
-		if not accessible:
-			return {"project": ["in", []]}, None, []
-		return {"project": ["in", list(accessible)]}, None, list(accessible)
+    if not scope or scope == "all":
+        _require_system_user()
+        # Access filter: scope=="all" used to
+        # return an unfiltered {} — every caller of this helper
+        # (get_widget_data, query_bql_group_by, get_report_tasks) then
+        # aggregated task data across EVERY project in the org regardless
+        # of `visibility`/membership. Scope "all" must mean "all projects
+        # I can see", not "all projects that exist".
+        from batch_projects.permissions import get_accessible_projects
 
-	if isinstance(scope, list):
-		# multi-project selection
-		resolved = []
-		for s in scope:
-			p = s if frappe.db.exists("BP Project", s) else frappe.db.get_value("BP Project", {"key": s}, "name")
-			if p:
-				_check_permission(p, "BP Viewer")
-				resolved.append(p)
-		if not resolved:
-			_require_system_user()
-			return {}, None, None
-		if len(resolved) == 1:
-			return {"project": resolved[0]}, resolved[0], resolved
-		return {"project": ["in", resolved]}, None, resolved
+        accessible = get_accessible_projects()  # None = admin (all)
+        if accessible is None:
+            return {}, None, None
+        if not accessible:
+            return {"project": ["in", []]}, None, []
+        return {"project": ["in", list(accessible)]}, None, list(accessible)
 
-	# single project
-	proj_name = scope if frappe.db.exists("BP Project", scope) else frappe.db.get_value("BP Project", {"key": scope}, "name")
-	if proj_name:
-		_check_permission(proj_name, "BP Viewer")
-		return {"project": proj_name}, proj_name, [proj_name]
-	_require_system_user()
-	return {}, None, None
+    if isinstance(scope, list):
+        # multi-project selection
+        resolved = []
+        for s in scope:
+            p = (
+                s
+                if frappe.db.exists("BP Project", s)
+                else frappe.db.get_value("BP Project", {"key": s}, "name")
+            )
+            if p:
+                _check_permission(p, "BP Viewer")
+                resolved.append(p)
+        if not resolved:
+            _require_system_user()
+            return {}, None, None
+        if len(resolved) == 1:
+            return {"project": resolved[0]}, resolved[0], resolved
+        return {"project": ["in", resolved]}, None, resolved
 
-
+    # single project
+    proj_name = (
+        scope
+        if frappe.db.exists("BP Project", scope)
+        else frappe.db.get_value("BP Project", {"key": scope}, "name")
+    )
+    if proj_name:
+        _check_permission(proj_name, "BP Viewer")
+        return {"project": proj_name}, proj_name, [proj_name]
+    _require_system_user()
+    return {}, None, None
 
 
 def _serialize_view(v):
@@ -4028,40 +4756,41 @@ def _serialize_view(v):
     }
 
 
-
-
 def _time_ago(dt):
-	if not dt:
-		return ""
-	from datetime import datetime
-	if not isinstance(dt, datetime):
-		try:
-			dt = datetime.strptime(str(dt)[:19], "%Y-%m-%d %H:%M:%S")
-		except Exception:
-			return str(dt)[:10]
-	mins = int((datetime.now() - dt).total_seconds() / 60)
-	if mins < 1:   return "just now"
-	if mins < 60:  return f"{mins}m ago"
-	h = mins // 60
-	if h < 24:     return f"{h}h ago"
-	d = h // 24
-	if d < 30:     return f"{d}d ago"
-	return dt.strftime("%b %d")
+    if not dt:
+        return ""
+    from datetime import datetime
 
-
+    if not isinstance(dt, datetime):
+        try:
+            dt = datetime.strptime(str(dt)[:19], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return str(dt)[:10]
+    mins = int((datetime.now() - dt).total_seconds() / 60)
+    if mins < 1:
+        return "just now"
+    if mins < 60:
+        return f"{mins}m ago"
+    h = mins // 60
+    if h < 24:
+        return f"{h}h ago"
+    d = h // 24
+    if d < 30:
+        return f"{d}d ago"
+    return dt.strftime("%b %d")
 
 
 def _timesheet_hours_by_user(users, from_dt, to_dt):
-	"""
-	Returns {user: (total_hours, billable_hours)} from submitted ERPNext timesheets.
-	Resolves user via Employee.user_id first, then falls back to Timesheet.owner
-	so users without an Employee record are still counted.
-	"""
-	if not users or not frappe.db.table_exists("Timesheet Detail"):
-		return {u: (0.0, 0.0) for u in users}
-	try:
-		rows = frappe.db.sql(
-			"""
+    """
+    Returns {user: (total_hours, billable_hours)} from submitted ERPNext timesheets.
+    Resolves user via Employee.user_id first, then falls back to Timesheet.owner
+    so users without an Employee record are still counted.
+    """
+    if not users or not frappe.db.table_exists("Timesheet Detail"):
+        return {u: (0.0, 0.0) for u in users}
+    try:
+        rows = frappe.db.sql(
+            """
 			SELECT
 				COALESCE(e.user_id, ts.owner)                          AS user,
 				SUM(td.hours)                                          AS total_hours,
@@ -4076,17 +4805,18 @@ def _timesheet_hours_by_user(users, from_dt, to_dt):
 			  AND COALESCE(e.user_id, ts.owner) IN %(users)s
 			GROUP BY COALESCE(e.user_id, ts.owner)
 			""",
-			{"from_dt": from_dt, "to_dt": to_dt, "users": users},
-			as_dict=True,
-		)
-		result = {r.user: (float(r.total_hours or 0), float(r.billable_hours or 0))
-		          for r in rows if r.user}
-		return {u: result.get(u, (0.0, 0.0)) for u in users}
-	except Exception as exc:
-		frappe.log_error(f"_timesheet_hours_by_user: {exc}")
-		return {u: (0.0, 0.0) for u in users}
-
-
+            {"from_dt": from_dt, "to_dt": to_dt, "users": users},
+            as_dict=True,
+        )
+        result = {
+            r.user: (float(r.total_hours or 0), float(r.billable_hours or 0))
+            for r in rows
+            if r.user
+        }
+        return {u: result.get(u, (0.0, 0.0)) for u in users}
+    except Exception as exc:
+        frappe.log_error(f"_timesheet_hours_by_user: {exc}")
+        return {u: (0.0, 0.0) for u in users}
 
 
 @frappe.whitelist()
@@ -4094,19 +4824,22 @@ def add_reference(issue, ref_doctype, ref_name, two_way=0):
     doc = frappe.get_doc("BP Task", issue)
     _check_permission(doc.project, "BP Member")
 
-    for r in (doc.references or []):
+    for r in doc.references or []:
         if r.ref_doctype == ref_doctype and r.ref_name == ref_name:
             return doc.as_dict()
 
     title_field = frappe.db.get_value("DocType", ref_doctype, "title_field") or "name"
     ref_label = frappe.db.get_value(ref_doctype, ref_name, title_field) or ref_name
 
-    doc.append("references", {
-        "ref_doctype": ref_doctype,
-        "ref_name": ref_name,
-        "ref_label": ref_label,
-        "ref_url": f"/app/{ref_doctype.lower().replace(' ', '-')}/{ref_name}",
-    })
+    doc.append(
+        "references",
+        {
+            "ref_doctype": ref_doctype,
+            "ref_name": ref_name,
+            "ref_label": ref_label,
+            "ref_url": f"/app/{ref_doctype.lower().replace(' ', '-')}/{ref_name}",
+        },
+    )
     doc.save(ignore_permissions=True)
 
     if int(two_way or 0):
@@ -4135,10 +4868,15 @@ def add_reference(issue, ref_doctype, ref_name, two_way=0):
     ]
 
 
-
-
 @frappe.whitelist()
-def add_task_link(issue, linked_task, link_type="relates to", dep_type="FS", lag_days=0, link_metadata=None):
+def add_task_link(
+    issue,
+    linked_task,
+    link_type="relates to",
+    dep_type="FS",
+    lag_days=0,
+    link_metadata=None,
+):
     if issue == linked_task:
         frappe.throw("A task can't be linked to itself.")
     doc = frappe.get_doc("BP Task", issue)
@@ -4149,7 +4887,9 @@ def add_task_link(issue, linked_task, link_type="relates to", dep_type="FS", lag
 
     # Reject blocking links that would create a circular dependency.
     if link_type in BLOCKING_TYPES:
-        pred, succ = (issue, linked_task) if link_type == "blocks" else (linked_task, issue)
+        pred, succ = (
+            (issue, linked_task) if link_type == "blocks" else (linked_task, issue)
+        )
         if _blocks_reaches(succ, pred):
             frappe.throw("That link would create a circular dependency.")
 
@@ -4163,41 +4903,37 @@ def add_task_link(issue, linked_task, link_type="relates to", dep_type="FS", lag
 
     # Mirror the reciprocal link onto the other task.
     inverse = INVERSE_LINK.get(link_type)
-    if inverse and _append_link(linked_doc, doc, inverse, dep_type, lag_days, link_metadata):
+    if inverse and _append_link(
+        linked_doc, doc, inverse, dep_type, lag_days, link_metadata
+    ):
         linked_doc.save(ignore_permissions=True)
 
     return {"ok": True}
 
 
-
-
 @frappe.whitelist()
 def archive_team(team):
-	"""Archive a team (Admin only). Hidden from listings; data preserved.
-	Projects keep their data but are unlinked from the archived team."""
-	_check_team_permission(team, "Admin")
-	frappe.db.set_value("BP Team", team, "status", "Archived")
-	for p in frappe.get_all("BP Project", filters={"team": team}, pluck="name"):
-		frappe.db.set_value("BP Project", p, "team", None)
-	frappe.db.commit()
-	return {"ok": True}
-
-
+    """Archive a team (Admin only). Hidden from listings; data preserved.
+    Projects keep their data but are unlinked from the archived team."""
+    _check_team_permission(team, "Admin")
+    frappe.db.set_value("BP Team", team, "status", "Archived")
+    for p in frappe.get_all("BP Project", filters={"team": team}, pluck="name"):
+        frappe.db.set_value("BP Project", p, "team", None)
+    frappe.db.commit()
+    return {"ok": True}
 
 
 @frappe.whitelist()
 def assign_project_to_team(project, team):
-	"""Assign or remove a project from a team."""
-	_check_permission(project, "BP Manager")
-	if not frappe.db.exists("BP Project", project):
-		frappe.throw(f"Project '{project}' not found.", frappe.DoesNotExistError)
-	# Use db.set_value to avoid running the full validate/save cycle which
-	# can fail with 417 if the calling user lacks Frappe-level write permission.
-	frappe.db.set_value("BP Project", project, "team", team or None)
-	frappe.db.commit()
-	return {"project": project, "team": team or None}
-
-
+    """Assign or remove a project from a team."""
+    _check_permission(project, "BP Manager")
+    if not frappe.db.exists("BP Project", project):
+        frappe.throw(f"Project '{project}' not found.", frappe.DoesNotExistError)
+    # Use db.set_value to avoid running the full validate/save cycle which
+    # can fail with 417 if the calling user lacks Frappe-level write permission.
+    frappe.db.set_value("BP Project", project, "team", team or None)
+    frappe.db.commit()
+    return {"project": project, "team": team or None}
 
 
 def backfill_reciprocal_links():
@@ -4210,7 +4946,14 @@ def backfill_reciprocal_links():
     rows = frappe.get_all(
         "BP Task Link",
         filters={"parenttype": "BP Task"},
-        fields=["parent", "linked_task", "link_type", "dep_type", "lag_days", "link_metadata"],
+        fields=[
+            "parent",
+            "linked_task",
+            "link_type",
+            "dep_type",
+            "lag_days",
+            "link_metadata",
+        ],
     )
     # Index existing (task -> {(other, type)}) so we don't duplicate.
     existing = {}
@@ -4225,29 +4968,32 @@ def backfill_reciprocal_links():
             continue
         if (src, inv) in existing.get(tgt, set()):
             continue  # reciprocal already present
-        meta = frappe.db.get_value("BP Task", src, ["task_key", "title", "status"], as_dict=True)
+        meta = frappe.db.get_value(
+            "BP Task", src, ["task_key", "title", "status"], as_dict=True
+        )
         if not meta:
             continue
         other = frappe.get_doc("BP Task", tgt)
-        other.append("links", {
-            "link_type": inv,
-            "linked_task": src,
-            "linked_task_key": meta.task_key,
-            "linked_task_title": meta.title,
-            "linked_task_status": meta.status,
-            # Mirror scheduling + integration metadata on the reciprocal too.
-            "dep_type": r.get("dep_type") or "FS",
-            "lag_days": r.get("lag_days") if r.get("lag_days") is not None else 0,
-            "link_metadata": r.get("link_metadata"),
-        })
+        other.append(
+            "links",
+            {
+                "link_type": inv,
+                "linked_task": src,
+                "linked_task_key": meta.task_key,
+                "linked_task_title": meta.title,
+                "linked_task_status": meta.status,
+                # Mirror scheduling + integration metadata on the reciprocal too.
+                "dep_type": r.get("dep_type") or "FS",
+                "lag_days": r.get("lag_days") if r.get("lag_days") is not None else 0,
+                "link_metadata": r.get("link_metadata"),
+            },
+        )
         other.save(ignore_permissions=True)
         existing.setdefault(tgt, set()).add((src, inv))
         added += 1
 
     frappe.db.commit()
     return {"added": added, "scanned": len(rows)}
-
-
 
 
 @frappe.whitelist()
@@ -4303,14 +5049,23 @@ def complete_sprint(sprint, move_incomplete_to=None):
     frappe.db.commit()
     _invalidate_sprint_cache(doc.project)
 
-    emit(SPRINT_COMPLETED, {
-        "project": doc.project,
-        "sprint": doc.name,
-        "sprint_name": doc.sprint_name,
-        "completed_count": frappe.db.count("BP Task", {"sprint": sprint, "status": ["in", done_statuses]}) if done_statuses else 0,
-        "incomplete_count": len(incomplete),
-        "moved_to": target,
-    })
+    emit(
+        SPRINT_COMPLETED,
+        {
+            "project": doc.project,
+            "sprint": doc.name,
+            "sprint_name": doc.sprint_name,
+            "completed_count": (
+                frappe.db.count(
+                    "BP Task", {"sprint": sprint, "status": ["in", done_statuses]}
+                )
+                if done_statuses
+                else 0
+            ),
+            "incomplete_count": len(incomplete),
+            "moved_to": target,
+        },
+    )
 
     return {
         "sprint": doc.as_dict(),
@@ -4319,76 +5074,85 @@ def complete_sprint(sprint, move_incomplete_to=None):
     }
 
 
-
-
 @frappe.whitelist()
-def create_automation_rule(project, rule_name, trigger_event, action_type,
-                           conditions=None, action_config=None, is_active=1):
+def create_automation_rule(
+    project,
+    rule_name,
+    trigger_event,
+    action_type,
+    conditions=None,
+    action_config=None,
+    is_active=1,
+):
     _check_permission(project, "BP Admin")
     from batch_projects.entitlements import require_feature
+
     require_feature("automations")
 
-    doc = frappe.get_doc({
-        "doctype": "BP Automation Rule",
-        "project": project,
-        "rule_name": rule_name,
-        "trigger_event": trigger_event,
-        "action_type": action_type,
-        "conditions": _coerce_json(conditions, "[]"),
-        "action_config": _coerce_json(action_config, "{}"),
-        "is_active": _as_bool(is_active),
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Automation Rule",
+            "project": project,
+            "rule_name": rule_name,
+            "trigger_event": trigger_event,
+            "action_type": action_type,
+            "conditions": _coerce_json(conditions, "[]"),
+            "action_config": _coerce_json(action_config, "{}"),
+            "is_active": _as_bool(is_active),
+        }
+    )
     doc.insert(ignore_permissions=True)
     frappe.db.commit()
     return doc.as_dict()
 
 
-
-
 @frappe.whitelist()
 def get_milestones(project=None):
-	"""List milestones for a project (or all accessible projects)."""
-	if project:
-		_check_permission(project, "BP Viewer")
-	else:
-		_require_system_user()
-	filters = {}
-	if project:
-		filters["project"] = project
-	rows = frappe.get_all(
-		"BP Milestone",
-		filters=filters,
-		fields=["name", "title", "project", "due_date", "status", "description"],
-		order_by="due_date asc, creation asc",
-	)
-	proj_names = list({r["project"] for r in rows})
-	proj_info = {}
-	if proj_names:
-		for p in frappe.get_all("BP Project", filters={"name": ["in", proj_names]},
-					fields=["name", "project_name", "project_color"]):
-			proj_info[p["name"]] = p
-	for r in rows:
-		p = proj_info.get(r["project"], {})
-		r["project_name"]  = p.get("project_name") or r["project"]
-		r["project_color"] = p.get("project_color") or _avatar_color(r["project"])
-	return rows
+    """List milestones for a project (or all accessible projects)."""
+    if project:
+        _check_permission(project, "BP Viewer")
+    else:
+        _require_system_user()
+    filters = {}
+    if project:
+        filters["project"] = project
+    rows = frappe.get_all(
+        "BP Milestone",
+        filters=filters,
+        fields=["name", "title", "project", "due_date", "status", "description"],
+        order_by="due_date asc, creation asc",
+    )
+    proj_names = list({r["project"] for r in rows})
+    proj_info = {}
+    if proj_names:
+        for p in frappe.get_all(
+            "BP Project",
+            filters={"name": ["in", proj_names]},
+            fields=["name", "project_name", "project_color"],
+        ):
+            proj_info[p["name"]] = p
+    for r in rows:
+        p = proj_info.get(r["project"], {})
+        r["project_name"] = p.get("project_name") or r["project"]
+        r["project_color"] = p.get("project_color") or _avatar_color(r["project"])
+    return rows
 
 
 @frappe.whitelist()
 def create_milestone(project, title, due_date=None, description=None):
-	_check_permission(project, "BP Member")
-	doc = frappe.get_doc({
-		"doctype":     "BP Milestone",
-		"project":     project,
-		"title":       title,
-		"due_date":    due_date or None,
-		"description": description or "",
-		"status":      "Open",
-	})
-	doc.insert(ignore_permissions=True)
-	return doc.as_dict()
-
-
+    _check_permission(project, "BP Member")
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Milestone",
+            "project": project,
+            "title": title,
+            "due_date": due_date or None,
+            "description": description or "",
+            "status": "Open",
+        }
+    )
+    doc.insert(ignore_permissions=True)
+    return doc.as_dict()
 
 
 @frappe.whitelist()
@@ -4431,34 +5195,36 @@ def create_project(
     if ptype == "fixed" and not budget_amount:
         frappe.throw("Total budget is required for fixed-price projects.")
 
-    doc = frappe.get_doc({
-        "doctype":        "BP Project",
-        "project_name":   project_name.strip(),
-        "key":            key,
-        "status":         "Active",
-        "description":    description or "",
-        "project_color":  project_color or "#0B6BCB",
-        "project_icon":   project_icon or "Folder",
-        "theme":          theme or "koalaBlue",
-        "visibility":     visibility or "workspace",
-        "project_type":   ptype,
-        "lead":           project_lead or None,
-        "client":         client or None,
-        "budget_amount":  float(budget_amount) if budget_amount else None,
-        "hourly_rate":    float(hourly_rate) if hourly_rate else None,
-        "retainer_hours": int(retainer_hours) if retainer_hours else None,
-        "currency":       currency or "INR",
-        "start_date":     start_date or None,
-        "target_end_date": target_end_date or None,
-        "workflow_states": workflow_states,
-        "issue_types":    issue_types,
-        "custom_fields":  custom_fields or "[]",
-        "enabled_views":  enabled_views or None,
-        "labels":         "[]",
-        "schema_version": 1,
-        "template_used":  template_used or "",
-        "company":        company,
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Project",
+            "project_name": project_name.strip(),
+            "key": key,
+            "status": "Active",
+            "description": description or "",
+            "project_color": project_color or "#0B6BCB",
+            "project_icon": project_icon or "Folder",
+            "theme": theme or "koalaBlue",
+            "visibility": visibility or "workspace",
+            "project_type": ptype,
+            "lead": project_lead or None,
+            "client": client or None,
+            "budget_amount": float(budget_amount) if budget_amount else None,
+            "hourly_rate": float(hourly_rate) if hourly_rate else None,
+            "retainer_hours": int(retainer_hours) if retainer_hours else None,
+            "currency": currency or "INR",
+            "start_date": start_date or None,
+            "target_end_date": target_end_date or None,
+            "workflow_states": workflow_states,
+            "issue_types": issue_types,
+            "custom_fields": custom_fields or "[]",
+            "enabled_views": enabled_views or None,
+            "labels": "[]",
+            "schema_version": 1,
+            "template_used": template_used or "",
+            "company": company,
+        }
+    )
     doc.insert(ignore_permissions=True)
 
     # Auto-add creator as Admin member so they have full access.
@@ -4466,8 +5232,10 @@ def create_project(
     # doc_events hook in hooks.py).
     creator = frappe.session.user
     from batch_projects.entitlements import assert_seat_available
+
     assert_seat_available(creator)
     from batch_projects import access
+
     access.ensure_member_role(creator)
     frappe.db.sql(
         """INSERT INTO `tabBP Project Member`
@@ -4477,28 +5245,37 @@ def create_project(
     )
     frappe.db.commit()
 
-    emit(PROJECT_CREATED, {
-        "project":      doc.name,
-        "project_name": doc.project_name,
-    })
-    emit(PROJECT_ROLE_CHANGED, {
-        "project": doc.name, "user": creator,
-        "old_role": None, "new_role": "Admin",
-    })
+    emit(
+        PROJECT_CREATED,
+        {
+            "project": doc.name,
+            "project_name": doc.project_name,
+        },
+    )
+    emit(
+        PROJECT_ROLE_CHANGED,
+        {
+            "project": doc.name,
+            "user": creator,
+            "old_role": None,
+            "new_role": "Admin",
+        },
+    )
 
     return {
-        "name":          doc.name,
-        "project_name":  doc.project_name,
-        "key":           doc.key,
+        "name": doc.name,
+        "project_name": doc.project_name,
+        "key": doc.key,
         "project_color": doc.project_color,
-        "project_icon":  doc.project_icon,
-        "theme":         doc.theme,
-        "project_type":  doc.project_type,
-        "visibility":    doc.visibility,
+        "project_icon": doc.project_icon,
+        "theme": doc.theme,
+        "project_type": doc.project_type,
+        "visibility": doc.visibility,
     }
 
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
+
 
 def _fetch_task_links(issue_names: list) -> dict:
     """Task→task relations per task (mirror columns read linked status live)."""
@@ -4507,8 +5284,15 @@ def _fetch_task_links(issue_names: list) -> dict:
     rows = frappe.get_all(
         "BP Task Link",
         filters={"parent": ["in", issue_names]},
-        fields=["parent", "link_type", "linked_task", "linked_task_key",
-                "linked_task_title", "linked_task_status", "linked_task_project"],
+        fields=[
+            "parent",
+            "link_type",
+            "linked_task",
+            "linked_task_key",
+            "linked_task_title",
+            "linked_task_status",
+            "linked_task_project",
+        ],
     )
     out = {}
     for r in rows:
@@ -4541,11 +5325,17 @@ def _fetch_assignees(issue_names: list) -> dict:
     )
     result = {}
     for row in rows:
-        full_name = row["full_name"] or frappe.db.get_value("User", row["user"], "full_name") or row["user"]
-        result.setdefault(row["parent"], []).append({
-            "user": row["user"],
-            "full_name": full_name,
-        })
+        full_name = (
+            row["full_name"]
+            or frappe.db.get_value("User", row["user"], "full_name")
+            or row["user"]
+        )
+        result.setdefault(row["parent"], []).append(
+            {
+                "user": row["user"],
+                "full_name": full_name,
+            }
+        )
     return result
 
 
@@ -4572,13 +5362,17 @@ def _fetch_epics_for_project(project: str) -> dict:
 
 def _get_completed_statuses(project_dict: dict) -> list:
     states = _parse_json(project_dict.get("workflow_states"), [])
-    return [s["name"] for s in states if s.get("category") in ("completed", "cancelled")]
+    return [
+        s["name"] for s in states if s.get("category") in ("completed", "cancelled")
+    ]
 
 
 def _get_completed_statuses_by_project(project_name: str) -> list:
     raw = frappe.db.get_value("BP Project", project_name, "workflow_states")
     states = _parse_json(raw, [])
-    return [s["name"] for s in states if s.get("category") in ("completed", "cancelled")]
+    return [
+        s["name"] for s in states if s.get("category") in ("completed", "cancelled")
+    ]
 
 
 def _project_health_label(health_override, total, done, overdue):
@@ -4604,148 +5398,178 @@ def _project_health_label(health_override, total, done, overdue):
 
 @frappe.whitelist()
 def get_risks(project=None):
-	"""List risks for a project (or all open risks)."""
-	if project:
-		_check_permission(project, "BP Viewer")
-	else:
-		_require_system_user()
-	filters = {"status": "Open"}
-	if project:
-		filters["project"] = project
-	rows = frappe.get_all("BP Risk",
-		filters=filters,
-		fields=["name", "title", "project", "severity", "status", "owner_user", "description"],
-		order_by="creation desc")
-	owner_users = list({r["owner_user"] for r in rows if r.get("owner_user")})
-	owner_info = {}
-	if owner_users:
-		for u in frappe.get_all("User", filters={"name": ["in", owner_users]}, fields=["name", "full_name"]):
-			owner_info[u["name"]] = u
-	proj_names = list({r["project"] for r in rows})
-	proj_info = {}
-	if proj_names:
-		for p in frappe.get_all("BP Project", filters={"name": ["in", proj_names]},
-					fields=["name", "project_name", "project_color"]):
-			proj_info[p["name"]] = p
-	for r in rows:
-		owner = owner_info.get(r.get("owner_user", ""), {})
-		p = proj_info.get(r["project"], {})
-		r["owner"] = owner.get("full_name", "") or r.get("owner_user", "")
-		r["owner_initial"] = "".join(w[0].upper() for w in r["owner"].split()[:2]) if r["owner"] else "?"
-		r["owner_color"] = _avatar_color(r.get("owner_user") or r["project"])
-		r["project_name"] = p.get("project_name", "") or r["project"]
-		r["project_color"] = p.get("project_color", "") or _avatar_color(r["project"])
-	return rows
+    """List risks for a project (or all open risks)."""
+    if project:
+        _check_permission(project, "BP Viewer")
+    else:
+        _require_system_user()
+    filters = {"status": "Open"}
+    if project:
+        filters["project"] = project
+    rows = frappe.get_all(
+        "BP Risk",
+        filters=filters,
+        fields=[
+            "name",
+            "title",
+            "project",
+            "severity",
+            "status",
+            "owner_user",
+            "description",
+        ],
+        order_by="creation desc",
+    )
+    owner_users = list({r["owner_user"] for r in rows if r.get("owner_user")})
+    owner_info = {}
+    if owner_users:
+        for u in frappe.get_all(
+            "User", filters={"name": ["in", owner_users]}, fields=["name", "full_name"]
+        ):
+            owner_info[u["name"]] = u
+    proj_names = list({r["project"] for r in rows})
+    proj_info = {}
+    if proj_names:
+        for p in frappe.get_all(
+            "BP Project",
+            filters={"name": ["in", proj_names]},
+            fields=["name", "project_name", "project_color"],
+        ):
+            proj_info[p["name"]] = p
+    for r in rows:
+        owner = owner_info.get(r.get("owner_user", ""), {})
+        p = proj_info.get(r["project"], {})
+        r["owner"] = owner.get("full_name", "") or r.get("owner_user", "")
+        r["owner_initial"] = (
+            "".join(w[0].upper() for w in r["owner"].split()[:2]) if r["owner"] else "?"
+        )
+        r["owner_color"] = _avatar_color(r.get("owner_user") or r["project"])
+        r["project_name"] = p.get("project_name", "") or r["project"]
+        r["project_color"] = p.get("project_color", "") or _avatar_color(r["project"])
+    return rows
 
 
 @frappe.whitelist()
 def update_risk(name, fields):
-	"""Update a risk's fields."""
-	if isinstance(fields, str):
-		fields = json.loads(fields)
-	doc = frappe.get_doc("BP Risk", name)
-	_check_permission(doc.project, "BP Member")
-	allowed = {"title", "severity", "status", "owner_user", "description"}
-	for k, v in (fields or {}).items():
-		if k in allowed:
-			setattr(doc, k, v)
-	doc.save(ignore_permissions=True)
-	frappe.db.commit()
-	return doc.as_dict()
+    """Update a risk's fields."""
+    if isinstance(fields, str):
+        fields = json.loads(fields)
+    doc = frappe.get_doc("BP Risk", name)
+    _check_permission(doc.project, "BP Member")
+    allowed = {"title", "severity", "status", "owner_user", "description"}
+    for k, v in (fields or {}).items():
+        if k in allowed:
+            setattr(doc, k, v)
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+    return doc.as_dict()
 
 
 @frappe.whitelist()
 def create_risk(project, title, severity="medium", owner_user=None, description=None):
-	_check_permission(project, "BP Member")
-	doc = frappe.get_doc({
-		"doctype":     "BP Risk",
-		"project":     project,
-		"title":       title,
-		"severity":    severity,
-		"owner_user":  owner_user or None,
-		"description": description or "",
-		"status":      "Open",
-	})
-	doc.insert(ignore_permissions=True)
-	return doc.as_dict()
-
-
+    _check_permission(project, "BP Member")
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Risk",
+            "project": project,
+            "title": title,
+            "severity": severity,
+            "owner_user": owner_user or None,
+            "description": description or "",
+            "status": "Open",
+        }
+    )
+    doc.insert(ignore_permissions=True)
+    return doc.as_dict()
 
 
 @frappe.whitelist()
 def create_sprint(project, sprint_name, goal=None, start_date=None, end_date=None):
     _check_permission(project, "BP Member")
-    doc = frappe.get_doc({
-        "doctype": "BP Sprint",
-        "project": project,
-        "sprint_name": sprint_name,
-        "status": "Planning",
-        "goal": goal or "",
-        "start_date": start_date or None,
-        "end_date": end_date or None,
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Sprint",
+            "project": project,
+            "sprint_name": sprint_name,
+            "status": "Planning",
+            "goal": goal or "",
+            "start_date": start_date or None,
+            "end_date": end_date or None,
+        }
+    )
     doc.insert(ignore_permissions=True)
     frappe.db.commit()
     _invalidate_sprint_cache(project)
     return doc.as_dict()
 
 
-
-
 @frappe.whitelist()
-def create_team(team_name, team_key=None, team_color="#0052CC", team_icon=None,
-                description=None, lead=None, department=None, company=None):
-	_require_system_user()
-	doc = frappe.get_doc({
-		"doctype":   "BP Team",
-		"team_name": team_name,
-		"team_key":  team_key or "",
-		"team_color": team_color,
-		"team_icon": team_icon or "",
-		"description": description or "",
-		"lead":      lead or "",
-		"department": department or "",
-		"company":   company or "",
-		"status":    "Active", 
-	})
-	# The creator becomes the team's Admin — otherwise they'd be locked out of
-	# managing the team they just made (update_team / members require Admin).
-	creator = frappe.session.user
-	if creator not in ("Administrator", "Guest"):
-		from batch_projects.entitlements import assert_seat_available
-		assert_seat_available(creator)
-		doc.append("members", {
-			"user": creator,
-			"full_name": frappe.db.get_value("User", creator, "full_name") or creator,
-			"role": "Admin",
-			"capacity_hours_per_sprint": 40,
-		})
-	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
-	return doc.as_dict()
+def create_team(
+    team_name,
+    team_key=None,
+    team_color="#0052CC",
+    team_icon=None,
+    description=None,
+    lead=None,
+    department=None,
+    company=None,
+):
+    _require_system_user()
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Team",
+            "team_name": team_name,
+            "team_key": team_key or "",
+            "team_color": team_color,
+            "team_icon": team_icon or "",
+            "description": description or "",
+            "lead": lead or "",
+            "department": department or "",
+            "company": company or "",
+            "status": "Active",
+        }
+    )
+    # The creator becomes the team's Admin — otherwise they'd be locked out of
+    # managing the team they just made (update_team / members require Admin).
+    creator = frappe.session.user
+    if creator not in ("Administrator", "Guest"):
+        from batch_projects.entitlements import assert_seat_available
 
-
+        assert_seat_available(creator)
+        doc.append(
+            "members",
+            {
+                "user": creator,
+                "full_name": frappe.db.get_value("User", creator, "full_name")
+                or creator,
+                "role": "Admin",
+                "capacity_hours_per_sprint": 40,
+            },
+        )
+    doc.insert(ignore_permissions=True)
+    frappe.db.commit()
+    return doc.as_dict()
 
 
 @frappe.whitelist()
 def create_team_sprint(team, sprint_name, goal=None, start_date=None, end_date=None):
-	"""Create a team-level sprint (not bound to a single project)."""
-	_check_team_permission(team, "Member")
-	doc = frappe.get_doc({
-		"doctype":     "BP Sprint",
-		"sprint_name": sprint_name,
-		"team":        team,
-		"sprint_type": "Team",
-		"status":      "Planning",
-		"goal":        goal or "",
-		"start_date":  start_date or None,
-		"end_date":    end_date or None,
-	})
-	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
-	return doc.as_dict()
-
-
+    """Create a team-level sprint (not bound to a single project)."""
+    _check_team_permission(team, "Member")
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Sprint",
+            "sprint_name": sprint_name,
+            "team": team,
+            "sprint_type": "Team",
+            "status": "Planning",
+            "goal": goal or "",
+            "start_date": start_date or None,
+            "end_date": end_date or None,
+        }
+    )
+    doc.insert(ignore_permissions=True)
+    frappe.db.commit()
+    return doc.as_dict()
 
 
 @frappe.whitelist()
@@ -4754,13 +5578,10 @@ def delete_attachment(file_name):
     if doc.attached_to_doctype != "BP Task":
         frappe.throw("Not a BP Task attachment.")
     _check_permission(
-        frappe.db.get_value("BP Task", doc.attached_to_name, "project"),
-        "BP Member"
+        frappe.db.get_value("BP Task", doc.attached_to_name, "project"), "BP Member"
     )
     doc.delete(ignore_permissions=True)
     return {"ok": True}
-
-
 
 
 @frappe.whitelist()
@@ -4772,26 +5593,20 @@ def delete_automation_rule(rule):
     return {"deleted": rule}
 
 
-
-
 @frappe.whitelist()
 def delete_milestone(name):
-	doc = frappe.get_doc("BP Milestone", name)
-	_check_permission(doc.project, "BP Manager")
-	frappe.delete_doc("BP Milestone", name, ignore_permissions=True)
-	return {"ok": True}
-
-
+    doc = frappe.get_doc("BP Milestone", name)
+    _check_permission(doc.project, "BP Manager")
+    frappe.delete_doc("BP Milestone", name, ignore_permissions=True)
+    return {"ok": True}
 
 
 @frappe.whitelist()
 def delete_risk(name):
-	doc = frappe.get_doc("BP Risk", name)
-	_check_permission(doc.project, "BP Manager")
-	frappe.delete_doc("BP Risk", name, ignore_permissions=True)
-	return {"ok": True}
-
-
+    doc = frappe.get_doc("BP Risk", name)
+    _check_permission(doc.project, "BP Manager")
+    frappe.delete_doc("BP Risk", name, ignore_permissions=True)
+    return {"ok": True}
 
 
 @frappe.whitelist()
@@ -4820,8 +5635,6 @@ def delete_sprint(sprint):
     return {"deleted": sprint}
 
 
-
-
 @frappe.whitelist()
 def delete_view(view):
     """Delete a personal saved view (owner only)."""
@@ -4830,8 +5643,6 @@ def delete_view(view):
         frappe.throw("You can only delete your own views.")
     doc.delete(ignore_permissions=True)
     return {"ok": True}
-
-
 
 
 @frappe.whitelist()
@@ -4845,12 +5656,27 @@ def get_allowed_doctypes(project=None):
     Drop them from the list up front instead when `project` isn't linked.
     """
     ALLOWED = [
-        "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
-        "Project", "Customer", "Supplier", "Lead", "Opportunity",
-        "Expense Claim", "Timesheet", "Delivery Note", "Stock Entry",
-        "Payment Entry", "Journal Entry", "Work Order", "Quotation",
+        "Sales Order",
+        "Purchase Order",
+        "Sales Invoice",
+        "Purchase Invoice",
+        "Project",
+        "Customer",
+        "Supplier",
+        "Lead",
+        "Opportunity",
+        "Expense Claim",
+        "Timesheet",
+        "Delivery Note",
+        "Stock Entry",
+        "Payment Entry",
+        "Journal Entry",
+        "Work Order",
+        "Quotation",
     ]
-    erp_linked = bool(project and frappe.db.get_value("BP Project", project, "erpnext_project"))
+    erp_linked = bool(
+        project and frappe.db.get_value("BP Project", project, "erpnext_project")
+    )
     requires_project = _PROJECT_FIELD_DOCTYPES | {"Timesheet"}
     existing = []
     for dt in ALLOWED:
@@ -4862,8 +5688,6 @@ def get_allowed_doctypes(project=None):
         except Exception:
             pass
     return existing
-
-
 
 
 @frappe.whitelist()
@@ -4882,10 +5706,16 @@ def get_automation_options(project=None):
     if project:
         _check_permission(project, "BP Viewer")
         proj = frappe.get_doc("BP Project", project)
-        statuses = [s.get("name") for s in _normalize_workflow_states(proj.get_workflow_states())]
+        statuses = [
+            s.get("name")
+            for s in _normalize_workflow_states(proj.get_workflow_states())
+        ]
         task_types = [t["name"] for t in proj.get_issue_types()]
         members = [
-            {"user": m.user, "full_name": frappe.db.get_value("User", m.user, "full_name") or m.user}
+            {
+                "user": m.user,
+                "full_name": frappe.db.get_value("User", m.user, "full_name") or m.user,
+            }
             for m in (proj.members or [])
         ]
         # BP Project.labels is a list of {id, label, color} (see
@@ -4897,17 +5727,38 @@ def get_automation_options(project=None):
         # before actions/scope/etc were even fetched — see
         # get_automation_rules — could never happen; fixing that surfaced
         # this).
-        labels = [l.get("label") for l in _parse_json(proj.labels, []) if l.get("label")]
+        labels = [
+            l.get("label") for l in _parse_json(proj.labels, []) if l.get("label")
+        ]
     condition_fields = [
-        {"value": "to_status",    "label": "New status",   "type": "select", "options": statuses},
-        {"value": "from_status",  "label": "Old status",   "type": "select", "options": statuses},
-        {"value": "status",       "label": "Status",       "type": "select", "options": statuses},
-        {"value": "priority",     "label": "Priority",     "type": "select",
-         "options": ["Highest", "High", "Medium", "Low", "Lowest"]},
-        {"value": "task_type",    "label": "Task type",    "type": "select", "options": task_types},
+        {
+            "value": "to_status",
+            "label": "New status",
+            "type": "select",
+            "options": statuses,
+        },
+        {
+            "value": "from_status",
+            "label": "Old status",
+            "type": "select",
+            "options": statuses,
+        },
+        {"value": "status", "label": "Status", "type": "select", "options": statuses},
+        {
+            "value": "priority",
+            "label": "Priority",
+            "type": "select",
+            "options": ["Highest", "High", "Medium", "Low", "Lowest"],
+        },
+        {
+            "value": "task_type",
+            "label": "Task type",
+            "type": "select",
+            "options": task_types,
+        },
         {"value": "story_points", "label": "Story points", "type": "number"},
-        {"value": "labels",       "label": "Labels",       "type": "text"},
-        {"value": "assignees",    "label": "Assignees",    "type": "user"},
+        {"value": "labels", "label": "Labels", "type": "text"},
+        {"value": "assignees", "label": "Assignees", "type": "user"},
     ]
     return {
         "statuses": statuses,
@@ -4937,26 +5788,26 @@ BLOCKING_TYPES = {"blocks", "is blocked by"}
 
 _AUTOMATION_TRIGGERS = [
     {"value": "task.status_changed", "label": "When a task's status changes"},
-    {"value": "task.created",        "label": "When a task is created"},
-    {"value": "task.updated",        "label": "When a task is updated"},
-    {"value": "task.assigned",       "label": "When a task is assigned"},
-    {"value": "task.due_soon",       "label": "When a task is due soon"},
-    {"value": "comment.added",       "label": "When a comment is added"},
-    {"value": "task.deleted",        "label": "When a task is deleted"},
-    {"value": "task.trashed",        "label": "When a task is moved to trash"},
-    {"value": "task.restored",       "label": "When a task is restored from trash"},
+    {"value": "task.created", "label": "When a task is created"},
+    {"value": "task.updated", "label": "When a task is updated"},
+    {"value": "task.assigned", "label": "When a task is assigned"},
+    {"value": "task.due_soon", "label": "When a task is due soon"},
+    {"value": "comment.added", "label": "When a comment is added"},
+    {"value": "task.deleted", "label": "When a task is deleted"},
+    {"value": "task.trashed", "label": "When a task is moved to trash"},
+    {"value": "task.restored", "label": "When a task is restored from trash"},
 ]
 
 
 _AUTOMATION_ACTIONS = [
     {"value": "Change Status", "label": "Change the status"},
-    {"value": "Assign Issue",  "label": "Assign the task"},
-    {"value": "Set Priority",  "label": "Set the priority"},
-    {"value": "Set Due Date",  "label": "Set the due date"},
-    {"value": "Add Label",     "label": "Add label(s)"},
-    {"value": "Add Comment",   "label": "Post a comment"},
-    {"value": "Notify",        "label": "Send a notification"},
-    {"value": "Create Issue",  "label": "Create a new task"},
+    {"value": "Assign Issue", "label": "Assign the task"},
+    {"value": "Set Priority", "label": "Set the priority"},
+    {"value": "Set Due Date", "label": "Set the due date"},
+    {"value": "Add Label", "label": "Add label(s)"},
+    {"value": "Add Comment", "label": "Post a comment"},
+    {"value": "Notify", "label": "Send a notification"},
+    {"value": "Create Issue", "label": "Create a new task"},
 ]
 
 
@@ -4976,8 +5827,6 @@ _AUTOMATION_OPERATORS = [
 ]
 
 
-
-
 def _parse_json(value, default=None):
     """Parse a JSON string, or return the value as-is if already a dict/list."""
     if value is None:
@@ -4995,290 +5844,339 @@ def _parse_json(value, default=None):
 def _require_automation_admin(scope, project):
     """Gate: needs workspace admin for workspace-scope, BP Admin for project-scope."""
     from batch_projects import access
+
     if scope == "workspace":
         if not access.is_workspace_admin():
-            frappe.throw("You need workspace admin access for this.", frappe.PermissionError)
+            frappe.throw(
+                "You need workspace admin access for this.", frappe.PermissionError
+            )
     else:
         from batch_projects.api.board import _check_permission
-        _check_permission(project, "BP Admin")
 
+        _check_permission(project, "BP Admin")
 
 
 @frappe.whitelist()
 def get_reports(project, period="last_30_days", from_date=None, to_date=None):
-	"""Per-project delivery analytics in one call:
-	  • status_breakdown — current task count per workflow status
-	  • throughput       — tasks created vs completed per week (within period)
-	  • cycle_time       — avg days started→completed (+ percentiles + scatter)
-	  • velocity         — committed vs completed story points per sprint
-	period: last_7_days | last_30_days | last_90_days | month:YYYY-MM
-	from_date/to_date: ISO strings, override period when both provided
-	"""
-	from datetime import date, datetime, timedelta
+    """Per-project delivery analytics in one call:
+      • status_breakdown — current task count per workflow status
+      • throughput       — tasks created vs completed per week (within period)
+      • cycle_time       — avg days started→completed (+ percentiles + scatter)
+      • velocity         — committed vs completed story points per sprint
+    period: last_7_days | last_30_days | last_90_days | month:YYYY-MM
+    from_date/to_date: ISO strings, override period when both provided
+    """
+    from datetime import date, datetime, timedelta
 
-	# ── Resolve scope → one or many projects ────────────────────────────────
-	# Accepts a single project name/key, a (JSON-stringified) list, or
-	# 'all'/None meaning every project the caller can access. Cross-project
-	# reports aggregate so the same widgets work at "All projects" scope.
-	if isinstance(project, str) and project.strip().startswith("["):
-		try:
-			project = json.loads(project)
-		except Exception:
-			pass
+    # ── Resolve scope → one or many projects ────────────────────────────────
+    # Accepts a single project name/key, a (JSON-stringified) list, or
+    # 'all'/None meaning every project the caller can access. Cross-project
+    # reports aggregate so the same widgets work at "All projects" scope.
+    if isinstance(project, str) and project.strip().startswith("["):
+        try:
+            project = json.loads(project)
+        except Exception:
+            pass
 
-	if isinstance(project, (list, tuple)):
-		proj_names = [p for p in project if p]
-	elif not project or project == "all":
-		proj_names = None  # → all accessible projects
-	else:
-		proj_names = [project]
+    if isinstance(project, (list, tuple)):
+        proj_names = [p for p in project if p]
+    elif not project or project == "all":
+        proj_names = None  # → all accessible projects
+    else:
+        proj_names = [project]
 
-	if proj_names is None:
-		from batch_projects.permissions import get_accessible_projects
-		acc = get_accessible_projects(frappe.session.user)
-		proj_names = frappe.get_all("BP Project", pluck="name") if acc is None else list(acc)
-	else:
-		# Normalise keys → names and permission-check each project in scope.
-		resolved = []
-		for s in proj_names:
-			pn = s if frappe.db.exists("BP Project", s) else frappe.db.get_value("BP Project", {"key": s}, "name")
-			if pn:
-				_check_permission(pn, "BP Viewer")
-				resolved.append(pn)
-		proj_names = resolved
+    if proj_names is None:
+        from batch_projects.permissions import get_accessible_projects
 
-	if not proj_names:
-		frappe.throw("No accessible project in scope for this report.", frappe.ValidationError)
+        acc = get_accessible_projects(frappe.session.user)
+        proj_names = (
+            frappe.get_all("BP Project", pluck="name") if acc is None else list(acc)
+        )
+    else:
+        # Normalise keys → names and permission-check each project in scope.
+        resolved = []
+        for s in proj_names:
+            pn = (
+                s
+                if frappe.db.exists("BP Project", s)
+                else frappe.db.get_value("BP Project", {"key": s}, "name")
+            )
+            if pn:
+                _check_permission(pn, "BP Viewer")
+                resolved.append(pn)
+        proj_names = resolved
 
-	# Filter value usable across all the project-scoped queries below.
-	proj_filter = proj_names[0] if len(proj_names) == 1 else ["in", proj_names]
+    if not proj_names:
+        frappe.throw(
+            "No accessible project in scope for this report.", frappe.ValidationError
+        )
 
-	# Merge workflow states + completed statuses across the project(s) in scope.
-	# Different projects may define different statuses; dedupe by name, first
-	# color wins, and the completed set is the union.
-	states, completed, _seen_states = [], set(), set()
-	for pn in proj_names:
-		try:
-			pdoc = frappe.get_cached_doc("BP Project", pn)
-			for s in _normalize_workflow_states(pdoc.get_workflow_states()):
-				nm = s.get("name")
-				if nm and nm not in _seen_states:
-					_seen_states.add(nm)
-					states.append(s)
-			completed |= set(pdoc.get_completed_statuses())
-		except Exception:
-			pass
+    # Filter value usable across all the project-scoped queries below.
+    proj_filter = proj_names[0] if len(proj_names) == 1 else ["in", proj_names]
 
-	today = date.today()
-	period_days = {"last_7_days": 7, "last_30_days": 30, "last_90_days": 90}
+    # Merge workflow states + completed statuses across the project(s) in scope.
+    # Different projects may define different statuses; dedupe by name, first
+    # color wins, and the completed set is the union.
+    states, completed, _seen_states = [], set(), set()
+    for pn in proj_names:
+        try:
+            pdoc = frappe.get_cached_doc("BP Project", pn)
+            for s in _normalize_workflow_states(pdoc.get_workflow_states()):
+                nm = s.get("name")
+                if nm and nm not in _seen_states:
+                    _seen_states.add(nm)
+                    states.append(s)
+            completed |= set(pdoc.get_completed_statuses())
+        except Exception:
+            pass
 
-	def _parse_date(v):
-		if not v: return None
-		if isinstance(v, (date, datetime)): return v.date() if isinstance(v, datetime) else v
-		try: return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
-		except: return None
+    today = date.today()
+    period_days = {"last_7_days": 7, "last_30_days": 30, "last_90_days": 90}
 
-	if from_date and to_date:
-		from_date = _parse_date(from_date) or today - timedelta(days=30)
-		to_date   = _parse_date(to_date)   or today
-	elif period in period_days:
-		from_date, to_date = today - timedelta(days=period_days[period]), today
-	elif period.startswith("month:"):
-		import calendar
-		ym = period.split(":")[1]
-		y, m = int(ym.split("-")[0]), int(ym.split("-")[1])
-		from_date, to_date = date(y, m, 1), date(y, m, calendar.monthrange(y, m)[1])
-	else:
-		from_date, to_date = today - timedelta(days=30), today
+    def _parse_date(v):
+        if not v:
+            return None
+        if isinstance(v, (date, datetime)):
+            return v.date() if isinstance(v, datetime) else v
+        try:
+            return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+        except:
+            return None
 
-	def _d(v):
-		if not v:
-			return None
-		if isinstance(v, datetime):
-			return v.date()
-		if isinstance(v, date):
-			return v
-		try:
-			return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
-		except Exception:
-			return None
+    if from_date and to_date:
+        from_date = _parse_date(from_date) or today - timedelta(days=30)
+        to_date = _parse_date(to_date) or today
+    elif period in period_days:
+        from_date, to_date = today - timedelta(days=period_days[period]), today
+    elif period.startswith("month:"):
+        import calendar
 
-	tasks = frappe.get_all(
-		"BP Task",
-		filters={"project": proj_filter},
-		fields=["name", "status", "story_points", "sprint",
-		        "started_on", "completed_on", "creation"],
-	)
+        ym = period.split(":")[1]
+        y, m = int(ym.split("-")[0]), int(ym.split("-")[1])
+        from_date, to_date = date(y, m, 1), date(y, m, calendar.monthrange(y, m)[1])
+    else:
+        from_date, to_date = today - timedelta(days=30), today
 
-	# 1. Status breakdown (current snapshot), ordered by the workflow
-	counts = {}
-	for t in tasks:
-		counts[t["status"]] = counts.get(t["status"], 0) + 1
-	status_breakdown = [
-		{"name": s.get("name"), "color": s.get("color") or "#9FA6AD",
-		 "category": s.get("category"), "count": counts.get(s.get("name"), 0)}
-		for s in states
-	]
-	known = {s.get("name") for s in states}
-	for st, c in counts.items():
-		if st not in known:
-			status_breakdown.append({"name": st, "color": "#9FA6AD", "category": "unstarted", "count": c})
+    def _d(v):
+        if not v:
+            return None
+        if isinstance(v, datetime):
+            return v.date()
+        if isinstance(v, date):
+            return v
+        try:
+            return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None
 
-	# 2. Throughput — weekly buckets (Mon-anchored) across [from_date, to_date]
-	start_week = from_date - timedelta(days=from_date.weekday())
-	buckets, wk = [], start_week
-	while wk <= to_date:
-		buckets.append({"start": wk, "label": wk.strftime("%b %d"), "created": 0, "completed": 0})
-		wk = wk + timedelta(days=7)
+    tasks = frappe.get_all(
+        "BP Task",
+        filters={"project": proj_filter},
+        fields=[
+            "name",
+            "status",
+            "story_points",
+            "sprint",
+            "started_on",
+            "completed_on",
+            "creation",
+        ],
+    )
 
-	def _bucket_idx(d):
-		if not d or d < buckets[0]["start"] or d > to_date:
-			return None
-		return min((d - buckets[0]["start"]).days // 7, len(buckets) - 1)
+    # 1. Status breakdown (current snapshot), ordered by the workflow
+    counts = {}
+    for t in tasks:
+        counts[t["status"]] = counts.get(t["status"], 0) + 1
+    status_breakdown = [
+        {
+            "name": s.get("name"),
+            "color": s.get("color") or "#9FA6AD",
+            "category": s.get("category"),
+            "count": counts.get(s.get("name"), 0),
+        }
+        for s in states
+    ]
+    known = {s.get("name") for s in states}
+    for st, c in counts.items():
+        if st not in known:
+            status_breakdown.append(
+                {"name": st, "color": "#9FA6AD", "category": "unstarted", "count": c}
+            )
 
-	cycle_days = []
-	cycle_scatter = []
-	for t in tasks:
-		i = _bucket_idx(_d(t.get("creation")))
-		if i is not None:
-			buckets[i]["created"] += 1
-		done = _d(t.get("completed_on"))
-		j = _bucket_idx(done)
-		if j is not None:
-			buckets[j]["completed"] += 1
-		started = _d(t.get("started_on"))
-		if started and done and done >= started:
-			days = (done - started).days
-			cycle_days.append(days)
-			cycle_scatter.append({"date": done.isoformat(), "days": days})
+    # 2. Throughput — weekly buckets (Mon-anchored) across [from_date, to_date]
+    start_week = from_date - timedelta(days=from_date.weekday())
+    buckets, wk = [], start_week
+    while wk <= to_date:
+        buckets.append(
+            {"start": wk, "label": wk.strftime("%b %d"), "created": 0, "completed": 0}
+        )
+        wk = wk + timedelta(days=7)
 
-	throughput = [{"label": b["label"], "created": b["created"], "completed": b["completed"]} for b in buckets]
+    def _bucket_idx(d):
+        if not d or d < buckets[0]["start"] or d > to_date:
+            return None
+        return min((d - buckets[0]["start"]).days // 7, len(buckets) - 1)
 
-	def _percentile(lst, p):
-		if not lst: return 0
-		s = sorted(lst)
-		k = (len(s) - 1) * p / 100
-		f, c = int(k), min(int(k) + 1, len(s) - 1)
-		return round(s[f] + (s[c] - s[f]) * (k - f), 1)
+    cycle_days = []
+    cycle_scatter = []
+    for t in tasks:
+        i = _bucket_idx(_d(t.get("creation")))
+        if i is not None:
+            buckets[i]["created"] += 1
+        done = _d(t.get("completed_on"))
+        j = _bucket_idx(done)
+        if j is not None:
+            buckets[j]["completed"] += 1
+        started = _d(t.get("started_on"))
+        if started and done and done >= started:
+            days = (done - started).days
+            cycle_days.append(days)
+            cycle_scatter.append({"date": done.isoformat(), "days": days})
 
-	avg_cycle = round(sum(cycle_days) / len(cycle_days), 1) if cycle_days else 0
-	completed_in_period = sum(b["completed"] for b in buckets)
+    throughput = [
+        {"label": b["label"], "created": b["created"], "completed": b["completed"]}
+        for b in buckets
+    ]
 
-	# 3. Velocity per sprint — committed vs completed story points
-	sprints = frappe.get_all(
-		"BP Sprint",
-		filters={"project": proj_filter},
-		fields=["name", "sprint_name", "status", "start_date", "end_date"],
-		order_by="start_date asc, creation asc",
-	)
-	committed, done_pts = {}, {}
-	for t in tasks:
-		sp = t.get("sprint")
-		if not sp:
-			continue
-		pts = float(t.get("story_points") or 0)
-		committed[sp] = committed.get(sp, 0) + pts
-		if t["status"] in completed:
-			done_pts[sp] = done_pts.get(sp, 0) + pts
-	velocity = [
-		{"name": s["name"], "label": s["sprint_name"], "status": s["status"],
-		 "committed": committed.get(s["name"], 0), "completed": done_pts.get(s["name"], 0)}
-		for s in sprints
-	]
+    def _percentile(lst, p):
+        if not lst:
+            return 0
+        s = sorted(lst)
+        k = (len(s) - 1) * p / 100
+        f, c = int(k), min(int(k) + 1, len(s) - 1)
+        return round(s[f] + (s[c] - s[f]) * (k - f), 1)
 
-	# 5. Cumulative flow — weekly status snapshots, reconstructed from the
-	# activity log (falls back to current status if no history exists).
-	acts = frappe.get_all(
-		"BP Activity",
-		filters={"project": proj_filter, "field_name": "status"},
-		fields=["task", "old_value", "new_value", "creation"],
-		order_by="creation asc",
-	)
-	trans = {}
-	for a in acts:
-		trans.setdefault(a["task"], []).append(a)
-	task_by_name = {t["name"]: t for t in tasks}
+    avg_cycle = round(sum(cycle_days) / len(cycle_days), 1) if cycle_days else 0
+    completed_in_period = sum(b["completed"] for b in buckets)
 
-	def _status_on(tname, day):
-		t = task_by_name.get(tname)
-		if not t:
-			return None
-		created = _d(t.get("creation"))
-		if not created or created > day:
-			return None
-		tl = trans.get(tname, [])
-		cur = tl[0]["old_value"] if tl else t["status"]
-		for a in tl:
-			ad = _d(a["creation"])
-			if ad and ad <= day:
-				cur = a["new_value"]
-			else:
-				break
-		return cur
+    # 3. Velocity per sprint — committed vs completed story points
+    sprints = frappe.get_all(
+        "BP Sprint",
+        filters={"project": proj_filter},
+        fields=["name", "sprint_name", "status", "start_date", "end_date"],
+        order_by="start_date asc, creation asc",
+    )
+    committed, done_pts = {}, {}
+    for t in tasks:
+        sp = t.get("sprint")
+        if not sp:
+            continue
+        pts = float(t.get("story_points") or 0)
+        committed[sp] = committed.get(sp, 0) + pts
+        if t["status"] in completed:
+            done_pts[sp] = done_pts.get(sp, 0) + pts
+    velocity = [
+        {
+            "name": s["name"],
+            "label": s["sprint_name"],
+            "status": s["status"],
+            "committed": committed.get(s["name"], 0),
+            "completed": done_pts.get(s["name"], 0),
+        }
+        for s in sprints
+    ]
 
-	cfd_order = [s["name"] for s in status_breakdown]
-	cfd_color = {s["name"]: s["color"] for s in status_breakdown}
-	cfd_counts = {sn: [] for sn in cfd_order}
-	for b in buckets:
-		snap = min(b["start"] + timedelta(days=6), to_date)
-		day_counts = {sn: 0 for sn in cfd_order}
-		for t in tasks:
-			st = _status_on(t["name"], snap)
-			if st in day_counts:
-				day_counts[st] += 1
-		for sn in cfd_order:
-			cfd_counts[sn].append(day_counts[sn])
-	cumulative_flow = {
-		"labels": [b["label"] for b in buckets],
-		"series": [{"name": sn, "color": cfd_color[sn], "counts": cfd_counts[sn]} for sn in cfd_order],
-	}
+    # 5. Cumulative flow — weekly status snapshots, reconstructed from the
+    # activity log (falls back to current status if no history exists).
+    acts = frappe.get_all(
+        "BP Activity",
+        filters={"project": proj_filter, "field_name": "status"},
+        fields=["task", "old_value", "new_value", "creation"],
+        order_by="creation asc",
+    )
+    trans = {}
+    for a in acts:
+        trans.setdefault(a["task"], []).append(a)
+    task_by_name = {t["name"]: t for t in tasks}
 
-	# 6. Burndown — active sprint (else the latest dated sprint)
-	dated_sprints = [s for s in sprints if s.get("start_date") and s.get("end_date")]
-	chosen = next((s for s in dated_sprints if s["status"] == "Active"), None)
-	if not chosen and dated_sprints:
-		chosen = sorted(dated_sprints, key=lambda s: s["start_date"])[-1]
-	burndown = None
-	if chosen:
-		s_start, s_end = _d(chosen["start_date"]), _d(chosen["end_date"])
-		sp_tasks = [t for t in tasks if t.get("sprint") == chosen["name"]]
-		total = sum(float(t.get("story_points") or 0) for t in sp_tasks)
-		ndays = (s_end - s_start).days + 1 if (s_start and s_end) else 0
-		bd_days = []
-		for i in range(max(ndays, 0)):
-			d = s_start + timedelta(days=i)
-			ideal = round(total * (1 - i / (ndays - 1)), 1) if ndays > 1 else total
-			burned = sum(
-				float(t.get("story_points") or 0) for t in sp_tasks
-				if t["status"] in completed and _d(t.get("completed_on")) and _d(t["completed_on"]) <= d
-			)
-			bd_days.append({
-				"label": d.strftime("%b %d"),
-				"ideal": ideal,
-				"remaining": round(total - burned, 1) if d <= today else None,
-			})
-		burndown = {"sprint": chosen["sprint_name"], "total": total, "days": bd_days}
+    def _status_on(tname, day):
+        t = task_by_name.get(tname)
+        if not t:
+            return None
+        created = _d(t.get("creation"))
+        if not created or created > day:
+            return None
+        tl = trans.get(tname, [])
+        cur = tl[0]["old_value"] if tl else t["status"]
+        for a in tl:
+            ad = _d(a["creation"])
+            if ad and ad <= day:
+                cur = a["new_value"]
+            else:
+                break
+        return cur
 
-	return {
-		"period": period,
-		"from_date": from_date.isoformat(),
-		"to_date": to_date.isoformat(),
-		"total_tasks": len(tasks),
-		"status_breakdown": status_breakdown,
-		"throughput": throughput,
-		"cycle_time": {
-			"avg_days": avg_cycle,
-			"completed_count": completed_in_period,
-			"sample": len(cycle_days),
-			"p50": _percentile(cycle_days, 50),
-			"p85": _percentile(cycle_days, 85),
-			"p95": _percentile(cycle_days, 95),
-			"scatter": cycle_scatter,
-		},
-		"velocity": velocity,
-		"cumulative_flow": cumulative_flow,
-		"burndown": burndown,
-	}
+    cfd_order = [s["name"] for s in status_breakdown]
+    cfd_color = {s["name"]: s["color"] for s in status_breakdown}
+    cfd_counts = {sn: [] for sn in cfd_order}
+    for b in buckets:
+        snap = min(b["start"] + timedelta(days=6), to_date)
+        day_counts = {sn: 0 for sn in cfd_order}
+        for t in tasks:
+            st = _status_on(t["name"], snap)
+            if st in day_counts:
+                day_counts[st] += 1
+        for sn in cfd_order:
+            cfd_counts[sn].append(day_counts[sn])
+    cumulative_flow = {
+        "labels": [b["label"] for b in buckets],
+        "series": [
+            {"name": sn, "color": cfd_color[sn], "counts": cfd_counts[sn]}
+            for sn in cfd_order
+        ],
+    }
+
+    # 6. Burndown — active sprint (else the latest dated sprint)
+    dated_sprints = [s for s in sprints if s.get("start_date") and s.get("end_date")]
+    chosen = next((s for s in dated_sprints if s["status"] == "Active"), None)
+    if not chosen and dated_sprints:
+        chosen = sorted(dated_sprints, key=lambda s: s["start_date"])[-1]
+    burndown = None
+    if chosen:
+        s_start, s_end = _d(chosen["start_date"]), _d(chosen["end_date"])
+        sp_tasks = [t for t in tasks if t.get("sprint") == chosen["name"]]
+        total = sum(float(t.get("story_points") or 0) for t in sp_tasks)
+        ndays = (s_end - s_start).days + 1 if (s_start and s_end) else 0
+        bd_days = []
+        for i in range(max(ndays, 0)):
+            d = s_start + timedelta(days=i)
+            ideal = round(total * (1 - i / (ndays - 1)), 1) if ndays > 1 else total
+            burned = sum(
+                float(t.get("story_points") or 0)
+                for t in sp_tasks
+                if t["status"] in completed
+                and _d(t.get("completed_on"))
+                and _d(t["completed_on"]) <= d
+            )
+            bd_days.append(
+                {
+                    "label": d.strftime("%b %d"),
+                    "ideal": ideal,
+                    "remaining": round(total - burned, 1) if d <= today else None,
+                }
+            )
+        burndown = {"sprint": chosen["sprint_name"], "total": total, "days": bd_days}
+
+    return {
+        "period": period,
+        "from_date": from_date.isoformat(),
+        "to_date": to_date.isoformat(),
+        "total_tasks": len(tasks),
+        "status_breakdown": status_breakdown,
+        "throughput": throughput,
+        "cycle_time": {
+            "avg_days": avg_cycle,
+            "completed_count": completed_in_period,
+            "sample": len(cycle_days),
+            "p50": _percentile(cycle_days, 50),
+            "p85": _percentile(cycle_days, 85),
+            "p95": _percentile(cycle_days, 95),
+            "scatter": cycle_scatter,
+        },
+        "velocity": velocity,
+        "cumulative_flow": cumulative_flow,
+        "burndown": burndown,
+    }
 
 
 @frappe.whitelist()
@@ -5323,43 +6221,66 @@ def get_members(project=None):
 
     doc = frappe.get_doc("BP Project", project)
     name_map = {u["user"]: u["full_name"] for u in user_list}
-    current = [{
-        "user": m.user,
-        "role": m.role,
-        "full_name": name_map.get(m.user)
-        or frappe.db.get_value("User", m.user, "full_name") or m.user,
-    } for m in (doc.members or [])]
+    current = [
+        {
+            "user": m.user,
+            "role": m.role,
+            "full_name": name_map.get(m.user)
+            or frappe.db.get_value("User", m.user, "full_name")
+            or m.user,
+        }
+        for m in (doc.members or [])
+    ]
     return {"user_list": user_list, "members": current, "can_manage": can_manage}
 
 
 # ─── SLA ──────────────────────────────────────────────────────────────────────
 
+
 @frappe.whitelist()
 def get_sla_policies(project):
     """List active SLA policies for a project."""
     _check_permission(project, "BP Viewer")
-    return frappe.get_all("BP SLA Policy",
+    return frappe.get_all(
+        "BP SLA Policy",
         filters={"project": project, "is_active": 1},
-        fields=["name", "policy_name", "priority_tier", "response_hours",
-                "resolution_hours", "escalate_to", "escalate_after_hours"])
+        fields=[
+            "name",
+            "policy_name",
+            "priority_tier",
+            "response_hours",
+            "resolution_hours",
+            "escalate_to",
+            "escalate_after_hours",
+        ],
+    )
 
 
 @frappe.whitelist()
-def create_sla_policy(project, policy_name, priority_tier, response_hours,
-                       resolution_hours, escalate_to=None, escalate_after_hours=None):
+def create_sla_policy(
+    project,
+    policy_name,
+    priority_tier,
+    response_hours,
+    resolution_hours,
+    escalate_to=None,
+    escalate_after_hours=None,
+):
     """Create a new SLA policy for a project."""
     _check_permission(project, "BP Manager")
-    doc = frappe.get_doc({
-        "doctype": "BP SLA Policy",
-        "project": project,
-        "policy_name": policy_name,
-        "priority_tier": priority_tier,
-        "response_hours": response_hours,
-        "resolution_hours": resolution_hours,
-        "escalate_to": escalate_to or None,
-        "escalate_after_hours": escalate_after_hours or 0,
-        "is_active": 1,
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP SLA Policy",
+            "project": project,
+            "policy_name": policy_name,
+            "priority_tier": priority_tier,
+            "response_hours": response_hours,
+            "resolution_hours": resolution_hours,
+            "escalate_to": escalate_to or None,
+            "escalate_after_hours": escalate_after_hours or 0,
+            "is_active": 1,
+        }
+    )
     doc.insert(ignore_permissions=True)
     frappe.db.commit()
     return doc.as_dict()
@@ -5377,6 +6298,7 @@ def get_sla_breaches(task=None, project=None):
         filters = {"project": project}
     else:
         from batch_projects.permissions import get_accessible_projects
+
         accessible = get_accessible_projects()  # None = admin (all)
         if accessible is not None:
             if not accessible:
@@ -5384,15 +6306,26 @@ def get_sla_breaches(task=None, project=None):
             filters = {"project": ["in", list(accessible)]}
         else:
             filters = {}
-    if task: filters["task"] = task
-    return frappe.get_all("BP SLA Breach",
+    if task:
+        filters["task"] = task
+    return frappe.get_all(
+        "BP SLA Breach",
         filters=filters,
-        fields=["name", "task", "policy", "breach_type", "triggered_on",
-                "escalated_to", "resolved_on"],
-        order_by="triggered_on desc")
+        fields=[
+            "name",
+            "task",
+            "policy",
+            "breach_type",
+            "triggered_on",
+            "escalated_to",
+            "resolved_on",
+        ],
+        order_by="triggered_on desc",
+    )
 
 
 # ─── WBS / PROJECT HIERARCHY ──────────────────────────────────────────────────
+
 
 @frappe.whitelist()
 def get_project_tree():
@@ -5402,16 +6335,31 @@ def get_project_tree():
     _require_system_user()
     # Access filter — otherwise a private/team project's name and
     # position in the WBS leaks to anyone with no access to it.
-    from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
+    from batch_projects.permissions import (
+        accessible_project_filter,
+        NO_ACCESSIBLE_PROJECTS,
+    )
+
     proj_filters = accessible_project_filter()
     if proj_filters is NO_ACCESSIBLE_PROJECTS:
         return []
-    projects = frappe.get_all("BP Project",
+    projects = frappe.get_all(
+        "BP Project",
         filters=proj_filters,
-        fields=["name", "project_name", "key", "parent_project",
-                "status", "project_color", "theme", "lead", "target_end_date",
-                "workflow_states"],
-        order_by="name asc")
+        fields=[
+            "name",
+            "project_name",
+            "key",
+            "parent_project",
+            "status",
+            "project_color",
+            "theme",
+            "lead",
+            "target_end_date",
+            "workflow_states",
+        ],
+        order_by="name asc",
+    )
 
     # Same grouped-count pattern as get_projects() — one query for every
     # project's task totals instead of 2N queries.
@@ -5428,12 +6376,16 @@ def get_project_tree():
             as_dict=True,
         )
         for r in rows:
-            status_counts_by_project.setdefault(r["project"], {})[r["status"]] = r["cnt"]
+            status_counts_by_project.setdefault(r["project"], {})[r["status"]] = r[
+                "cnt"
+            ]
 
     leads = {p["lead"] for p in projects if p.get("lead")}
     lead_names = {}
     if leads:
-        for u in frappe.get_all("User", filters={"name": ["in", list(leads)]}, fields=["name", "full_name"]):
+        for u in frappe.get_all(
+            "User", filters={"name": ["in", list(leads)]}, fields=["name", "full_name"]
+        ):
             lead_names[u["name"]] = u["full_name"] or u["name"]
 
     # Build tree
@@ -5441,6 +6393,7 @@ def get_project_tree():
     for p in projects:
         parent = p.parent_project or "__root__"
         children.setdefault(parent, []).append(p)
+
     def _build(node_key):
         out = []
         for p in children.get(node_key, []):
@@ -5449,17 +6402,26 @@ def get_project_tree():
             total = sum(by_status.values())
             done = sum(cnt for status, cnt in by_status.items() if status in completed)
             row = {
-                "name": p.name, "project_name": p.project_name, "key": p.key,
-                "status": p.status, "color": p.project_color, "theme": p.theme,
-                "task_count": total, "done_count": done,
-                "lead": p.lead or None, "lead_name": lead_names.get(p.lead) if p.lead else None,
-                "target_end_date": str(p.target_end_date) if p.target_end_date else None,
+                "name": p.name,
+                "project_name": p.project_name,
+                "key": p.key,
+                "status": p.status,
+                "color": p.project_color,
+                "theme": p.theme,
+                "task_count": total,
+                "done_count": done,
+                "lead": p.lead or None,
+                "lead_name": lead_names.get(p.lead) if p.lead else None,
+                "target_end_date": (
+                    str(p.target_end_date) if p.target_end_date else None
+                ),
             }
             subs = _build(p.name)
             if subs:
                 row["children"] = subs
             out.append(row)
         return out
+
     return _build("__root__")
 
 
@@ -5487,6 +6449,7 @@ def set_parent_project(project, parent_project=None):
 
 # ─── TRIAGE / INBOX ───────────────────────────────────────────────────────────
 
+
 @frappe.whitelist()
 def get_triage_queue(project=None):
     """Return tasks needing triage across all projects or a specific project."""
@@ -5497,35 +6460,55 @@ def get_triage_queue(project=None):
     else:
         _require_system_user()
         from batch_projects.permissions import get_accessible_projects
+
         acc = get_accessible_projects(frappe.session.user)
         if acc is not None:
             filters["project"] = ["in", list(acc)]
 
-    tasks = frappe.get_all("BP Task",
+    tasks = frappe.get_all(
+        "BP Task",
         filters=_task_filters(filters),
-        fields=["name", "task_key", "title", "status", "priority", "project",
-                "creation", "task_type"],
+        fields=[
+            "name",
+            "task_key",
+            "title",
+            "status",
+            "priority",
+            "project",
+            "creation",
+            "task_type",
+        ],
         order_by="creation desc",
-        limit=100)
+        limit=100,
+    )
 
     # Resolve project names and assignees
     pnames = list({t["project"] for t in tasks})
     proj_map = {}
     if pnames:
-        for p in frappe.get_all("BP Project", filters={"name": ["in", pnames]},
-                                fields=["name", "project_name", "key"]):
+        for p in frappe.get_all(
+            "BP Project",
+            filters={"name": ["in", pnames]},
+            fields=["name", "project_name", "key"],
+        ):
             proj_map[p["name"]] = p
 
     tnames = [t["name"] for t in tasks]
     assignee_map = {}
     if tnames:
-        for a in frappe.get_all("BP Task Assignee", filters={"parent": ["in", tnames]},
-                                 fields=["parent", "user", "full_name"]):
-            assignee_map.setdefault(a["parent"], []).append({
-                "user": a["user"], "full_name": a["full_name"] or a["user"]})
+        for a in frappe.get_all(
+            "BP Task Assignee",
+            filters={"parent": ["in", tnames]},
+            fields=["parent", "user", "full_name"],
+        ):
+            assignee_map.setdefault(a["parent"], []).append(
+                {"user": a["user"], "full_name": a["full_name"] or a["user"]}
+            )
 
     for t in tasks:
-        t["project_name"] = proj_map.get(t["project"], {}).get("project_name", t["project"])
+        t["project_name"] = proj_map.get(t["project"], {}).get(
+            "project_name", t["project"]
+        )
         t["project_key"] = proj_map.get(t["project"], {}).get("key", "")
         t["assignees"] = assignee_map.get(t["name"], [])
 
@@ -5541,11 +6524,13 @@ def mark_triaged(task):
     doc.save(ignore_permissions=True)
     frappe.db.commit()
     from batch_projects.cache import invalidate_project
+
     invalidate_project(doc.project)
     return {"ok": True}
 
 
 # ─── FILES ────────────────────────────────────────────────────────────────────
+
 
 @frappe.whitelist()
 def get_project_files(project):
@@ -5562,7 +6547,8 @@ def get_project_files(project):
     close on the write side."""
     _check_permission(project, "BP Viewer")
 
-    files = frappe.db.sql("""
+    files = frappe.db.sql(
+        """
         SELECT f.name, f.file_name, f.file_url, f.file_size,
                f.is_private, f.creation, f.owner,
                f.attached_to_name AS task_name,
@@ -5587,7 +6573,10 @@ def get_project_files(project):
           AND f.attached_to_name = %(project)s
 
         ORDER BY creation DESC
-    """, {"project": project}, as_dict=True)
+    """,
+        {"project": project},
+        as_dict=True,
+    )
 
     return [
         {
@@ -5659,6 +6648,7 @@ def delete_project_file(file_name):
     frappe.db.commit()
     return {"ok": True}
 
+
 # Intake-form and milestone-invoice routers were removed from here — they
 # were thin aliases to api.forms.*/api.erp_link.*
 # that bp-gateway's Go-side MethodGate (internal/license/license.go's
@@ -5674,16 +6664,37 @@ def delete_project_file(file_name):
 # ─── Constants restored from refactor ─────────────────────────────────────────
 
 _PREF_DEFAULTS = {
-    "email_enabled": 1, "email_assignment": 1, "email_comment": 1,
-    "email_mention": 1, "email_status_change": 1, "email_due_reminder": 1,
-    "email_digest": 1, "email_weekly_summary": 1, "inapp_enabled": 1,
+    "email_enabled": 1,
+    "email_assignment": 1,
+    "email_comment": 1,
+    "email_mention": 1,
+    "email_status_change": 1,
+    "email_due_reminder": 1,
+    "email_digest": 1,
+    "email_weekly_summary": 1,
+    "inapp_enabled": 1,
     "desktop_enabled": 1,
 }
 
-_WIDGET_PALETTE = ["#0B6BCB", "#7C3AED", "#008846", "#B45309", "#cc1c63",
-                   "#0E6B93", "#36b37e", "#C2410C", "#6D28D9", "#0891B2"]
-_WIDGET_PRIORITY = {"Highest": "#C41C1C", "High": "#B45309", "Medium": "#fdab3d",
-                    "Low": "#2563EB", "Lowest": "#64748B"}
+_WIDGET_PALETTE = [
+    "#0B6BCB",
+    "#7C3AED",
+    "#008846",
+    "#B45309",
+    "#cc1c63",
+    "#0E6B93",
+    "#36b37e",
+    "#C2410C",
+    "#6D28D9",
+    "#0891B2",
+]
+_WIDGET_PRIORITY = {
+    "Highest": "#C41C1C",
+    "High": "#B45309",
+    "Medium": "#fdab3d",
+    "Low": "#2563EB",
+    "Lowest": "#64748B",
+}
 
 
 @frappe.whitelist()
@@ -5694,10 +6705,12 @@ def get_teams():
     filters = {"status": "Active"}
 
     from batch_projects import access
+
     user = frappe.session.user
     if access.is_guest(user) and not access.is_instance_admin(user):
         my_teams = frappe.get_all(
-            "BP Team Member", filters={"user": user}, pluck="parent")
+            "BP Team Member", filters={"user": user}, pluck="parent"
+        )
         if not my_teams:
             return []
         filters["name"] = ["in", my_teams]
@@ -5705,9 +6718,19 @@ def get_teams():
     teams = frappe.get_all(
         "BP Team",
         filters=filters,
-        fields=["name", "team_name", "team_key", "team_color", "team_icon",
-                "description", "lead", "department", "company",
-                "default_workflow_template", "capacity_hours_per_sprint"],
+        fields=[
+            "name",
+            "team_name",
+            "team_key",
+            "team_color",
+            "team_icon",
+            "description",
+            "lead",
+            "department",
+            "company",
+            "default_workflow_template",
+            "capacity_hours_per_sprint",
+        ],
         order_by="team_name asc",
     )
 
@@ -5725,20 +6748,35 @@ def get_teams():
         # project's `team` assignment and its own `visibility` are separate
         # fields, so a `private` project on this team must not surface here
         # for a team viewer who isn't an explicit BP Project Member.
-        from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
-        proj_filters = accessible_project_filter({"team": team["name"], "status": "Active"})
-        projects = [] if proj_filters is NO_ACCESSIBLE_PROJECTS else frappe.get_all(
-            "BP Project",
-            filters=proj_filters,
-            fields=["name", "project_name", "key", "project_color", "project_icon", "status"],
-            order_by="project_name asc",
+        from batch_projects.permissions import (
+            accessible_project_filter,
+            NO_ACCESSIBLE_PROJECTS,
+        )
+
+        proj_filters = accessible_project_filter(
+            {"team": team["name"], "status": "Active"}
+        )
+        projects = (
+            []
+            if proj_filters is NO_ACCESSIBLE_PROJECTS
+            else frappe.get_all(
+                "BP Project",
+                filters=proj_filters,
+                fields=[
+                    "name",
+                    "project_name",
+                    "key",
+                    "project_color",
+                    "project_icon",
+                    "status",
+                ],
+                order_by="project_name asc",
+            )
         )
         team["projects"] = projects
         team["project_count"] = len(projects)
 
     return teams
-
-
 
 
 @frappe.whitelist()
@@ -5749,14 +6787,15 @@ def get_team(team):
     data = doc.as_dict()
 
     # Members with full_name fallback
-    all_users = {u["name"]: u["full_name"] for u in frappe.get_all(
-        "User", fields=["name", "full_name"]
-    )}
+    all_users = {
+        u["name"]: u["full_name"]
+        for u in frappe.get_all("User", fields=["name", "full_name"])
+    }
     data["members"] = [
         {
-            "user":                  m.user,
-            "full_name":             m.full_name or all_users.get(m.user, m.user),
-            "role":                  m.role,
+            "user": m.user,
+            "full_name": m.full_name or all_users.get(m.user, m.user),
+            "role": m.role,
             "capacity_hours_per_sprint": m.capacity_hours_per_sprint or 40,
         }
         for m in doc.members
@@ -5764,20 +6803,42 @@ def get_team(team):
 
     # Projects under this team — scoped to what the caller can see,
     # same reasoning as get_teams above.
-    from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
+    from batch_projects.permissions import (
+        accessible_project_filter,
+        NO_ACCESSIBLE_PROJECTS,
+    )
+
     _proj_filters = accessible_project_filter({"team": team, "status": "Active"})
-    data["projects"] = [] if _proj_filters is NO_ACCESSIBLE_PROJECTS else frappe.get_all(
-        "BP Project",
-        filters=_proj_filters,
-        fields=["name", "project_name", "key", "project_color", "project_icon", "theme",
-                "workflow_states", "issue_types", "status"],
-        order_by="project_name asc",
+    data["projects"] = (
+        []
+        if _proj_filters is NO_ACCESSIBLE_PROJECTS
+        else frappe.get_all(
+            "BP Project",
+            filters=_proj_filters,
+            fields=[
+                "name",
+                "project_name",
+                "key",
+                "project_color",
+                "project_icon",
+                "theme",
+                "workflow_states",
+                "issue_types",
+                "status",
+            ],
+            order_by="project_name asc",
+        )
     )
     for p in data["projects"]:
-        p["open_count"] = frappe.db.count("BP Task", _task_filters({
-            "project": p["name"],
-            "status": ["not in", _get_completed_statuses(p)],
-        }))
+        p["open_count"] = frappe.db.count(
+            "BP Task",
+            _task_filters(
+                {
+                    "project": p["name"],
+                    "status": ["not in", _get_completed_statuses(p)],
+                }
+            ),
+        )
 
     # Active team sprint
     data["active_sprint"] = frappe.db.get_value(
@@ -5798,8 +6859,12 @@ def get_team(team):
     # Parent team info
     if doc.get("parent_team"):
         try:
-            parent = frappe.db.get_value("BP Team", doc.parent_team,
-                ["team_name", "team_key", "team_color"], as_dict=True)
+            parent = frappe.db.get_value(
+                "BP Team",
+                doc.parent_team,
+                ["team_name", "team_key", "team_color"],
+                as_dict=True,
+            )
             data["parent_team_info"] = parent
         except Exception:
             data["parent_team_info"] = None
@@ -5815,9 +6880,9 @@ def get_team(team):
     data["team_links"] = [
         {
             "link_type": l.link_type,
-            "label":     l.label or "",
-            "url":       l.url or "",
-            "project":   l.project or "",
+            "label": l.label or "",
+            "url": l.url or "",
+            "project": l.project or "",
         }
         for l in (doc.team_links or [])
     ]
@@ -5828,8 +6893,17 @@ def get_team(team):
         data["recent_activity"] = frappe.get_all(
             "BP Activity",
             filters={"project": ["in", project_names]},
-            fields=["name", "task", "task_key", "action_type",
-                    "old_value", "new_value", "user", "creation", "project"],
+            fields=[
+                "name",
+                "task",
+                "task_key",
+                "action_type",
+                "old_value",
+                "new_value",
+                "user",
+                "creation",
+                "project",
+            ],
             order_by="creation desc",
             limit=15,
         )
@@ -5842,15 +6916,13 @@ def get_team(team):
     return data
 
 
-
-
 @frappe.whitelist()
 def get_my_tasks(
-    status_filter="open",   # 'open' | 'all' | 'completed'
-    project=None,           # filter to a specific project
-    priority=None,          # filter to a specific priority
-    group_by="project",     # 'project' | 'status' | 'priority' | 'due_date'
-    sort_by="due_date",     # 'due_date' | 'priority' | 'creation' | 'modified'
+    status_filter="open",  # 'open' | 'all' | 'completed'
+    project=None,  # filter to a specific project
+    priority=None,  # filter to a specific priority
+    group_by="project",  # 'project' | 'status' | 'priority' | 'due_date'
+    sort_by="due_date",  # 'due_date' | 'priority' | 'creation' | 'modified'
     sort_order="asc",
     limit=100,
     offset=0,
@@ -5879,7 +6951,12 @@ def get_my_tasks(
     all_task_names = list(assignee_set | set(reporter_rows))
 
     if not all_task_names:
-        return {"tasks": [], "grouped": {}, "total": 0, "counts": {"open": 0, "completed": 0}}
+        return {
+            "tasks": [],
+            "grouped": {},
+            "total": 0,
+            "counts": {"open": 0, "completed": 0},
+        }
 
     # ── 3. Build filters ──
     # `project` may arrive as a scalar, a (JSON-stringified) list, or 'all'.
@@ -5904,6 +6981,7 @@ def get_my_tasks(
 
     # Collect completed statuses per project for open/completed filtering
     project_completed_map = {}
+
     def _is_completed(task):
         proj = task["project"]
         if proj not in project_completed_map:
@@ -5915,11 +6993,11 @@ def get_my_tasks(
 
     # ── 4. Fetch tasks ──
     sort_field_map = {
-        "due_date":  "due_date",
-        "priority":  "priority",
-        "creation":  "creation",
-        "modified":  "modified",
-        "title":     "title",
+        "due_date": "due_date",
+        "priority": "priority",
+        "creation": "creation",
+        "modified": "modified",
+        "title": "title",
     }
     order_field = sort_field_map.get(sort_by, "due_date")
     order_dir = "desc" if sort_order == "desc" else "asc"
@@ -5928,9 +7006,22 @@ def get_my_tasks(
         "BP Task",
         filters=_task_filters(filters),
         fields=[
-            "name", "task_key", "title", "status", "priority", "task_type",
-            "project", "due_date", "start_date", "story_points", "epic",
-            "parent_task", "sprint", "reporter", "creation", "modified",
+            "name",
+            "task_key",
+            "title",
+            "status",
+            "priority",
+            "task_type",
+            "project",
+            "due_date",
+            "start_date",
+            "story_points",
+            "epic",
+            "parent_task",
+            "sprint",
+            "reporter",
+            "creation",
+            "modified",
         ],
         order_by=f"{order_field} {order_dir}",
     )
@@ -5940,7 +7031,9 @@ def get_my_tasks(
     for task in tasks:
         proj = task["project"]
         if proj not in project_name_map:
-            project_name_map[proj] = frappe.db.get_value("BP Project", proj, "project_name") or proj
+            project_name_map[proj] = (
+                frappe.db.get_value("BP Project", proj, "project_name") or proj
+            )
         task["project_name"] = project_name_map[proj]
         task["is_assigned"] = task["name"] in assignee_set
         task["is_reporter"] = task["reporter"] == user
@@ -5953,9 +7046,15 @@ def get_my_tasks(
             states = _deep_parse_json(
                 frappe.db.get_value("BP Project", proj, "workflow_states") or "[]"
             )
-            wf_color_map[proj] = {s["name"]: s for s in (states if isinstance(states, list) else [])}
-        task["status_color"] = wf_color_map[proj].get(task["status"], {}).get("color", "#636B74")
-        task["status_category"] = wf_color_map[proj].get(task["status"], {}).get("category", "unstarted")
+            wf_color_map[proj] = {
+                s["name"]: s for s in (states if isinstance(states, list) else [])
+            }
+        task["status_color"] = (
+            wf_color_map[proj].get(task["status"], {}).get("color", "#636B74")
+        )
+        task["status_category"] = (
+            wf_color_map[proj].get(task["status"], {}).get("category", "unstarted")
+        )
 
     # ── 5. Filter by open/completed ──
     counts = {"open": 0, "completed": 0}
@@ -5975,10 +7074,11 @@ def get_my_tasks(
         tasks = all_filtered
 
     total = len(tasks)
-    tasks = tasks[int(offset): int(offset) + int(limit)]
+    tasks = tasks[int(offset) : int(offset) + int(limit)]
 
     # ── 6. Group ──
     from frappe.utils import today, add_days
+
     today_str = str(today())
     tomorrow_str = str(add_days(today_str, 1))
     next_week_str = str(add_days(today_str, 7))
@@ -6018,8 +7118,6 @@ def get_my_tasks(
     }
 
 
-
-
 @frappe.whitelist()
 def get_timesheets(period="last_30_days", team=None):
     """
@@ -6028,6 +7126,7 @@ def get_timesheets(period="last_30_days", team=None):
     team:   BP Team name (optional filter)
     """
     from datetime import date, timedelta
+
     _require_system_user()
 
     today = date.today()
@@ -6035,19 +7134,20 @@ def get_timesheets(period="last_30_days", team=None):
 
     if period in period_days:
         from_date = today - timedelta(days=period_days[period])
-        to_date   = today
+        to_date = today
     elif period.startswith("month:"):
         import calendar
-        ym        = period.split(":")[1]
+
+        ym = period.split(":")[1]
         year, mon = int(ym.split("-")[0]), int(ym.split("-")[1])
         from_date = date(year, mon, 1)
-        to_date   = date(year, mon, calendar.monthrange(year, mon)[1])
+        to_date = date(year, mon, calendar.monthrange(year, mon)[1])
     else:
         from_date = today - timedelta(days=30)
-        to_date   = today
+        to_date = today
 
     from_dt = f"{from_date.isoformat()} 00:00:00"
-    to_dt   = f"{to_date.isoformat()} 23:59:59"
+    to_dt = f"{to_date.isoformat()} 23:59:59"
 
     _empty = {
         "period": period,
@@ -6080,6 +7180,7 @@ def get_timesheets(period="last_30_days", team=None):
     # restricted caller since they can't be attributed to anything the
     # caller is known to have access to.
     from batch_projects.permissions import get_accessible_projects
+
     accessible = get_accessible_projects()
     if accessible is not None and not accessible:
         return _empty
@@ -6105,8 +7206,16 @@ def get_timesheets(period="last_30_days", team=None):
               {project_clause}
             GROUP BY COALESCE(e.user_id, ts.owner), tsd.project
             ORDER BY full_name ASC, hours DESC
-            """.format(project_clause="AND p.name IN %(accessible)s" if accessible is not None else ""),
-            {"from_dt": from_dt, "to_dt": to_dt, "accessible": list(accessible) if accessible is not None else []},
+            """.format(
+                project_clause=(
+                    "AND p.name IN %(accessible)s" if accessible is not None else ""
+                )
+            ),
+            {
+                "from_dt": from_dt,
+                "to_dt": to_dt,
+                "accessible": list(accessible) if accessible is not None else [],
+            },
             as_dict=True,
         )
     except Exception as exc:
@@ -6124,53 +7233,58 @@ def get_timesheets(period="last_30_days", team=None):
             continue
         if key not in emp_map:
             emp_map[key] = {
-                "user":          key,
-                "full_name":     r.get("full_name") or key,
-                "total_hours":   0.0,
+                "user": key,
+                "full_name": r.get("full_name") or key,
+                "total_hours": 0.0,
                 "billable_hours": 0.0,
-                "projects":      [],
+                "projects": [],
             }
-        h  = float(r.get("hours") or 0)
+        h = float(r.get("hours") or 0)
         bh = float(r.get("billable_hours") or 0)
-        emp_map[key]["total_hours"]    += h
+        emp_map[key]["total_hours"] += h
         emp_map[key]["billable_hours"] += bh
         if r.get("project"):
-            emp_map[key]["projects"].append({
-                "project":       r["project"],
-                "project_name":  r.get("project_name") or r["project"],
-                "project_color": r.get("project_color") or "#94a3b8",
-                "hours":         round(h, 1),
-                "billable_hours": round(bh, 1),
-            })
+            emp_map[key]["projects"].append(
+                {
+                    "project": r["project"],
+                    "project_name": r.get("project_name") or r["project"],
+                    "project_color": r.get("project_color") or "#94a3b8",
+                    "hours": round(h, 1),
+                    "billable_hours": round(bh, 1),
+                }
+            )
 
     members = list(emp_map.values())
     for m in members:
-        m["total_hours"]        = round(m["total_hours"], 1)
-        m["billable_hours"]     = round(m["billable_hours"], 1)
+        m["total_hours"] = round(m["total_hours"], 1)
+        m["billable_hours"] = round(m["billable_hours"], 1)
         m["non_billable_hours"] = round(m["total_hours"] - m["billable_hours"], 1)
-        m["billable_pct"]       = round(m["billable_hours"] / m["total_hours"] * 100, 1) if m["total_hours"] > 0 else 0
+        m["billable_pct"] = (
+            round(m["billable_hours"] / m["total_hours"] * 100, 1)
+            if m["total_hours"] > 0
+            else 0
+        )
 
     members.sort(key=lambda x: x["total_hours"], reverse=True)
 
-    total_h    = round(sum(m["total_hours"] for m in members), 1)
+    total_h = round(sum(m["total_hours"] for m in members), 1)
     billable_h = round(sum(m["billable_hours"] for m in members), 1)
 
     return {
-        "period":            period,
-        "from_date":         from_date.isoformat(),
-        "to_date":           to_date.isoformat(),
-        "total_hours":       total_h,
-        "billable_hours":    billable_h,
+        "period": period,
+        "from_date": from_date.isoformat(),
+        "to_date": to_date.isoformat(),
+        "total_hours": total_h,
+        "billable_hours": billable_h,
         "non_billable_hours": round(total_h - billable_h, 1),
-        "billable_pct":      round(billable_h / total_h * 100, 1) if total_h > 0 else 0,
-        "members":           members,
+        "billable_pct": round(billable_h / total_h * 100, 1) if total_h > 0 else 0,
+        "members": members,
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MARGIN REPORT
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 
 @frappe.whitelist()
@@ -6198,24 +7312,25 @@ def get_workload(weeks=4, team=None):
     for i in range(weeks):
         ws = start_of_week + timedelta(weeks=i)
         we = ws + timedelta(days=6)
-        week_buckets.append({
-            "label": ws.strftime("%b %d"),
-            "start": ws.isoformat(),
-            "end":   we.isoformat(),
-        })
+        week_buckets.append(
+            {
+                "label": ws.strftime("%b %d"),
+                "start": ws.isoformat(),
+                "end": we.isoformat(),
+            }
+        )
 
     # Resolve member list + per-member capacity
     if team:
         _check_team_permission(team, "Viewer")
         tdoc = frappe.get_doc("BP Team", team)
         member_users = [m.user for m in (tdoc.members or [])]
-        cap_by_user  = {
-            m.user: float(m.capacity_hours_per_sprint or 40)
-            for m in tdoc.members
+        cap_by_user = {
+            m.user: float(m.capacity_hours_per_sprint or 40) for m in tdoc.members
         }
     else:
         member_users = _all_tracked_users()
-        cap_by_user  = _get_member_capacities(member_users)
+        cap_by_user = _get_member_capacities(member_users)
 
     if not member_users:
         return {"weeks": week_buckets, "members": [], "capacity_per_week": 40}
@@ -6270,53 +7385,66 @@ def get_workload(weeks=4, team=None):
         if due:
             if not isinstance(due, date):
                 from datetime import datetime
+
                 due = datetime.strptime(str(due), "%Y-%m-%d").date()
             matched = False
             for wi, wb in enumerate(week_buckets):
-                if date.fromisoformat(wb["start"]) <= due <= date.fromisoformat(wb["end"]):
+                if (
+                    date.fromisoformat(wb["start"])
+                    <= due
+                    <= date.fromisoformat(wb["end"])
+                ):
                     bucket = wi
                     matched = True
                     break
             if not matched:
-                bucket = (weeks - 1) if due > date.fromisoformat(week_buckets[-1]["end"]) else 0
+                bucket = (
+                    (weeks - 1)
+                    if due > date.fromisoformat(week_buckets[-1]["end"])
+                    else 0
+                )
 
         member_week[a.user][bucket].append(a)
 
     members = []
     for user in member_users:
-        info     = user_info.get(user, frappe._dict())
+        info = user_info.get(user, frappe._dict())
         capacity = cap_by_user.get(user, 40.0)
-        weekly   = []
+        weekly = []
         for wi in range(weeks):
-            tasks     = member_week[user][wi]
+            tasks = member_week[user][wi]
             allocated = sum(float(t.get("estimated_hours") or 0) for t in tasks)
-            load_pct  = round(min(allocated / capacity * 100, 200), 1) if capacity else 0
-            weekly.append({
-                "allocated": round(allocated, 1),
-                "capacity":  capacity,
-                "load_pct":  load_pct,
-                "tasks": [
-                    {
-                        "name":           t.task_name,
-                        "title":          t.title,
-                        "project":        t.project,
-                        "project_title":  t.project_title or t.project,
-                        "project_color":  t.project_color,
-                        "due_date":       str(t.due_date) if t.due_date else None,
-                        "estimated_hours": float(t.estimated_hours or 0),
-                    }
-                    for t in tasks
-                ],
-            })
+            load_pct = round(min(allocated / capacity * 100, 200), 1) if capacity else 0
+            weekly.append(
+                {
+                    "allocated": round(allocated, 1),
+                    "capacity": capacity,
+                    "load_pct": load_pct,
+                    "tasks": [
+                        {
+                            "name": t.task_name,
+                            "title": t.title,
+                            "project": t.project,
+                            "project_title": t.project_title or t.project,
+                            "project_color": t.project_color,
+                            "due_date": str(t.due_date) if t.due_date else None,
+                            "estimated_hours": float(t.estimated_hours or 0),
+                        }
+                        for t in tasks
+                    ],
+                }
+            )
 
-        members.append({
-            "user":            user,
-            "full_name":       info.get("full_name") or user,
-            "user_image":      info.get("user_image"),
-            "weekly":          weekly,
-            "total_allocated": round(sum(w["allocated"] for w in weekly), 1),
-            "total_capacity":  round(capacity * weeks, 1),
-        })
+        members.append(
+            {
+                "user": user,
+                "full_name": info.get("full_name") or user,
+                "user_image": info.get("user_image"),
+                "weekly": weekly,
+                "total_allocated": round(sum(w["allocated"] for w in weekly), 1),
+                "total_capacity": round(capacity * weeks, 1),
+            }
+        )
 
     members.sort(key=lambda m: m["full_name"])
     return {"weeks": week_buckets, "members": members, "capacity_per_week": 40}
@@ -6325,7 +7453,6 @@ def get_workload(weeks=4, team=None):
 # ─────────────────────────────────────────────────────────────────────────────
 # UTILIZATION
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 
 @frappe.whitelist()
@@ -6348,39 +7475,42 @@ def get_utilization(period="last_30_days", team=None):
     if period in period_days:
         days = period_days[period]
         from_date = today - timedelta(days=days)
-        to_date   = today
+        to_date = today
     elif period.startswith("month:"):
         import calendar
-        ym         = period.split(":")[1]
-        year, mon  = int(ym.split("-")[0]), int(ym.split("-")[1])
-        from_date  = date(year, mon, 1)
-        to_date    = date(year, mon, calendar.monthrange(year, mon)[1])
+
+        ym = period.split(":")[1]
+        year, mon = int(ym.split("-")[0]), int(ym.split("-")[1])
+        from_date = date(year, mon, 1)
+        to_date = date(year, mon, calendar.monthrange(year, mon)[1])
     else:
-        from_date  = today - timedelta(days=30)
-        to_date    = today
+        from_date = today - timedelta(days=30)
+        to_date = today
 
     # Resolve members + per-member capacity
     if team:
         _check_team_permission(team, "Viewer")
         tdoc = frappe.get_doc("BP Team", team)
         member_users = [m.user for m in (tdoc.members or [])]
-        cap_by_user  = {
-            m.user: float(m.capacity_hours_per_sprint or 40)
-            for m in tdoc.members
+        cap_by_user = {
+            m.user: float(m.capacity_hours_per_sprint or 40) for m in tdoc.members
         }
     else:
         member_users = _all_tracked_users()
-        cap_by_user  = _get_member_capacities(member_users)
+        cap_by_user = _get_member_capacities(member_users)
 
     if not member_users:
         return {
-            "period":    period,
+            "period": period,
             "from_date": from_date.isoformat(),
-            "to_date":   to_date.isoformat(),
-            "members":   [],
-            "totals":    {
-                "capacity": 0, "logged": 0, "billable": 0,
-                "utilization_pct": 0, "billable_pct": 0,
+            "to_date": to_date.isoformat(),
+            "members": [],
+            "totals": {
+                "capacity": 0,
+                "logged": 0,
+                "billable": 0,
+                "utilization_pct": 0,
+                "billable_pct": 0,
             },
         }
 
@@ -6397,58 +7527,62 @@ def get_utilization(period="last_30_days", team=None):
     days_in_period = (to_date - from_date).days + 1
 
     from_dt = f"{from_date.isoformat()} 00:00:00"
-    to_dt   = f"{to_date.isoformat()} 23:59:59"
+    to_dt = f"{to_date.isoformat()} 23:59:59"
 
     # Pull total and billable hours from submitted ERPNext Timesheets (single query)
     ts_data = _timesheet_hours_by_user(member_users, from_dt, to_dt)
 
-    members       = []
-    total_logged   = 0.0
+    members = []
+    total_logged = 0.0
     total_billable = 0.0
     total_capacity = 0.0
 
     for user in member_users:
-        info     = user_info.get(user, frappe._dict())
+        info = user_info.get(user, frappe._dict())
         logged, billable = ts_data.get(user, (0.0, 0.0))
 
         # Weekly capacity scaled to period (hours/week × weeks in period)
-        weekly_cap    = cap_by_user.get(user, 40.0)
-        capacity      = round(weekly_cap * days_in_period / 7, 1)
+        weekly_cap = cap_by_user.get(user, 40.0)
+        capacity = round(weekly_cap * days_in_period / 7, 1)
 
-        util_pct     = round(min(logged / capacity * 100, 200), 1) if capacity else 0
+        util_pct = round(min(logged / capacity * 100, 200), 1) if capacity else 0
         billable_pct = round(billable / logged * 100, 1) if logged > 0 else 0
 
-        total_logged   += logged
+        total_logged += logged
         total_billable += billable
         total_capacity += capacity
 
-        members.append({
-            "user":            user,
-            "full_name":       info.get("full_name") or user,
-            "user_image":      info.get("user_image"),
-            "logged_hours":    round(logged, 1),
-            "billable_hours":  round(billable, 1),
-            "capacity_hours":  capacity,
-            "utilization_pct": util_pct,
-            "billable_pct":    billable_pct,
-        })
+        members.append(
+            {
+                "user": user,
+                "full_name": info.get("full_name") or user,
+                "user_image": info.get("user_image"),
+                "logged_hours": round(logged, 1),
+                "billable_hours": round(billable, 1),
+                "capacity_hours": capacity,
+                "utilization_pct": util_pct,
+                "billable_pct": billable_pct,
+            }
+        )
 
     members.sort(key=lambda m: m["utilization_pct"], reverse=True)
 
-    total_util         = round(total_logged / total_capacity * 100, 1) if total_capacity else 0
-    total_billable_pct = round(total_billable / total_logged * 100, 1) if total_logged else 0
+    total_util = round(total_logged / total_capacity * 100, 1) if total_capacity else 0
+    total_billable_pct = (
+        round(total_billable / total_logged * 100, 1) if total_logged else 0
+    )
 
     return {
-        "period":    period,
+        "period": period,
         "from_date": from_date.isoformat(),
-        "to_date":   to_date.isoformat(),
-        "members":   members,
+        "to_date": to_date.isoformat(),
+        "members": members,
         "totals": {
-            "capacity":        round(total_capacity, 1),
-            "logged":          round(total_logged, 1),
-            "billable":        round(total_billable, 1),
+            "capacity": round(total_capacity, 1),
+            "logged": round(total_logged, 1),
+            "billable": round(total_billable, 1),
             "utilization_pct": total_util,
-            "billable_pct":    total_billable_pct,
+            "billable_pct": total_billable_pct,
         },
     }
 
@@ -6458,7 +7592,6 @@ def get_utilization(period="last_30_days", team=None):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-
 @frappe.whitelist()
 def get_workspace_summary():
     """
@@ -6466,32 +7599,56 @@ def get_workspace_summary():
     stale projects, recently delivered, invoice-ready, milestones, risks.
     """
     from datetime import date, timedelta
+
     _require_system_user()
 
     today = date.today()
-    ago_7  = (today - timedelta(days=7)).isoformat()
+    ago_7 = (today - timedelta(days=7)).isoformat()
     ago_14 = (today - timedelta(days=14)).isoformat()
 
     # Access filter: frappe.get_all ignores
     # permission_query_conditions, so this cross-project rollup must scope
     # itself explicitly or it leaks every project's budget/client/hourly_rate
     # regardless of `visibility`/membership.
-    from batch_projects.permissions import get_accessible_projects, NO_ACCESSIBLE_PROJECTS, accessible_project_filter
+    from batch_projects.permissions import (
+        get_accessible_projects,
+        NO_ACCESSIBLE_PROJECTS,
+        accessible_project_filter,
+    )
+
     accessible = get_accessible_projects()  # None = admin (all)
     proj_filters = accessible_project_filter({"status": "Active"})
     if proj_filters is NO_ACCESSIBLE_PROJECTS:
         return {
-            "project_health": [], "profitability": [], "invoice_ready": [],
-            "activity_stream": [], "stale_projects": [], "recently_delivered": [],
-            "milestones": [], "risks": [],
+            "project_health": [],
+            "profitability": [],
+            "invoice_ready": [],
+            "activity_stream": [],
+            "stale_projects": [],
+            "recently_delivered": [],
+            "milestones": [],
+            "risks": [],
         }
 
     projects = frappe.get_all(
         "BP Project",
         filters=proj_filters,
-        fields=["name", "project_name", "key", "project_color", "theme", "workflow_states",
-                "project_type", "hourly_rate", "budget_amount", "retainer_hours",
-                "client", "currency", "target_end_date", "modified"],
+        fields=[
+            "name",
+            "project_name",
+            "key",
+            "project_color",
+            "theme",
+            "workflow_states",
+            "project_type",
+            "hourly_rate",
+            "budget_amount",
+            "retainer_hours",
+            "client",
+            "currency",
+            "target_end_date",
+            "modified",
+        ],
     )
     accessible_names = [p["name"] for p in projects]
 
@@ -6510,7 +7667,8 @@ def get_workspace_summary():
             FROM `tabBP Task`
             WHERE project IN %(projects)s AND is_deleted = 0
             """,
-            {"projects": accessible_names}, as_dict=True,
+            {"projects": accessible_names},
+            as_dict=True,
         ):
             task_rows_by_project.setdefault(r["project"], []).append(r)
 
@@ -6522,11 +7680,21 @@ def get_workspace_summary():
             fields=["parent", "user"],
         ):
             member_rows_by_project.setdefault(r["parent"], []).append(r)
-    all_member_users = list({r["user"] for rows in member_rows_by_project.values() for r in rows})
-    user_info_all = {u.name: u for u in frappe.get_all(
-        "User", filters={"name": ["in", all_member_users]},
-        fields=["name", "full_name", "user_image"],
-    )} if all_member_users else {}
+    all_member_users = list(
+        {r["user"] for rows in member_rows_by_project.values() for r in rows}
+    )
+    user_info_all = (
+        {
+            u.name: u
+            for u in frappe.get_all(
+                "User",
+                filters={"name": ["in", all_member_users]},
+                fields=["name", "full_name", "user_image"],
+            )
+        }
+        if all_member_users
+        else {}
+    )
 
     today_str = today.isoformat()
     project_health = []
@@ -6536,21 +7704,35 @@ def get_workspace_summary():
         total = len(rows)
         done = sum(1 for r in rows if r["status"] in completed)
         open_ = total - done
-        pct   = round(done / total * 100) if total else 0
+        pct = round(done / total * 100) if total else 0
         overdue_cnt = sum(
-            1 for r in rows
-            if r["status"] not in completed and r.get("due_date") and str(r["due_date"]) < today_str
+            1
+            for r in rows
+            if r["status"] not in completed
+            and r.get("due_date")
+            and str(r["due_date"]) < today_str
         )
 
         # Real members
         mbr_rows = member_rows_by_project.get(p["name"], [])
         members = [
             {
-                "user":       m["user"],
-                "full_name":  user_info_all.get(m["user"], frappe._dict()).get("full_name") or m["user"],
-                "user_image": user_info_all.get(m["user"], frappe._dict()).get("user_image"),
-                "initials":   "".join(w[0].upper() for w in (user_info_all.get(m["user"], frappe._dict()).get("full_name") or m["user"]).split()[:2]),
-                "color":      _avatar_color(m["user"]),
+                "user": m["user"],
+                "full_name": user_info_all.get(m["user"], frappe._dict()).get(
+                    "full_name"
+                )
+                or m["user"],
+                "user_image": user_info_all.get(m["user"], frappe._dict()).get(
+                    "user_image"
+                ),
+                "initials": "".join(
+                    w[0].upper()
+                    for w in (
+                        user_info_all.get(m["user"], frappe._dict()).get("full_name")
+                        or m["user"]
+                    ).split()[:2]
+                ),
+                "color": _avatar_color(m["user"]),
             }
             for m in mbr_rows
         ]
@@ -6568,19 +7750,21 @@ def get_workspace_summary():
         else:
             health = "on_track"
 
-        project_health.append({
-            "key":        p["key"],
-            "name":       p["project_name"],
-            "color":      p["project_color"] or _avatar_color(p["key"]),
-            "theme":      p.get("theme"),
-            "completion": pct,
-            "total_tasks": total,
-            "done_tasks":  done,
-            "open_tasks":  open_,
-            "days_left":   days_left,
-            "health":      health,
-            "members":     members,
-        })
+        project_health.append(
+            {
+                "key": p["key"],
+                "name": p["project_name"],
+                "color": p["project_color"] or _avatar_color(p["key"]),
+                "theme": p.get("theme"),
+                "completion": pct,
+                "total_tasks": total,
+                "done_tasks": done,
+                "open_tasks": open_,
+                "days_left": days_left,
+                "health": health,
+                "members": members,
+            }
+        )
         p.pop("workflow_states", None)
 
     # ── Profitability ─────────────────────────────────────────────────────────
@@ -6588,12 +7772,13 @@ def get_workspace_summary():
     for p in projects:
         if not p.get("project_type") or p["project_type"] == "internal":
             continue
-        rate  = float(p.get("hourly_rate") or 0)
+        rate = float(p.get("hourly_rate") or 0)
         # Billable hours from tasks
         try:
             res = frappe.db.sql(
                 "SELECT COALESCE(SUM(actual_hours), 0) AS h FROM `tabBP Task` WHERE project = %(proj)s AND billable = 1 AND is_deleted = 0",
-                {"proj": p["name"]}, as_dict=True,
+                {"proj": p["name"]},
+                as_dict=True,
             )
             billable_h = float(res[0].h or 0) if res else 0.0
         except Exception:
@@ -6602,7 +7787,7 @@ def get_workspace_summary():
         billed_val = round(billable_h * rate, 2)
 
         # Budget by type
-        ptype  = p.get("project_type", "tm")
+        ptype = p.get("project_type", "tm")
         budget = 0.0
         if ptype == "fixed":
             budget = float(p.get("budget_amount") or 0)
@@ -6610,14 +7795,15 @@ def get_workspace_summary():
             budget = float(p.get("retainer_hours") or 0) * rate
         # T&M has no fixed budget
 
-        remaining  = round(budget - billed_val, 2) if budget else None
-        burn_pct   = round(billed_val / budget * 100, 1) if budget else None
+        remaining = round(budget - billed_val, 2) if budget else None
+        burn_pct = round(billed_val / budget * 100, 1) if budget else None
 
         # Unbilled = total billable estimated value minus billed
         try:
             res2 = frappe.db.sql(
                 "SELECT COALESCE(SUM(estimated_hours), 0) AS h FROM `tabBP Task` WHERE project = %(proj)s AND billable = 1 AND is_deleted = 0",
-                {"proj": p["name"]}, as_dict=True,
+                {"proj": p["name"]},
+                as_dict=True,
             )
             estimated_h = float(res2[0].h or 0) if res2 else 0.0
         except Exception:
@@ -6626,30 +7812,38 @@ def get_workspace_summary():
 
         status = "Healthy"
         if burn_pct is not None:
-            if burn_pct > 100: status = "Over budget"
-            elif burn_pct > 85: status = "Watch"
+            if burn_pct > 100:
+                status = "Over budget"
+            elif burn_pct > 85:
+                status = "Watch"
 
-        profitability.append({
-            "project":     p["project_name"],
-            "key":         p["key"],
-            "color":       p["project_color"] or _avatar_color(p["key"]),
-            "project_type": p.get("project_type") or "tm",
-            "client":      p.get("client") or "",
-            "currency":    p.get("currency") or "USD",
-            "rate":        rate,
-            "budget":      budget,
-            "billed":      billed_val,
-            "unbilled":    unbilled_val,
-            "remaining":   remaining,
-            "burn_pct":    burn_pct,
-            "billable_hours": round(billable_h, 1),
-            "status":      status,
-        })
+        profitability.append(
+            {
+                "project": p["project_name"],
+                "key": p["key"],
+                "color": p["project_color"] or _avatar_color(p["key"]),
+                "project_type": p.get("project_type") or "tm",
+                "client": p.get("client") or "",
+                "currency": p.get("currency") or "USD",
+                "rate": rate,
+                "budget": budget,
+                "billed": billed_val,
+                "unbilled": unbilled_val,
+                "remaining": remaining,
+                "burn_pct": burn_pct,
+                "billable_hours": round(billable_h, 1),
+                "status": status,
+            }
+        )
 
     # ── Invoice-ready: billable completed tasks, grouped by client ────────────
     invoice_ready_map = {}
     for p in projects:
-        if not p.get("client") or not p.get("project_type") or p["project_type"] == "internal":
+        if (
+            not p.get("client")
+            or not p.get("project_type")
+            or p["project_type"] == "internal"
+        ):
             continue
         rate = float(p.get("hourly_rate") or 0)
         if not rate:
@@ -6677,13 +7871,15 @@ def get_workspace_summary():
         client = p["client"]
         if client not in invoice_ready_map:
             invoice_ready_map[client] = {"client": client, "total": 0, "items": []}
-        invoice_ready_map[client]["items"].append({
-            "project": p["project_name"],
-            "key":     p["key"],
-            "hours":   round(hours, 1),
-            "amount":  amount,
-            "action":  "Generate Invoice",
-        })
+        invoice_ready_map[client]["items"].append(
+            {
+                "project": p["project_name"],
+                "key": p["key"],
+                "hours": round(hours, 1),
+                "amount": amount,
+                "action": "Generate Invoice",
+            }
+        )
         invoice_ready_map[client]["total"] += amount
 
     invoice_ready = list(invoice_ready_map.values())
@@ -6707,25 +7903,32 @@ def get_workspace_summary():
             ORDER BY a.creation DESC
             LIMIT 25
             """,
-            {"unrestricted": accessible is None, "names": accessible_names or ["__none__"]},
+            {
+                "unrestricted": accessible is None,
+                "names": accessible_names or ["__none__"],
+            },
             as_dict=True,
         )
         for a in acts:
             text = _activity_text(a)
-            activity_stream.append({
-                "id":           a.name,
-                "actor":        a.actor_name or a.user,
-                "actor_image":  a.actor_image,
-                "actor_initial": "".join(w[0].upper() for w in (a.actor_name or a.user).split()[:2]),
-                "actor_color":  _avatar_color(a.user),
-                "text":         text,
-                "project":      a.project or "",
-                "task":         a.task or "",
-                "task_key":     a.task_key or "",
-                "action_type":  a.action_type or "",
-                "time":         _time_ago(a.creation),
-                "creation":     str(a.creation)[:19] if a.creation else "",
-            })
+            activity_stream.append(
+                {
+                    "id": a.name,
+                    "actor": a.actor_name or a.user,
+                    "actor_image": a.actor_image,
+                    "actor_initial": "".join(
+                        w[0].upper() for w in (a.actor_name or a.user).split()[:2]
+                    ),
+                    "actor_color": _avatar_color(a.user),
+                    "text": text,
+                    "project": a.project or "",
+                    "task": a.task or "",
+                    "task_key": a.task_key or "",
+                    "action_type": a.action_type or "",
+                    "time": _time_ago(a.creation),
+                    "creation": str(a.creation)[:19] if a.creation else "",
+                }
+            )
     except Exception:
         pass
 
@@ -6742,15 +7945,18 @@ def get_workspace_summary():
             if p["name"] not in active_proj_set:
                 last_act = frappe.db.sql(
                     "SELECT MAX(creation) AS t FROM `tabBP Activity` WHERE project = %(proj)s",
-                    {"proj": p["name"]}, as_dict=True,
+                    {"proj": p["name"]},
+                    as_dict=True,
                 )
                 last = last_act[0].t if last_act else None
-                stale_projects.append({
-                    "key":           p["key"],
-                    "name":          p["project_name"],
-                    "color":         p["project_color"] or _avatar_color(p["key"]),
-                    "last_activity": _time_ago(last) if last else "No activity",
-                })
+                stale_projects.append(
+                    {
+                        "key": p["key"],
+                        "name": p["project_name"],
+                        "color": p["project_color"] or _avatar_color(p["key"]),
+                        "last_activity": _time_ago(last) if last else "No activity",
+                    }
+                )
     except Exception:
         pass
 
@@ -6776,22 +7982,28 @@ def get_workspace_summary():
             ORDER BY t.modified DESC
             LIMIT 20
             """,
-            {"cutoff": ago_14, "unrestricted": accessible is None, "names": accessible_names or ["__none__"]},
+            {
+                "cutoff": ago_14,
+                "unrestricted": accessible is None,
+                "names": accessible_names or ["__none__"],
+            },
             as_dict=True,
         )
         # Filter to actually-completed statuses
         proj_completed = {}
         for r in completed_rows:
             if r.project not in proj_completed:
-                proj_completed[r.project] = set(_get_completed_statuses_by_project(r.project) or ["Done"])
+                proj_completed[r.project] = set(
+                    _get_completed_statuses_by_project(r.project) or ["Done"]
+                )
         recently_delivered = [
             {
-                "name":          r.name,
-                "title":         r.title,
-                "task_key":      r.task_key,
-                "project":       r.project_name or r.project,
+                "name": r.name,
+                "title": r.title,
+                "task_key": r.task_key,
+                "project": r.project_name or r.project,
                 "project_color": r.project_color or _avatar_color(r.project or ""),
-                "date":          str(r.completed_date),
+                "date": str(r.completed_date),
             }
             for r in completed_rows
         ]
@@ -6818,22 +8030,34 @@ def get_workspace_summary():
         for m in ms_rows:
             p_info = proj_map.get(m["project"], {})
             # tasks_left: count open tasks in project (rough)
-            open_t = frappe.db.count("BP Task", _task_filters({
-                "project": m["project"],
-                "status": ["not in", _get_completed_statuses_by_project(m["project"]) or ["Done"]],
-            }))
+            open_t = frappe.db.count(
+                "BP Task",
+                _task_filters(
+                    {
+                        "project": m["project"],
+                        "status": [
+                            "not in",
+                            _get_completed_statuses_by_project(m["project"])
+                            or ["Done"],
+                        ],
+                    }
+                ),
+            )
             due = m.get("due_date")
-            milestones.append({
-                "name":          m["name"],
-                "title":         m["title"],
-                "project":       m["project"],
-                "project_name":  p_info.get("project_name") or m["project"],
-                "project_color": p_info.get("project_color") or _avatar_color(m["project"]),
-                "due_date":      str(due) if due else None,
-                "date_label":    due.strftime("%b %d") if due else "TBD",
-                "tasks_left":    open_t,
-                "days_left":     (due - today).days if due else None,
-            })
+            milestones.append(
+                {
+                    "name": m["name"],
+                    "title": m["title"],
+                    "project": m["project"],
+                    "project_name": p_info.get("project_name") or m["project"],
+                    "project_color": p_info.get("project_color")
+                    or _avatar_color(m["project"]),
+                    "due_date": str(due) if due else None,
+                    "date_label": due.strftime("%b %d") if due else "TBD",
+                    "tasks_left": open_t,
+                    "days_left": (due - today).days if due else None,
+                }
+            )
     except Exception:
         pass
 
@@ -6856,42 +8080,58 @@ def get_workspace_summary():
         risk_rows.sort(key=lambda r: sev_order.get(r.get("severity", "medium"), 2))
         proj_map = {p["name"]: p for p in projects}
         owner_users = list({r["owner_user"] for r in risk_rows if r.get("owner_user")})
-        owner_info  = {u.name: u for u in frappe.get_all(
-            "User", filters={"name": ["in", owner_users]},
-            fields=["name", "full_name"]
-        )} if owner_users else {}
+        owner_info = (
+            {
+                u.name: u
+                for u in frappe.get_all(
+                    "User",
+                    filters={"name": ["in", owner_users]},
+                    fields=["name", "full_name"],
+                )
+            }
+            if owner_users
+            else {}
+        )
         for r in risk_rows:
-            owner_name = owner_info.get(r.get("owner_user", ""), frappe._dict()).get("full_name") or r.get("owner_user", "")
-            risks.append({
-                "name":          r["name"],
-                "title":         r["title"],
-                "project":       r["project"],
-                "project_name":  proj_map.get(r["project"], {}).get("project_name") or r["project"],
-                "severity":      r.get("severity", "medium"),
-                "owner":         owner_name,
-                "owner_initial": "".join(w[0].upper() for w in owner_name.split()[:2]) if owner_name else "?",
-                "owner_color":   _avatar_color(r.get("owner_user") or r["project"]),
-            })
+            owner_name = owner_info.get(r.get("owner_user", ""), frappe._dict()).get(
+                "full_name"
+            ) or r.get("owner_user", "")
+            risks.append(
+                {
+                    "name": r["name"],
+                    "title": r["title"],
+                    "project": r["project"],
+                    "project_name": proj_map.get(r["project"], {}).get("project_name")
+                    or r["project"],
+                    "severity": r.get("severity", "medium"),
+                    "owner": owner_name,
+                    "owner_initial": (
+                        "".join(w[0].upper() for w in owner_name.split()[:2])
+                        if owner_name
+                        else "?"
+                    ),
+                    "owner_color": _avatar_color(r.get("owner_user") or r["project"]),
+                }
+            )
     except Exception:
         pass
 
     return {
-        "project_health":     project_health,
-        "profitability":      profitability,
-        "invoice_ready":      invoice_ready,
-        "activity_stream":    activity_stream,
-        "stale_projects":     stale_projects,
+        "project_health": project_health,
+        "profitability": profitability,
+        "invoice_ready": invoice_ready,
+        "activity_stream": activity_stream,
+        "stale_projects": stale_projects,
         "recently_delivered": recently_delivered,
-        "milestones":         milestones,
-        "risks":              risks,
+        "milestones": milestones,
+        "risks": risks,
     }
-
-
 
 
 @frappe.whitelist()
 def get_dashboard():
     from datetime import date, timedelta
+
     _require_system_user()
     user = frappe.session.user
     today_str = date.today().isoformat()
@@ -6907,51 +8147,95 @@ def get_dashboard():
     if issue_names:
         my_issues = frappe.get_all(
             "BP Task",
-            filters={"name": ["in", issue_names]},
-            fields=["name", "task_key", "title", "status", "priority",
-                    "project", "due_date", "epic", "story_points", "task_type",
-                    "estimated_hours", "modified"],
+            filters={"name": ["in", issue_names], "is_deleted": 0},
+            fields=[
+                "name",
+                "task_key",
+                "title",
+                "status",
+                "priority",
+                "project",
+                "due_date",
+                "epic",
+                "story_points",
+                "task_type",
+                "estimated_hours",
+                "modified",
+            ],
             order_by="due_date asc",
         )
         completed_map = {}
         for i in my_issues:
             if i["project"] not in completed_map:
-                completed_map[i["project"]] = _get_completed_statuses_by_project(i["project"])
+                completed_map[i["project"]] = _get_completed_statuses_by_project(
+                    i["project"]
+                )
         my_issues = [
-            i for i in my_issues
+            i
+            for i in my_issues
             if i["status"] not in completed_map.get(i["project"], [])
         ]
 
-    overdue = [i for i in my_issues if i.get("due_date") and str(i["due_date"]) < today_str]
+    overdue = [
+        i for i in my_issues if i.get("due_date") and str(i["due_date"]) < today_str
+    ]
 
     # Stale: assigned, non-closed, not modified in 7+ days
     stale_cutoff = (date.today() - timedelta(days=7)).isoformat()
     stale_tasks = [
-        i for i in my_issues
+        i
+        for i in my_issues
         if i.get("modified") and str(i["modified"])[:10] < stale_cutoff
     ]
 
     # Upcoming deadlines: due in next 14 days
     in_14 = (date.today() + timedelta(days=14)).isoformat()
     upcoming_deadlines = [
-        i for i in my_issues
+        i
+        for i in my_issues
         if i.get("due_date") and today_str <= str(i["due_date"]) <= in_14
     ]
 
     # Access filter — frappe.get_all ignores permission_query_conditions.
-    from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
+    from batch_projects.permissions import (
+        accessible_project_filter,
+        NO_ACCESSIBLE_PROJECTS,
+    )
+
     proj_filters = accessible_project_filter({"status": "Active"})
-    projects = [] if proj_filters is NO_ACCESSIBLE_PROJECTS else frappe.get_all(
-        "BP Project",
-        filters=proj_filters,
-        fields=["name", "project_name", "key", "workflow_states",
-                "project_color", "target_end_date", "project_type",
-                "hourly_rate", "budget_amount", "retainer_hours", "client", "currency"],
+    projects = (
+        []
+        if proj_filters is NO_ACCESSIBLE_PROJECTS
+        else frappe.get_all(
+            "BP Project",
+            filters=proj_filters,
+            fields=[
+                "name",
+                "project_name",
+                "key",
+                "workflow_states",
+                "project_color",
+                "target_end_date",
+                "project_type",
+                "hourly_rate",
+                "budget_amount",
+                "retainer_hours",
+                "client",
+                "currency",
+            ],
+        )
     )
     for p in projects:
         completed = _get_completed_statuses(p)
-        p["open_count"]  = frappe.db.count("BP Task", _task_filters({"project": p["name"], "status": ["not in", completed or ["Done"]]}))
-        p["total_count"] = frappe.db.count("BP Task", _task_filters({"project": p["name"]}))
+        p["open_count"] = frappe.db.count(
+            "BP Task",
+            _task_filters(
+                {"project": p["name"], "status": ["not in", completed or ["Done"]]}
+            ),
+        )
+        p["total_count"] = frappe.db.count(
+            "BP Task", _task_filters({"project": p["name"]})
+        )
         # Real members
         members = frappe.get_all(
             "BP Project Member",
@@ -6959,15 +8243,26 @@ def get_dashboard():
             fields=["user", "role"],
         )
         user_names = [m["user"] for m in members]
-        user_info = {u.name: u for u in frappe.get_all(
-            "User", filters={"name": ["in", user_names]},
-            fields=["name", "full_name", "user_image"]
-        )} if user_names else {}
+        user_info = (
+            {
+                u.name: u
+                for u in frappe.get_all(
+                    "User",
+                    filters={"name": ["in", user_names]},
+                    fields=["name", "full_name", "user_image"],
+                )
+            }
+            if user_names
+            else {}
+        )
         p["members"] = [
             {
                 "user": m["user"],
-                "full_name": user_info.get(m["user"], frappe._dict()).get("full_name") or m["user"],
-                "user_image": user_info.get(m["user"], frappe._dict()).get("user_image"),
+                "full_name": user_info.get(m["user"], frappe._dict()).get("full_name")
+                or m["user"],
+                "user_image": user_info.get(m["user"], frappe._dict()).get(
+                    "user_image"
+                ),
             }
             for m in members
         ]
@@ -7019,8 +8314,6 @@ def get_dashboard():
     }
 
 
-
-
 @frappe.whitelist()
 def get_people():
     """
@@ -7034,18 +8327,23 @@ def get_people():
 
     from datetime import date, timedelta
 
-    today    = date.today()
+    today = date.today()
     week_end = today + timedelta(days=7)
     from_30d = today - timedelta(days=30)
 
     # All tracked members (project + team) + per-member capacity
     member_users = _all_tracked_users()
-    cap_by_user  = _get_member_capacities(member_users)
+    cap_by_user = _get_member_capacities(member_users)
 
     if not member_users:
         return {
             "people": [],
-            "totals": {"count": 0, "avg_utilization": 0.0, "available_hours": 0.0, "overloaded": 0},
+            "totals": {
+                "count": 0,
+                "avg_utilization": 0.0,
+                "available_hours": 0.0,
+                "overloaded": 0,
+            },
         }
 
     # User info
@@ -7071,7 +8369,7 @@ def get_people():
                 if e.user_id:
                     designation_by_user[e.user_id] = {
                         "designation": e.designation or "",
-                        "department":  e.department  or "",
+                        "department": e.department or "",
                     }
         except Exception:
             pass
@@ -7093,11 +8391,13 @@ def get_people():
         u = pr.user
         if u not in projects_by_user:
             projects_by_user[u] = []
-        projects_by_user[u].append({
-            "name":  pr.name,
-            "title": pr.project_title or pr.name,
-            "color": pr.project_color or "#94a3b8",
-        })
+        projects_by_user[u].append(
+            {
+                "name": pr.name,
+                "title": pr.project_title or pr.name,
+                "color": pr.project_color or "#94a3b8",
+            }
+        )
 
     # This-week allocation: open tasks due in the next 7 days
     alloc_by_user = {u: 0.0 for u in member_users}
@@ -7113,7 +8413,11 @@ def get_people():
           AND t.is_deleted = 0
         GROUP BY a.user
         """,
-        {"today": today.isoformat(), "week_end": week_end.isoformat(), "users": member_users},
+        {
+            "today": today.isoformat(),
+            "week_end": week_end.isoformat(),
+            "users": member_users,
+        },
         as_dict=True,
     )
     for row in alloc_rows:
@@ -7122,45 +8426,51 @@ def get_people():
 
     # Last-30D logged hours from submitted ERPNext Timesheets
     from_dt = f"{from_30d.isoformat()} 00:00:00"
-    to_dt   = f"{today.isoformat()} 23:59:59"
+    to_dt = f"{today.isoformat()} 23:59:59"
     ts_data = _timesheet_hours_by_user(member_users, from_dt, to_dt)
 
     people = []
     for user in member_users:
-        info         = user_info.get(user, frappe._dict())
-        emp          = designation_by_user.get(user, {})
-        logged, _    = ts_data.get(user, (0.0, 0.0))
-        alloc        = alloc_by_user.get(user, 0.0)
-        weekly_cap   = cap_by_user.get(user, 40.0)
+        info = user_info.get(user, frappe._dict())
+        emp = designation_by_user.get(user, {})
+        logged, _ = ts_data.get(user, (0.0, 0.0))
+        alloc = alloc_by_user.get(user, 0.0)
+        weekly_cap = cap_by_user.get(user, 40.0)
         capacity_30d = round(weekly_cap * 30 / 7, 1)
-        util         = round(min(logged / capacity_30d * 100, 200), 1) if capacity_30d else 0
+        util = round(min(logged / capacity_30d * 100, 200), 1) if capacity_30d else 0
 
-        people.append({
-            "user":            user,
-            "full_name":       info.get("full_name") or user,
-            "user_image":      info.get("user_image"),
-            "designation":     emp.get("designation", ""),
-            "department":      emp.get("department",  ""),
-            "projects":        projects_by_user.get(user, []),
-            "week_allocation": round(alloc, 1),
-            "week_capacity":   weekly_cap,
-            "utilization_pct": util,
-        })
+        people.append(
+            {
+                "user": user,
+                "full_name": info.get("full_name") or user,
+                "user_image": info.get("user_image"),
+                "designation": emp.get("designation", ""),
+                "department": emp.get("department", ""),
+                "projects": projects_by_user.get(user, []),
+                "week_allocation": round(alloc, 1),
+                "week_capacity": weekly_cap,
+                "utilization_pct": util,
+            }
+        )
 
     people.sort(key=lambda p: p["full_name"])
 
-    count      = len(people)
+    count = len(people)
     overloaded = sum(1 for p in people if p["utilization_pct"] >= 95)
-    avg_util   = round(sum(p["utilization_pct"] for p in people) / count, 1) if count else 0
-    available  = round(sum(max(0.0, p["week_capacity"] - p["week_allocation"]) for p in people), 1)
+    avg_util = (
+        round(sum(p["utilization_pct"] for p in people) / count, 1) if count else 0
+    )
+    available = round(
+        sum(max(0.0, p["week_capacity"] - p["week_allocation"]) for p in people), 1
+    )
 
     return {
         "people": people,
         "totals": {
-            "count":           count,
+            "count": count,
             "avg_utilization": avg_util,
             "available_hours": available,
-            "overloaded":      overloaded,
+            "overloaded": overloaded,
         },
     }
 
@@ -7168,7 +8478,6 @@ def get_people():
 # ─────────────────────────────────────────────────────────────────────────────
 # PROJECT FILES
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 
 def _comment_matching_task_names(query, project=None, projects_in=None, cap=200):
@@ -7183,8 +8492,13 @@ def _comment_matching_task_names(query, project=None, projects_in=None, cap=200)
         if not projects_in:
             return []
         filters["project"] = ["in", list(projects_in)]
-    return frappe.get_all("BP Activity", filters=filters, pluck="task",
-                           order_by="modified desc", limit=cap)
+    return frappe.get_all(
+        "BP Activity",
+        filters=filters,
+        pluck="task",
+        order_by="modified desc",
+        limit=cap,
+    )
 
 
 @frappe.whitelist()
@@ -7199,8 +8513,8 @@ def search_tasks(query, project=None, exclude=None, limit=10, offset=0):
         filters["name"] = ["!=", exclude]
 
     or_filters = [
-        ["title",       "like", f"%{query}%"],
-        ["task_key",    "like", f"%{query}%"],
+        ["title", "like", f"%{query}%"],
+        ["task_key", "like", f"%{query}%"],
         ["description", "like", f"%{query}%"],
     ]
     comment_tasks = _comment_matching_task_names(query, project=project)
@@ -7218,8 +8532,6 @@ def search_tasks(query, project=None, exclude=None, limit=10, offset=0):
     )
 
 
-
-
 @frappe.whitelist()
 def search_tasks_global(query, exclude=None, limit=12, offset=0):
     """Cross-project task search for the connector (linking tasks across boards).
@@ -7229,6 +8541,7 @@ def search_tasks_global(query, exclude=None, limit=12, offset=0):
     """
     _require_system_user()
     from batch_projects.permissions import get_accessible_projects
+
     accessible = get_accessible_projects()  # None = admin (all projects)
 
     filters = {"is_deleted": 0}
@@ -7240,8 +8553,8 @@ def search_tasks_global(query, exclude=None, limit=12, offset=0):
         filters["name"] = ["!=", exclude]
 
     or_filters = [
-        ["title",       "like", f"%{query}%"],
-        ["task_key",    "like", f"%{query}%"],
+        ["title", "like", f"%{query}%"],
+        ["task_key", "like", f"%{query}%"],
         ["description", "like", f"%{query}%"],
     ]
     comment_tasks = _comment_matching_task_names(query, projects_in=accessible)
@@ -7260,8 +8573,11 @@ def search_tasks_global(query, exclude=None, limit=12, offset=0):
     proj_names = {r["project"] for r in rows if r.get("project")}
     name_map = {}
     if proj_names:
-        for p in frappe.get_all("BP Project", filters={"name": ["in", list(proj_names)]},
-                                fields=["name", "project_name", "key"]):
+        for p in frappe.get_all(
+            "BP Project",
+            filters={"name": ["in", list(proj_names)]},
+            fields=["name", "project_name", "key"],
+        ):
             name_map[p["name"]] = p
     for r in rows:
         meta = name_map.get(r.get("project")) or {}
@@ -7273,16 +8589,24 @@ def search_tasks_global(query, exclude=None, limit=12, offset=0):
 # ─── CREATE PROJECT ───────────────────────────────────────────────────────────
 
 
-
 # Doctypes that carry a real `project` Link field in ERPNext core — a
 # search against one of these can be hard-scoped to the caller's own BP
 # Project. Timesheet is handled separately below (project lives on the
 # Timesheet Detail child rows, not the header — same asymmetry _tenant_ok
 # in erp_link.py already accounts for).
-_PROJECT_FIELD_DOCTYPES = frozenset({
-    "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
-    "Delivery Note", "Stock Entry", "Work Order", "Quotation", "Expense Claim",
-})
+_PROJECT_FIELD_DOCTYPES = frozenset(
+    {
+        "Sales Order",
+        "Purchase Order",
+        "Sales Invoice",
+        "Purchase Invoice",
+        "Delivery Note",
+        "Stock Entry",
+        "Work Order",
+        "Quotation",
+        "Expense Claim",
+    }
+)
 # The remainder of _ERP_SEARCH_DOCTYPES below (Project, Customer, Supplier,
 # Lead, Opportunity, Payment Entry, Journal Entry) either carry no project
 # dimension at all (Payment Entry/Journal Entry are tagged per accounting
@@ -7297,10 +8621,23 @@ _PROJECT_FIELD_DOCTYPES = frozenset({
 # module-level "_ERP_SEARCH_DOCTYPES" was the source of truth it mirrors,
 # which wasn't true until now.
 _ERP_SEARCH_DOCTYPES = [
-    "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice",
-    "Project", "Customer", "Supplier", "Lead", "Opportunity",
-    "Expense Claim", "Timesheet", "Delivery Note", "Stock Entry",
-    "Payment Entry", "Journal Entry", "Work Order", "Quotation",
+    "Sales Order",
+    "Purchase Order",
+    "Sales Invoice",
+    "Purchase Invoice",
+    "Project",
+    "Customer",
+    "Supplier",
+    "Lead",
+    "Opportunity",
+    "Expense Claim",
+    "Timesheet",
+    "Delivery Note",
+    "Stock Entry",
+    "Payment Entry",
+    "Journal Entry",
+    "Work Order",
+    "Quotation",
 ]
 
 
@@ -7414,7 +8751,11 @@ def get_erp_document_label(doctype, name):
     if not row:
         return {"name": name, "label": name, "doctype": doctype}
 
-    return {"name": row["name"], "label": row.get(title_field) or row["name"], "doctype": doctype}
+    return {
+        "name": row["name"],
+        "label": row.get(title_field) or row["name"],
+        "doctype": doctype,
+    }
 
 
 @frappe.whitelist()
@@ -7434,22 +8775,27 @@ def start_sprint(sprint):
         "sprint_name",
     )
     if active:
-        frappe.throw(f'Sprint "{active}" is already active. Complete it before starting a new one.')
+        frappe.throw(
+            f'Sprint "{active}" is already active. Complete it before starting a new one.'
+        )
 
     doc.status = "Active"
     doc.save(ignore_permissions=True)
     frappe.db.commit()
     _invalidate_sprint_cache(doc.project)
 
-    emit(SPRINT_STARTED, {
-        "project": doc.project,
-        "sprint": doc.name,
-        "sprint_name": doc.sprint_name,
-        "total_issues": frappe.db.count("BP Task", _task_filters({"sprint": doc.name})),
-    })
+    emit(
+        SPRINT_STARTED,
+        {
+            "project": doc.project,
+            "sprint": doc.name,
+            "sprint_name": doc.sprint_name,
+            "total_issues": frappe.db.count(
+                "BP Task", _task_filters({"sprint": doc.name})
+            ),
+        },
+    )
     return doc.as_dict()
-
-
 
 
 @frappe.whitelist()
@@ -7471,30 +8817,32 @@ def update_sprint(sprint, sprint_name=None, goal=None, start_date=None, end_date
     return doc.as_dict()
 
 
-
-
 @frappe.whitelist()
 def watch_task(task):
     """Current user starts watching a task."""
     from batch_projects.events import add_watcher
+    from batch_projects.task_validation import require_live_task
+
+    require_live_task(task)
     _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
     add_watcher(task, frappe.session.user, reason="manual")
     return {"watching": True}
 
 
-
-
 @frappe.whitelist()
 def unwatch_task(task):
     """Current user stops watching a task."""
+    from batch_projects.task_validation import require_live_task
+
+    require_live_task(task)
     _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
     for w in frappe.get_all(
-        "BP Task Watcher", filters={"task": task, "user": frappe.session.user}, pluck="name"
+        "BP Task Watcher",
+        filters={"task": task, "user": frappe.session.user},
+        pluck="name",
     ):
         frappe.delete_doc("BP Task Watcher", w, ignore_permissions=True)
     return {"watching": False}
-
-
 
 
 @frappe.whitelist()
@@ -7502,17 +8850,27 @@ def get_task_watchers(task):
     """List watchers of a task + whether the current user is watching."""
     _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
     rows = frappe.get_all(
-        "BP Task Watcher", filters={"task": task}, fields=["user", "watch_reason"], order_by="creation asc"
+        "BP Task Watcher",
+        filters={"task": task},
+        fields=["user", "watch_reason"],
+        order_by="creation asc",
     )
     users = [r["user"] for r in rows]
     # Batched, not N+1 — same shape the header's real photo needs (see
     # ColumnWidget's identity-image work): without user_image the header's
     # avatar stack could only ever fall back to hashed initials.
-    info = {
-        u["name"]: u for u in frappe.get_all(
-            "User", filters={"name": ["in", users]}, fields=["name", "full_name", "user_image"]
-        )
-    } if users else {}
+    info = (
+        {
+            u["name"]: u
+            for u in frappe.get_all(
+                "User",
+                filters={"name": ["in", users]},
+                fields=["name", "full_name", "user_image"],
+            )
+        }
+        if users
+        else {}
+    )
     watchers = [
         {
             "user": r["user"],
@@ -7532,30 +8890,34 @@ def get_task_watchers(task):
 # ─── MY TASKS ─────────────────────────────────────────────────────────────────
 
 
-
 @frappe.whitelist()
 def remove_task_link(issue, linked_task, link_type):
     doc = frappe.get_doc("BP Task", issue)
     _check_permission(doc.project, "BP Member")
-    doc.set("links", [
-        l for l in doc.get("links", [])
-        if not (l.linked_task == linked_task and l.link_type == link_type)
-    ])
+    doc.set(
+        "links",
+        [
+            l
+            for l in doc.get("links", [])
+            if not (l.linked_task == linked_task and l.link_type == link_type)
+        ],
+    )
     doc.save(ignore_permissions=True)
 
     # Remove the reciprocal link from the other task too.
     inverse = INVERSE_LINK.get(link_type)
     if inverse and frappe.db.exists("BP Task", linked_task):
         other = frappe.get_doc("BP Task", linked_task)
-        kept = [l for l in other.get("links", [])
-                if not (l.linked_task == issue and l.link_type == inverse)]
+        kept = [
+            l
+            for l in other.get("links", [])
+            if not (l.linked_task == issue and l.link_type == inverse)
+        ]
         if len(kept) != len(other.get("links", [])):
             other.set("links", kept)
             other.save(ignore_permissions=True)
 
     return {"ok": True}
-
-
 
 
 @frappe.whitelist()
@@ -7568,15 +8930,18 @@ def remove_reference(issue, reference_name=None, ref_doctype=None, ref_name=None
     def keep(r):
         if reference_name and r.name == reference_name:
             return False
-        if ref_doctype and ref_name and r.ref_doctype == ref_doctype and r.ref_name == ref_name:
+        if (
+            ref_doctype
+            and ref_name
+            and r.ref_doctype == ref_doctype
+            and r.ref_name == ref_name
+        ):
             return False
         return True
 
     doc.references = [r for r in (doc.references or []) if keep(r)]
     doc.save(ignore_permissions=True)
     return {"ok": True}
-
-
 
 
 @frappe.whitelist()
@@ -7593,8 +8958,6 @@ def update_milestone(name, fields):
     return doc.as_dict()
 
 
-
-
 @frappe.whitelist()
 def update_project_members(project, members):
     """Replace the full members list on a project. members: JSON list of {user, role}"""
@@ -7608,8 +8971,10 @@ def update_project_members(project, members):
     clean = []
     for m in members_list:
         if isinstance(m, str):
-            try: m = json.loads(m)
-            except: continue
+            try:
+                m = json.loads(m)
+            except:
+                continue
         if not isinstance(m, dict) or not m.get("user"):
             continue
         role = m.get("role", "Member")
@@ -7617,68 +8982,94 @@ def update_project_members(project, members):
             role = "Member"
         clean.append({"user": m["user"], "role": role})
 
-    # Enforce seat cap for new members not already in this project.
-    # Existing members keep their seat; users already seated elsewhere
-    # via another project are also fine (assert_seat_available handles
-    # is_seated internally). Same pattern as board.py:3239-3244 and
-    # invitations.py:298-303.
-    current = frappe.get_all("BP Project Member",
-        filters={"parent": project},
-        fields=["user", "role"])
-    current_users = {m["user"] for m in current}
-    old_roles = {m["user"]: m["role"] for m in current}
-    from batch_projects.entitlements import assert_seats_available, is_seated
-    new_users = {m["user"] for m in clean if not is_seated(m["user"])}
-    assert_seats_available(len(new_users))
+    # Atomic seat decision: advisory lock around count+assert+write
+    import hashlib
 
-    from batch_projects import access
-    for u in {m["user"] for m in clean} - current_users:
-        access.ensure_member_role(u)
-
-    frappe.db.sql(
-        "DELETE FROM `tabBP Project Member` WHERE parent=%s",
-        project
-    )
-    for i, m in enumerate(clean):
-        frappe.db.sql(
-            """INSERT INTO `tabBP Project Member`
-               (name, parent, parenttype, parentfield, idx, user, role,
-                owner, creation, modified, modified_by)
-               VALUES (%s, %s, 'BP Project', 'members', %s, %s, %s,
-                       %s, NOW(), NOW(), %s)""",
-            (
-                frappe.generate_hash(length=10),
-                project, i + 1,
-                m["user"], m["role"],
-                frappe.session.user, frappe.session.user,
-            )
+    digest = hashlib.sha256(f"bp_seat:{project}".encode()).hexdigest()
+    lock_name = f"bp_seat:{digest[:48]}"  # 56 chars total, under 64-char limit
+    acquired = frappe.db.sql("SELECT GET_LOCK(%s, 8)", (lock_name,))[0][0]
+    if not acquired:
+        frappe.throw(
+            "Could not acquire seat lock for this project. Retry.",
+            frappe.ValidationError,
         )
-    frappe.db.sql(
-        "UPDATE `tabBP Project` SET modified=NOW(), modified_by=%s WHERE name=%s",
-        (frappe.session.user, project)
-    )
-    frappe.db.commit()
+
+    try:
+        # Enforce seat cap for new members not already in this project.
+        # Existing members keep their seat; users already seated elsewhere
+        # via another project are also fine (assert_seat_available handles
+        # is_seated internally). Same pattern as board.py:3239-3244 and
+        # invitations.py:298-303.
+        current = frappe.get_all(
+            "BP Project Member", filters={"parent": project}, fields=["user", "role"]
+        )
+        current_users = {m["user"] for m in current}
+        old_roles = {m["user"]: m["role"] for m in current}
+        from batch_projects.entitlements import assert_seats_available, is_seated
+
+        new_users = {m["user"] for m in clean if not is_seated(m["user"])}
+        assert_seats_available(len(new_users))
+
+        from batch_projects import access
+
+        for u in {m["user"] for m in clean} - current_users:
+            access.ensure_member_role(u)
+
+        frappe.db.sql("DELETE FROM `tabBP Project Member` WHERE parent=%s", project)
+        for i, m in enumerate(clean):
+            frappe.db.sql(
+                """INSERT INTO `tabBP Project Member`
+                   (name, parent, parenttype, parentfield, idx, user, role,
+                    owner, creation, modified, modified_by)
+                   VALUES (%s, %s, 'BP Project', 'members', %s, %s, %s,
+                           %s, NOW(), NOW(), %s)""",
+                (
+                    frappe.generate_hash(length=10),
+                    project,
+                    i + 1,
+                    m["user"],
+                    m["role"],
+                    frappe.session.user,
+                    frappe.session.user,
+                ),
+            )
+        frappe.db.sql(
+            "UPDATE `tabBP Project` SET modified=NOW(), modified_by=%s WHERE name=%s",
+            (frappe.session.user, project),
+        )
+        frappe.db.commit()
+    finally:
+        frappe.db.sql("SELECT RELEASE_LOCK(%s)", (lock_name,))
 
     # ReBAC sync: this is a whole-list replace, so diff old vs
     # new roles rather than emitting for everyone — emit() fires an event
     # per mutation, not per row in a bulk statement.
     new_roles = {m["user"]: m["role"] for m in clean}
-    for user in (old_roles.keys() | new_roles.keys()):
+    for user in old_roles.keys() | new_roles.keys():
         old_role, new_role = old_roles.get(user), new_roles.get(user)
         if old_role != new_role:
-            emit(PROJECT_ROLE_CHANGED, {
-                "project": project, "user": user,
-                "old_role": old_role, "new_role": new_role,
-            })
+            emit(
+                PROJECT_ROLE_CHANGED,
+                {
+                    "project": project,
+                    "user": user,
+                    "old_role": old_role,
+                    "new_role": new_role,
+                },
+            )
 
-    users = {u["name"]: u["full_name"] for u in frappe.get_all(
-        "User", fields=["name", "full_name"]
-    )}
-    return [{
-        "user": m["user"],
-        "role": m["role"],
-        "full_name": users.get(m["user"], m["user"]),
-    } for m in clean]
+    users = {
+        u["name"]: u["full_name"]
+        for u in frappe.get_all("User", fields=["name", "full_name"])
+    }
+    return [
+        {
+            "user": m["user"],
+            "role": m["role"],
+            "full_name": users.get(m["user"], m["user"]),
+        }
+        for m in clean
+    ]
 
 
 # ─── ISSUE LINKS ──────────────────────────────────────────────────────────────
@@ -7698,8 +9089,6 @@ INVERSE_LINK = {
 BLOCKING_TYPES = {"blocks", "is blocked by"}
 
 
-
-
 @frappe.whitelist()
 def set_view_subscription(view, subscribed=1, frequency="Weekly"):
     """Subscribe/unsubscribe the owner to a scheduled email of this saved view."""
@@ -7710,9 +9099,10 @@ def set_view_subscription(view, subscribed=1, frequency="Weekly"):
     if frequency in ("Daily", "Weekly"):
         doc.subscription_frequency = frequency
     doc.save(ignore_permissions=True)
-    return {"subscribed": bool(doc.subscribed), "subscription_frequency": doc.subscription_frequency}
-
-
+    return {
+        "subscribed": bool(doc.subscribed),
+        "subscription_frequency": doc.subscription_frequency,
+    }
 
 
 @frappe.whitelist()
@@ -7736,8 +9126,6 @@ def update_notification_preferences(preferences):
     return {k: int(doc.get(k) or 0) for k in _PREF_DEFAULTS}
 
 
-
-
 @frappe.whitelist()
 def get_notification_preferences():
     """Return the current user's notification preferences (defaults if unset)."""
@@ -7748,11 +9136,17 @@ def get_notification_preferences():
     return dict(_PREF_DEFAULTS)
 
 
-
-
 @frappe.whitelist()
-def get_report_tasks(scope="all", status_filter="open", priority=None, search=None,
-                     sort_by="modified", sort_order="desc", limit=25, offset=0):
+def get_report_tasks(
+    scope="all",
+    status_filter="open",
+    priority=None,
+    search=None,
+    sort_by="modified",
+    sort_order="desc",
+    limit=25,
+    offset=0,
+):
     """Scope-wide task list for report Table widgets — ALL tasks in scope
     (not just the caller's), with true server-side pagination, search and sort.
 
@@ -7768,12 +9162,17 @@ def get_report_tasks(scope="all", status_filter="open", priority=None, search=No
         scope_projects = proj_names
     else:
         from batch_projects.permissions import get_accessible_projects
+
         acc = get_accessible_projects()
-        scope_projects = frappe.get_all("BP Project", pluck="name") if acc is None else list(acc)
+        scope_projects = (
+            frappe.get_all("BP Project", pluck="name") if acc is None else list(acc)
+        )
     completed = set()
     for pn in scope_projects:
         try:
-            completed |= set(frappe.get_cached_doc("BP Project", pn).get_completed_statuses())
+            completed |= set(
+                frappe.get_cached_doc("BP Project", pn).get_completed_statuses()
+            )
         except Exception:
             pass
 
@@ -7788,27 +9187,59 @@ def get_report_tasks(scope="all", status_filter="open", priority=None, search=No
     or_filters = None
     if search:
         s = f"%{search}%"
-        or_filters = [["BP Task", "title", "like", s], ["BP Task", "task_key", "like", s]]
+        or_filters = [
+            ["BP Task", "title", "like", s],
+            ["BP Task", "task_key", "like", s],
+        ]
 
     sort_map = {
-        "modified": "modified", "creation": "creation", "due_date": "due_date",
-        "priority": "priority", "title": "title", "story_points": "story_points",
+        "modified": "modified",
+        "creation": "creation",
+        "due_date": "due_date",
+        "priority": "priority",
+        "title": "title",
+        "story_points": "story_points",
     }
     order_by = f"{sort_map.get(sort_by, 'modified')} {'desc' if sort_order == 'desc' else 'asc'}"
 
-    fields = ["name", "task_key", "title", "status", "priority", "task_type",
-              "project", "due_date", "start_date", "story_points", "epic",
-              "sprint", "reporter", "estimated_hours", "actual_hours", "creation", "modified"]
+    fields = [
+        "name",
+        "task_key",
+        "title",
+        "status",
+        "priority",
+        "task_type",
+        "project",
+        "due_date",
+        "start_date",
+        "story_points",
+        "epic",
+        "sprint",
+        "reporter",
+        "estimated_hours",
+        "actual_hours",
+        "creation",
+        "modified",
+    ]
 
     # Total filtered count (names only — cheap). NOTE: frappe.get_all() always
     # runs with ignore_permissions=True, which skips permission_query_conditions
     # entirely (confirmed in frappe/model/db_query.py) — this is scoped by the
     # explicit _resolve_scope()/get_accessible_projects() above, not by that hook.
-    total = len(frappe.get_all("BP Task", filters=db_filters, or_filters=or_filters, pluck="name"))
+    total = len(
+        frappe.get_all(
+            "BP Task", filters=db_filters, or_filters=or_filters, pluck="name"
+        )
+    )
 
     tasks = frappe.get_all(
-        "BP Task", filters=db_filters, or_filters=or_filters, fields=fields,
-        order_by=order_by, limit_start=int(offset), limit_page_length=int(limit),
+        "BP Task",
+        filters=db_filters,
+        or_filters=or_filters,
+        fields=fields,
+        order_by=order_by,
+        limit_start=int(offset),
+        limit_page_length=int(limit),
     )
 
     # Enrich: project_name + assignees
@@ -7821,17 +9252,23 @@ def get_report_tasks(scope="all", status_filter="open", priority=None, search=No
     names = [t["name"] for t in tasks]
     amap = {}
     if names:
-        for a in frappe.get_all("BP Task Assignee",
-                                filters={"parenttype": "BP Task", "parent": ["in", names]},
-                                fields=["parent", "user"]):
+        for a in frappe.get_all(
+            "BP Task Assignee",
+            filters={"parenttype": "BP Task", "parent": ["in", names]},
+            fields=["parent", "user"],
+        ):
             amap.setdefault(a["parent"], []).append(a["user"])
         users = list({u for lst in amap.values() for u in lst})
         fn = {}
         if users:
-            for u in frappe.get_all("User", filters={"name": ["in", users]}, fields=["name", "full_name"]):
+            for u in frappe.get_all(
+                "User", filters={"name": ["in", users]}, fields=["name", "full_name"]
+            ):
                 fn[u["name"]] = u["full_name"] or u["name"]
         for t in tasks:
-            t["assignees"] = [{"user": u, "full_name": fn.get(u, u)} for u in amap.get(t["name"], [])]
+            t["assignees"] = [
+                {"user": u, "full_name": fn.get(u, u)} for u in amap.get(t["name"], [])
+            ]
     else:
         for t in tasks:
             t["assignees"] = []
@@ -7840,7 +9277,6 @@ def get_report_tasks(scope="all", status_filter="open", priority=None, search=No
 
 
 # ─── DASHBOARD ────────────────────────────────────────────────────────────────
-
 
 
 @frappe.whitelist()
@@ -7860,9 +9296,19 @@ def get_widget_data(config):
     filters, proj_name, proj_names = _resolve_scope(scope)
 
     tasks = frappe.get_all(
-        "BP Task", filters=filters,
-        fields=["name", "status", "priority", "task_type", "project", "epic",
-                "story_points", "estimated_hours", "actual_hours"],
+        "BP Task",
+        filters=filters,
+        fields=[
+            "name",
+            "status",
+            "priority",
+            "task_type",
+            "project",
+            "epic",
+            "story_points",
+            "estimated_hours",
+            "actual_hours",
+        ],
     )
 
     def _mval(t):
@@ -7873,13 +9319,18 @@ def get_widget_data(config):
         names = [t["name"] for t in tasks]
         amap = {}
         if names:
-            for a in frappe.get_all("BP Task Assignee", filters={"parenttype": "BP Task", "parent": ["in", names]},
-                                    fields=["parent", "user"]):
+            for a in frappe.get_all(
+                "BP Task Assignee",
+                filters={"parenttype": "BP Task", "parent": ["in", names]},
+                fields=["parent", "user"],
+            ):
                 amap.setdefault(a["parent"], []).append(a["user"])
         users = list({u for lst in amap.values() for u in lst})
         fn = {}
         if users:
-            for u in frappe.get_all("User", filters={"name": ["in", users]}, fields=["name", "full_name"]):
+            for u in frappe.get_all(
+                "User", filters={"name": ["in", users]}, fields=["name", "full_name"]
+            ):
                 fn[u["name"]] = u["full_name"] or u["name"]
         for t in tasks:
             us = amap.get(t["name"], [])
@@ -7897,7 +9348,11 @@ def get_widget_data(config):
     color_map, label_map = {}, {}
     if group_by == "status":
         # Collect from the resolved project(s); fall back to all projects when scope is "all"
-        color_sources = proj_names if proj_names else [p["name"] for p in frappe.get_all("BP Project", fields=["name"])]
+        color_sources = (
+            proj_names
+            if proj_names
+            else [p["name"] for p in frappe.get_all("BP Project", fields=["name"])]
+        )
         for pn in color_sources:
             try:
                 for s in frappe.get_cached_doc("BP Project", pn).get_workflow_states():
@@ -7910,26 +9365,42 @@ def get_widget_data(config):
     elif group_by == "epic":
         ekeys = [k for k in groups if k and k != "(none)"]
         if ekeys:
-            for e in frappe.get_all("BP Epic", filters={"name": ["in", ekeys]}, fields=["name", "title", "color"]):
+            for e in frappe.get_all(
+                "BP Epic",
+                filters={"name": ["in", ekeys]},
+                fields=["name", "title", "color"],
+            ):
                 label_map[e["name"]] = e["title"]
                 color_map[e["name"]] = e["color"]
     elif group_by == "project":
         pkeys = [k for k in groups if k and k != "(none)"]
         if pkeys:
-            for p in frappe.get_all("BP Project", filters={"name": ["in", pkeys]}, fields=["name", "project_name", "project_color"]):
+            for p in frappe.get_all(
+                "BP Project",
+                filters={"name": ["in", pkeys]},
+                fields=["name", "project_name", "project_color"],
+            ):
                 label_map[p["name"]] = p["project_name"]
                 color_map[p["name"]] = p["project_color"]
 
     items = []
-    for i, (k, v) in enumerate(sorted(groups.items(), key=lambda kv: kv[1], reverse=True)):
-        items.append({
-            "label": label_map.get(k) or ("(none)" if k == "(none)" else k),
-            "value": round(v, 1),
-            "color": color_map.get(k) or _WIDGET_PALETTE[i % len(_WIDGET_PALETTE)],
-        })
-    return {"items": items, "total": round(sum(groups.values()), 1), "metric": metric, "group_by": group_by, "scope": scope}
-
-
+    for i, (k, v) in enumerate(
+        sorted(groups.items(), key=lambda kv: kv[1], reverse=True)
+    ):
+        items.append(
+            {
+                "label": label_map.get(k) or ("(none)" if k == "(none)" else k),
+                "value": round(v, 1),
+                "color": color_map.get(k) or _WIDGET_PALETTE[i % len(_WIDGET_PALETTE)],
+            }
+        )
+    return {
+        "items": items,
+        "total": round(sum(groups.values()), 1),
+        "metric": metric,
+        "group_by": group_by,
+        "scope": scope,
+    }
 
 
 @frappe.whitelist()
@@ -7941,12 +9412,14 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
     """
     if isinstance(filters_json, str):
         import json as _json
+
         filters_json = _json.loads(filters_json)
 
     # scope may arrive as a JSON-encoded list from the frontend
     if isinstance(scope, str) and scope.startswith("["):
         try:
             import json as _json
+
             scope = _json.loads(scope)
         except Exception:
             pass
@@ -7956,11 +9429,11 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
 
     # Map BQL filter keys to BP Task field names
     FILTER_MAP = {
-        "status":    "status",
-        "priority":  "priority",
-        "sprint":    "sprint",
+        "status": "status",
+        "priority": "priority",
+        "sprint": "sprint",
         "task_type": "task_type",
-        "epic":      "epic",
+        "epic": "epic",
     }
     for k, field in FILTER_MAP.items():
         if k in filters_json:
@@ -7982,9 +9455,19 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
     config = {"scope": proj_name or scope, "group_by": group_by, "metric": metric}
     # Temporarily override get_all to use our filters by calling core logic directly
     tasks = frappe.get_all(
-        "BP Task", filters=db_filters,
-        fields=["name", "status", "priority", "task_type", "project", "epic",
-                "story_points", "estimated_hours", "actual_hours"],
+        "BP Task",
+        filters=db_filters,
+        fields=[
+            "name",
+            "status",
+            "priority",
+            "task_type",
+            "project",
+            "epic",
+            "story_points",
+            "estimated_hours",
+            "actual_hours",
+        ],
     )
 
     def _mval(t):
@@ -7995,14 +9478,18 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
         names = [t["name"] for t in tasks]
         amap = {}
         if names:
-            for a in frappe.get_all("BP Task Assignee",
-                                    filters={"parenttype": "BP Task", "parent": ["in", names]},
-                                    fields=["parent", "user"]):
+            for a in frappe.get_all(
+                "BP Task Assignee",
+                filters={"parenttype": "BP Task", "parent": ["in", names]},
+                fields=["parent", "user"],
+            ):
                 amap.setdefault(a["parent"], []).append(a["user"])
         users = list({u for lst in amap.values() for u in lst})
         fn = {}
         if users:
-            for u in frappe.get_all("User", filters={"name": ["in", users]}, fields=["name", "full_name"]):
+            for u in frappe.get_all(
+                "User", filters={"name": ["in", users]}, fields=["name", "full_name"]
+            ):
                 fn[u["name"]] = u["full_name"] or u["name"]
         for t in tasks:
             for u in amap.get(t["name"], []) or ["Unassigned"]:
@@ -8011,8 +9498,14 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
         if not groups and tasks:
             groups["Unassigned"] = sum(_mval(t) for t in tasks)
     else:
-        key_field = {"sprint": "sprint", "task_type": "task_type", "epic": "epic",
-                     "priority": "priority", "status": "status", "project": "project"}.get(group_by, group_by)
+        key_field = {
+            "sprint": "sprint",
+            "task_type": "task_type",
+            "epic": "epic",
+            "priority": "priority",
+            "status": "status",
+            "project": "project",
+        }.get(group_by, group_by)
         for t in tasks:
             key = t.get(key_field) or "(none)"
             groups[key] = groups.get(key, 0) + _mval(t)
@@ -8021,7 +9514,11 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
     if group_by == "priority":
         color_map = dict(_WIDGET_PRIORITY)
     elif group_by == "status":
-        color_sources = proj_names if proj_names else [p["name"] for p in frappe.get_all("BP Project", fields=["name"])]
+        color_sources = (
+            proj_names
+            if proj_names
+            else [p["name"] for p in frappe.get_all("BP Project", fields=["name"])]
+        )
         for pn in color_sources:
             try:
                 for s in frappe.get_cached_doc("BP Project", pn).get_workflow_states():
@@ -8036,11 +9533,16 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
             "value": round(v, 1),
             "color": color_map.get(k) or _WIDGET_PALETTE[i % len(_WIDGET_PALETTE)],
         }
-        for i, (k, v) in enumerate(sorted(groups.items(), key=lambda kv: kv[1], reverse=True))
+        for i, (k, v) in enumerate(
+            sorted(groups.items(), key=lambda kv: kv[1], reverse=True)
+        )
     ]
-    return {"items": items, "total": round(sum(groups.values()), 1), "metric": metric, "group_by": group_by}
-
-
+    return {
+        "items": items,
+        "total": round(sum(groups.values()), 1),
+        "metric": metric,
+        "group_by": group_by,
+    }
 
 
 @frappe.whitelist()
@@ -8057,8 +9559,6 @@ def get_erpnext_departments():
         return departments
     except Exception:
         return []
-
-
 
 
 # get_margin_report was REMOVED here — the margin/profitability arithmetic
@@ -8082,7 +9582,6 @@ def get_erpnext_departments():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-
 @frappe.whitelist()
 def get_sprint_report(project, sprint_name):
     """Sprint completion analysis: committed vs added mid-sprint vs completed vs spillover.
@@ -8099,20 +9598,35 @@ def get_sprint_report(project, sprint_name):
     completed_statuses = set(proj.get_completed_statuses())
 
     def _d(v):
-        if not v: return None
-        if isinstance(v, datetime): return v.date()
-        if isinstance(v, date): return v
-        try: return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
-        except: return None
+        if not v:
+            return None
+        if isinstance(v, datetime):
+            return v.date()
+        if isinstance(v, date):
+            return v
+        try:
+            return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+        except:
+            return None
 
     start_date = _d(sprint.start_date)
-    end_date   = _d(sprint.end_date)
+    end_date = _d(sprint.end_date)
 
     tasks = frappe.get_all(
         "BP Task",
-        filters={"project": project, "sprint": sprint_name},
-        fields=["name", "title", "task_key", "status", "priority", "story_points",
-                "started_on", "completed_on", "creation", "docstatus"],
+        filters={"project": project, "sprint": sprint_name, "is_deleted": 0},
+        fields=[
+            "name",
+            "title",
+            "task_key",
+            "status",
+            "priority",
+            "story_points",
+            "started_on",
+            "completed_on",
+            "creation",
+            "docstatus",
+        ],
         order_by="creation asc",
     )
 
@@ -8132,18 +9646,20 @@ def get_sprint_report(project, sprint_name):
         task_creation = _d(t.get("creation"))
         assigned_date = assigned_at.get(t.name) or task_creation
 
-        is_committed = bool(start_date and assigned_date and assigned_date <= start_date)
+        is_committed = bool(
+            start_date and assigned_date and assigned_date <= start_date
+        )
         is_done = t.status in completed_statuses
 
         entry = {
-            "name":           t.name,
-            "task_key":       t.task_key,
-            "title":          t.title,
-            "status":         t.status,
-            "priority":       t.priority,
-            "story_points":   pts,
-            "is_done":        is_done,
-            "completed_on":   str(t.completed_on) if t.get("completed_on") else None,
+            "name": t.name,
+            "task_key": t.task_key,
+            "title": t.title,
+            "status": t.status,
+            "priority": t.priority,
+            "story_points": pts,
+            "is_done": is_done,
+            "completed_on": str(t.completed_on) if t.get("completed_on") else None,
         }
 
         if is_committed:
@@ -8166,6 +9682,7 @@ def get_sprint_report(project, sprint_name):
     burndown = None
     if start_date and end_date and end_date >= start_date:
         from datetime import timedelta
+
         total_pts = committed_pts + added_pts
         span = (end_date - start_date).days or 1
         last_day = min(end_date, date.today())
@@ -8173,7 +9690,9 @@ def get_sprint_report(project, sprint_name):
         done_events = [
             (_d(t.completed_on), float(t.get("story_points") or 0))
             for t in tasks
-            if t.status in completed_statuses and t.get("completed_on") and _d(t.completed_on)
+            if t.status in completed_statuses
+            and t.get("completed_on")
+            and _d(t.completed_on)
         ]
         days = []
         d = start_date
@@ -8190,37 +9709,44 @@ def get_sprint_report(project, sprint_name):
         burndown = {"total_points": round(total_pts, 1), "days": days}
 
     return {
-        "sprint":        sprint_name,
-        "sprint_label":  sprint.sprint_name,
-        "status":        sprint.status,
-        "start_date":    str(start_date) if start_date else None,
-        "end_date":      str(end_date) if end_date else None,
-        "goal":          sprint.goal,
+        "sprint": sprint_name,
+        "sprint_label": sprint.sprint_name,
+        "status": sprint.status,
+        "start_date": str(start_date) if start_date else None,
+        "end_date": str(end_date) if end_date else None,
+        "goal": sprint.goal,
         "summary": {
-            "total":           total,
-            "committed":       len(committed),
-            "added":           len(added),
-            "completed":       len(completed_tasks),
-            "spillover":       len(spillover),
-            "committed_pts":   round(committed_pts, 1),
-            "added_pts":       round(added_pts, 1),
-            "done_pts":        round(done_pts, 1),
+            "total": total,
+            "committed": len(committed),
+            "added": len(added),
+            "completed": len(completed_tasks),
+            "spillover": len(spillover),
+            "committed_pts": round(committed_pts, 1),
+            "added_pts": round(added_pts, 1),
+            "done_pts": round(done_pts, 1),
             "completion_rate": completion_rate,
         },
-        "committed":  committed,
-        "added":      added,
-        "completed":  completed_tasks,
-        "spillover":  spillover,
-        "burndown":   burndown,
+        "committed": committed,
+        "added": added,
+        "completed": completed_tasks,
+        "spillover": spillover,
+        "burndown": burndown,
     }
-
-
 
 
 @frappe.whitelist()
 def get_team_velocity(team, last_n_sprints=5):
     """Sprint velocity data for a team — completed points per sprint."""
     _check_team_permission(team, "Viewer")
+
+    # Constrain to caller's accessible projects
+    from batch_projects.permissions import get_accessible_projects
+
+    accessible = get_accessible_projects()
+    if accessible is not None and not accessible:
+        # No accessible projects — return zeros
+        return []
+
     sprints = frappe.get_all(
         "BP Sprint",
         filters={"team": team, "status": "Completed"},
@@ -8231,27 +9757,32 @@ def get_team_velocity(team, last_n_sprints=5):
 
     result = []
     for sprint in sprints:
+        filters = {"sprint": sprint["name"], "is_deleted": 0}
+        if accessible is not None:
+            filters["project"] = ["in", list(accessible)]
         issues = frappe.get_all(
             "BP Task",
-            filters={"sprint": sprint["name"]},
+            filters=filters,
             fields=["story_points", "status", "project"],
         )
-        total_points    = sum((i["story_points"] or 0) for i in issues)
+        total_points = sum((i["story_points"] or 0) for i in issues)
         completed_points = sum(
-            (i["story_points"] or 0) for i in issues
-            if i.get("project") and i["status"] in _get_completed_statuses_by_project(i["project"])
+            (i["story_points"] or 0)
+            for i in issues
+            if i.get("project")
+            and i["status"] in _get_completed_statuses_by_project(i["project"])
         )
-        result.append({
-            **sprint,
-            "total_points":     total_points,
-            "completed_points": completed_points,
-            "total_issues":     len(issues),
-        })
+        result.append(
+            {
+                **sprint,
+                "total_points": total_points,
+                "completed_points": completed_points,
+                "total_issues": len(issues),
+            }
+        )
 
     result.reverse()  # chronological
     return result
-
-
 
 
 @frappe.whitelist()
@@ -8264,41 +9795,60 @@ def get_team_dashboard(team):
 
     _check_team_permission(team, "Viewer")
 
-    tdoc         = frappe.get_doc("BP Team", team)
+    tdoc = frappe.get_doc("BP Team", team)
     member_users = [m.user for m in (tdoc.members or [])]
 
     # ── 30-day timesheet metrics ──────────────────────────────────────────
-    today   = date.today()
+    today = date.today()
     from_dt = (today - timedelta(days=30)).isoformat() + " 00:00:00"
-    to_dt   = today.isoformat()                        + " 23:59:59"
+    to_dt = today.isoformat() + " 23:59:59"
 
-    ts_data          = _timesheet_hours_by_user(member_users, from_dt, to_dt)
-    cap_by           = _get_member_capacities(member_users)
-    total_logged     = sum(ts_data.get(u, (0.0, 0.0))[0] for u in member_users)
-    total_billable   = sum(ts_data.get(u, (0.0, 0.0))[1] for u in member_users)
-    total_capacity   = sum(cap_by.get(u, 40.0) * 30 / 7 for u in member_users)
-    utilization_pct  = round(total_logged / total_capacity * 100, 1) if total_capacity > 0 else 0
-    billable_pct     = round(total_billable / total_logged * 100, 1) if total_logged > 0 else 0
+    ts_data = _timesheet_hours_by_user(member_users, from_dt, to_dt)
+    cap_by = _get_member_capacities(member_users)
+    total_logged = sum(ts_data.get(u, (0.0, 0.0))[0] for u in member_users)
+    total_billable = sum(ts_data.get(u, (0.0, 0.0))[1] for u in member_users)
+    total_capacity = sum(cap_by.get(u, 40.0) * 30 / 7 for u in member_users)
+    utilization_pct = (
+        round(total_logged / total_capacity * 100, 1) if total_capacity > 0 else 0
+    )
+    billable_pct = (
+        round(total_billable / total_logged * 100, 1) if total_logged > 0 else 0
+    )
 
     # ── Owned projects ────────────────────────────────────────────────────
     # Access filter — same reasoning as get_teams/get_team: a
     # project's `team` assignment and its own `visibility` are independent.
-    from batch_projects.permissions import accessible_project_filter, NO_ACCESSIBLE_PROJECTS
-    _owned_filters = accessible_project_filter({"team": team, "status": "Active"})
-    owned_projects = [] if _owned_filters is NO_ACCESSIBLE_PROJECTS else frappe.get_all(
-        "BP Project",
-        filters=_owned_filters,
-        fields=["name", "project_name", "key", "project_color", "project_icon"],
-        order_by="project_name asc",
+    from batch_projects.permissions import (
+        accessible_project_filter,
+        NO_ACCESSIBLE_PROJECTS,
     )
-    owned_names    = {p["name"] for p in owned_projects}
-    team_user_set  = set(member_users)
+
+    _owned_filters = accessible_project_filter({"team": team, "status": "Active"})
+    owned_projects = (
+        []
+        if _owned_filters is NO_ACCESSIBLE_PROJECTS
+        else frappe.get_all(
+            "BP Project",
+            filters=_owned_filters,
+            fields=["name", "project_name", "key", "project_color", "project_icon"],
+            order_by="project_name asc",
+        )
+    )
+    owned_names = {p["name"] for p in owned_projects}
+    team_user_set = set(member_users)
     for p in owned_projects:
-        p["open_count"]        = frappe.db.count("BP Task", _task_filters({
-            "project": p["name"],
-            "status":  ["not in", _get_completed_statuses_by_project(p["name"])],
-        }))
-        proj_mbrs              = frappe.get_all("BP Project Member", filters={"parent": p["name"]}, fields=["user"])
+        p["open_count"] = frappe.db.count(
+            "BP Task",
+            _task_filters(
+                {
+                    "project": p["name"],
+                    "status": ["not in", _get_completed_statuses_by_project(p["name"])],
+                }
+            ),
+        )
+        proj_mbrs = frappe.get_all(
+            "BP Project Member", filters={"parent": p["name"]}, fields=["user"]
+        )
         p["team_member_count"] = sum(1 for pm in proj_mbrs if pm.user in team_user_set)
 
     # ── Contributing-to (team members on non-owned active projects) ────────
@@ -8308,6 +9858,7 @@ def get_team_dashboard(team):
     # visibility — and _check_team_permission(team, "Viewer") is a low bar
     # (any authenticated System User, no membership required).
     from batch_projects.permissions import get_accessible_projects
+
     _accessible = get_accessible_projects()  # None = admin (all)
     if member_users and _accessible != set():
         contrib_rows = frappe.db.sql(
@@ -8325,29 +9876,42 @@ def get_team_dashboard(team):
               AND (%(unrestricted)s OR proj.name IN %(accessible)s)
             """,
             {
-                "users": member_users, "team": team,
+                "users": member_users,
+                "team": team,
                 "unrestricted": _accessible is None,
                 "accessible": list(_accessible) if _accessible else ["__none__"],
             },
             as_dict=True,
         )
         for p in contrib_rows:
-            p["open_count"]        = frappe.db.count("BP Task", _task_filters({
-                "project": p["name"],
-                "status":  ["not in", _get_completed_statuses_by_project(p["name"])],
-            }))
-            proj_mbrs              = frappe.get_all("BP Project Member", filters={"parent": p["name"]}, fields=["user"])
-            p["team_member_count"] = sum(1 for pm in proj_mbrs if pm.user in team_user_set)
+            p["open_count"] = frappe.db.count(
+                "BP Task",
+                _task_filters(
+                    {
+                        "project": p["name"],
+                        "status": [
+                            "not in",
+                            _get_completed_statuses_by_project(p["name"]),
+                        ],
+                    }
+                ),
+            )
+            proj_mbrs = frappe.get_all(
+                "BP Project Member", filters={"parent": p["name"]}, fields=["user"]
+            )
+            p["team_member_count"] = sum(
+                1 for pm in proj_mbrs if pm.user in team_user_set
+            )
     else:
         contrib_rows = []
 
     # ── 4-week capacity outlook ───────────────────────────────────────────
-    start_of_week    = today - timedelta(days=today.weekday())
-    weekly_team_cap  = sum(cap_by.get(u, 40.0) for u in member_users)
-    outlook          = []
+    start_of_week = today - timedelta(days=today.weekday())
+    weekly_team_cap = sum(cap_by.get(u, 40.0) for u in member_users)
+    outlook = []
     for i in range(4):
-        ws    = start_of_week + timedelta(weeks=i)
-        we    = ws + timedelta(days=6)
+        ws = start_of_week + timedelta(weeks=i)
+        we = ws + timedelta(days=6)
         alloc = 0.0
         if member_users:
             rows = frappe.db.sql(
@@ -8371,24 +9935,26 @@ def get_team_dashboard(team):
             )
             alloc = float(rows[0].alloc or 0) if rows else 0.0
         pct = round(alloc / weekly_team_cap * 100, 1) if weekly_team_cap > 0 else 0
-        outlook.append({
-            "label":      ws.strftime("%b %d"),
-            "week_start": ws.isoformat(),
-            "allocated":  round(alloc, 1),
-            "capacity":   round(weekly_team_cap, 1),
-            "pct":        pct,
-        })
+        outlook.append(
+            {
+                "label": ws.strftime("%b %d"),
+                "week_start": ws.isoformat(),
+                "allocated": round(alloc, 1),
+                "capacity": round(weekly_team_cap, 1),
+                "pct": pct,
+            }
+        )
 
     return {
         "metrics": {
-            "utilization_pct":     utilization_pct,
-            "logged_hours":        round(total_logged, 1),
-            "billable_pct":        billable_pct,
-            "owned_count":         len(owned_projects),
-            "contributing_count":  len(contrib_rows),
+            "utilization_pct": utilization_pct,
+            "logged_hours": round(total_logged, 1),
+            "billable_pct": billable_pct,
+            "owned_count": len(owned_projects),
+            "contributing_count": len(contrib_rows),
         },
-        "owned_projects":   owned_projects,
-        "contributing_to":  list(contrib_rows),
+        "owned_projects": owned_projects,
+        "contributing_to": list(contrib_rows),
         "capacity_outlook": outlook,
     }
 
@@ -8396,7 +9962,6 @@ def get_team_dashboard(team):
 # ─────────────────────────────────────────────────────────────────────────────
 # SHARED HELPERS — PEOPLE / WORKLOAD / UTILIZATION
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 
 @frappe.whitelist()
@@ -8408,6 +9973,7 @@ def get_team_capacity_heatmap(team=None):
     """
     from datetime import date, timedelta
     from collections import defaultdict
+
     _require_system_user()
 
     today = date.today()
@@ -8420,26 +9986,32 @@ def get_team_capacity_heatmap(team=None):
             days.append(d)
         d += timedelta(days=1)
     day_keys = [d.isoformat() for d in days]
-    day_set  = set(day_keys)
+    day_set = set(day_keys)
 
     # Resolve members
     if team:
         _check_team_permission(team, "Viewer")
-        tdoc         = frappe.get_doc("BP Team", team)
+        tdoc = frappe.get_doc("BP Team", team)
         member_users = [m.user for m in (tdoc.members or [])]
-        cap_by       = {m.user: float(m.capacity_hours_per_sprint or 40) / 5 for m in tdoc.members}
+        cap_by = {
+            m.user: float(m.capacity_hours_per_sprint or 40) / 5 for m in tdoc.members
+        }
     else:
         member_users = _all_tracked_users()
-        weekly_caps  = _get_member_capacities(member_users)
-        cap_by       = {u: weekly_caps.get(u, 40.0) / 5 for u in member_users}
+        weekly_caps = _get_member_capacities(member_users)
+        cap_by = {u: weekly_caps.get(u, 40.0) / 5 for u in member_users}
 
     if not member_users:
         return {"days": day_keys, "members": []}
 
-    user_info = {u.name: u for u in frappe.get_all(
-        "User", filters={"name": ["in", member_users]},
-        fields=["name", "full_name", "user_image"]
-    )}
+    user_info = {
+        u.name: u
+        for u in frappe.get_all(
+            "User",
+            filters={"name": ["in", member_users]},
+            fields=["name", "full_name", "user_image"],
+        )
+    }
 
     # Project-visibility filter — this query never
     # joined BP Project at all, so a Viewer on one small project could see
@@ -8447,6 +10019,7 @@ def get_team_capacity_heatmap(team=None):
     # user across the whole org, including private/team-restricted
     # projects. Same access-filter pattern as get_timesheets right above.
     from batch_projects.permissions import get_accessible_projects
+
     accessible = get_accessible_projects()
     if accessible is not None and not accessible:
         return {"days": day_keys, "members": []}
@@ -8468,9 +10041,16 @@ def get_team_capacity_heatmap(team=None):
             WHERE ta.user IN %(users)s
               {project_clause}
             ORDER BY t.due_date ASC
-            """.format(project_clause="AND t.project IN %(accessible)s" if accessible is not None else ""),
-            {"users": member_users, "end": window_end,
-             "accessible": list(accessible) if accessible is not None else []},
+            """.format(
+                project_clause=(
+                    "AND t.project IN %(accessible)s" if accessible is not None else ""
+                )
+            ),
+            {
+                "users": member_users,
+                "end": window_end,
+                "accessible": list(accessible) if accessible is not None else [],
+            },
             as_dict=True,
         )
     except Exception:
@@ -8484,6 +10064,7 @@ def get_team_capacity_heatmap(team=None):
         if not isinstance(due, date):
             try:
                 from datetime import datetime
+
                 due = datetime.strptime(str(due), "%Y-%m-%d").date()
             except Exception:
                 continue
@@ -8492,6 +10073,7 @@ def get_team_capacity_heatmap(team=None):
         if start and not isinstance(start, date):
             try:
                 from datetime import datetime
+
                 start = datetime.strptime(str(start), "%Y-%m-%d").date()
             except Exception:
                 start = None
@@ -8500,7 +10082,7 @@ def get_team_capacity_heatmap(team=None):
 
         # Working days in range (clamp to window)
         range_start = max(start or due, today)
-        range_end   = due
+        range_end = due
         work_days_in_range = []
         cur = range_start
         while cur <= range_end:
@@ -8519,22 +10101,26 @@ def get_team_capacity_heatmap(team=None):
 
     members_out = []
     for user in member_users:
-        info     = user_info.get(user, frappe._dict())
+        info = user_info.get(user, frappe._dict())
         daily_cap = cap_by.get(user, 8.0)
         allocations = {}
         for dk in day_keys:
             h = round(member_day_hours[user].get(dk, 0.0), 1)
             allocations[dk] = h
 
-        members_out.append({
-            "user":       user,
-            "full_name":  info.get("full_name") or user,
-            "user_image": info.get("user_image"),
-            "initials":   "".join(w[0].upper() for w in (info.get("full_name") or user).split()[:2]),
-            "color":      _avatar_color(user),
-            "daily_cap":  daily_cap,
-            "allocations": allocations,
-        })
+        members_out.append(
+            {
+                "user": user,
+                "full_name": info.get("full_name") or user,
+                "user_image": info.get("user_image"),
+                "initials": "".join(
+                    w[0].upper() for w in (info.get("full_name") or user).split()[:2]
+                ),
+                "color": _avatar_color(user),
+                "daily_cap": daily_cap,
+                "allocations": allocations,
+            }
+        )
 
     members_out.sort(key=lambda m: m["full_name"])
     return {"days": day_keys, "members": members_out}
@@ -8547,25 +10133,25 @@ def get_team_capacity_heatmap(team=None):
 # Triggers offered in the builder, with human labels.
 _AUTOMATION_TRIGGERS = [
     {"value": "task.status_changed", "label": "When a task's status changes"},
-    {"value": "task.created",        "label": "When a task is created"},
-    {"value": "task.updated",        "label": "When a task is updated"},
-    {"value": "task.assigned",       "label": "When a task is assigned"},
-    {"value": "task.due_soon",       "label": "When a task is due soon"},
-    {"value": "comment.added",       "label": "When a comment is added"},
-    {"value": "task.deleted",        "label": "When a task is deleted"},
-    {"value": "task.trashed",        "label": "When a task is moved to trash"},
-    {"value": "task.restored",       "label": "When a task is restored from trash"},
+    {"value": "task.created", "label": "When a task is created"},
+    {"value": "task.updated", "label": "When a task is updated"},
+    {"value": "task.assigned", "label": "When a task is assigned"},
+    {"value": "task.due_soon", "label": "When a task is due soon"},
+    {"value": "comment.added", "label": "When a comment is added"},
+    {"value": "task.deleted", "label": "When a task is deleted"},
+    {"value": "task.trashed", "label": "When a task is moved to trash"},
+    {"value": "task.restored", "label": "When a task is restored from trash"},
 ]
 
 _AUTOMATION_ACTIONS = [
     {"value": "Change Status", "label": "Change the status"},
-    {"value": "Assign Issue",  "label": "Assign the task"},
-    {"value": "Set Priority",  "label": "Set the priority"},
-    {"value": "Set Due Date",  "label": "Set the due date"},
-    {"value": "Add Label",     "label": "Add label(s)"},
-    {"value": "Add Comment",   "label": "Post a comment"},
-    {"value": "Notify",        "label": "Send a notification"},
-    {"value": "Create Issue",  "label": "Create a new task"},
+    {"value": "Assign Issue", "label": "Assign the task"},
+    {"value": "Set Priority", "label": "Set the priority"},
+    {"value": "Set Due Date", "label": "Set the due date"},
+    {"value": "Add Label", "label": "Add label(s)"},
+    {"value": "Add Comment", "label": "Post a comment"},
+    {"value": "Notify", "label": "Send a notification"},
+    {"value": "Create Issue", "label": "Create a new task"},
 ]
 
 _AUTOMATION_OPERATORS = [
@@ -8584,26 +10170,45 @@ _AUTOMATION_OPERATORS = [
 ]
 
 
-
-
 @frappe.whitelist()
-def update_team(team, team_name=None, team_key=None, team_color=None,
-                team_icon=None, description=None, lead=None,
-                department=None, company=None, capacity_hours_per_sprint=None,
-                default_workflow_template=None, parent_team=None, team_type=None):
+def update_team(
+    team,
+    team_name=None,
+    team_key=None,
+    team_color=None,
+    team_icon=None,
+    description=None,
+    lead=None,
+    department=None,
+    company=None,
+    capacity_hours_per_sprint=None,
+    default_workflow_template=None,
+    parent_team=None,
+    team_type=None,
+):
     _check_team_permission(team, "Manager")
     doc = frappe.get_doc("BP Team", team)
-    if team_name  is not None: doc.team_name  = team_name
-    if team_key   is not None: doc.team_key   = team_key
-    if team_color is not None: doc.team_color = team_color
-    if team_icon  is not None: doc.team_icon  = team_icon
-    if description is not None: doc.description = description
+    if team_name is not None:
+        doc.team_name = team_name
+    if team_key is not None:
+        doc.team_key = team_key
+    if team_color is not None:
+        doc.team_color = team_color
+    if team_icon is not None:
+        doc.team_icon = team_icon
+    if description is not None:
+        doc.description = description
     # Use form_dict check so JS null can clear nullable Link fields
-    if "lead"       in frappe.form_dict: doc.lead       = lead or None
-    if "department" in frappe.form_dict: doc.department = department or None
-    if company     is not None: doc.company = company
-    if parent_team is not None: doc.parent_team = parent_team or None
-    if team_type   is not None: doc.team_type   = team_type
+    if "lead" in frappe.form_dict:
+        doc.lead = lead or None
+    if "department" in frappe.form_dict:
+        doc.department = department or None
+    if company is not None:
+        doc.company = company
+    if parent_team is not None:
+        doc.parent_team = parent_team or None
+    if team_type is not None:
+        doc.team_type = team_type
     if capacity_hours_per_sprint is not None:
         doc.capacity_hours_per_sprint = float(capacity_hours_per_sprint)
     if default_workflow_template is not None:
@@ -8613,29 +10218,48 @@ def update_team(team, team_name=None, team_key=None, team_color=None,
     return doc.as_dict()
 
 
-
-
 @frappe.whitelist()
 def update_team_members(team, members):
     """Replace team member list. members = [{user, role, capacity_hours_per_sprint}]"""
     _check_team_permission(team, "Admin")
     if isinstance(members, str):
         members = frappe.parse_json(members)
+
+    # Incremental seat check: new unseated users before the save
+    current_users = {
+        r.user
+        for r in frappe.get_all(
+            "BP Team Member", filters={"parent": team}, fields=["user"]
+        )
+    }
+    from batch_projects.entitlements import assert_seats_available, is_seated
+
+    new_users = [
+        m["user"]
+        for m in members
+        if m["user"] not in current_users and not is_seated(m["user"])
+    ]
+    if new_users:
+        assert_seats_available(len(new_users))
+
     doc = frappe.get_doc("BP Team", team)
     doc.members = []
     for m in members:
         user_full = frappe.db.get_value("User", m["user"], "full_name") or m["user"]
-        doc.append("members", {
-            "user":                  m["user"],
-            "full_name":             user_full,
-            "role":                  m.get("role", "Member"),
-            "capacity_hours_per_sprint": float(m.get("capacity_hours_per_sprint", 40)),
-        })
+        doc.append(
+            "members",
+            {
+                "user": m["user"],
+                "full_name": user_full,
+                "role": m.get("role", "Member"),
+                "capacity_hours_per_sprint": float(
+                    m.get("capacity_hours_per_sprint", 40)
+                ),
+            },
+        )
     doc.save(ignore_permissions=True)
     frappe.db.commit()
     return [m.as_dict() for m in doc.members]
-
-
 
 
 @frappe.whitelist()
@@ -8647,17 +10271,18 @@ def update_team_links(team, links):
     doc = frappe.get_doc("BP Team", team)
     doc.team_links = []
     for l in links:
-        doc.append("team_links", {
-            "link_type": l.get("link_type", "External URL"),
-            "label":     l.get("label", ""),
-            "url":       l.get("url", ""),
-            "project":   l.get("project", ""),
-        })
+        doc.append(
+            "team_links",
+            {
+                "link_type": l.get("link_type", "External URL"),
+                "label": l.get("label", ""),
+                "url": l.get("url", ""),
+                "project": l.get("project", ""),
+            },
+        )
     doc.save(ignore_permissions=True)
     frappe.db.commit()
     return [l.as_dict() for l in doc.team_links]
-
-
 
 
 @frappe.whitelist()
@@ -8667,10 +10292,23 @@ def get_automation_rules(project):
     rows = frappe.get_all(
         "BP Automation Rule",
         filters={"project": project},
-        fields=["name", "rule_name", "description", "is_active", "trigger_event",
-                "conditions", "action_type", "action_config", "actions",
-                "scope", "project_filter", "owner", "modified",
-                "last_run_at", "last_run_status"],
+        fields=[
+            "name",
+            "rule_name",
+            "description",
+            "is_active",
+            "trigger_event",
+            "conditions",
+            "action_type",
+            "action_config",
+            "actions",
+            "scope",
+            "project_filter",
+            "owner",
+            "modified",
+            "last_run_at",
+            "last_run_status",
+        ],
         order_by="modified desc",
     )
     for r in rows:
@@ -8685,8 +10323,6 @@ def get_automation_rules(project):
     return rows
 
 
-
-
 @frappe.whitelist()
 def get_automation_runs(project, limit=40):
     """Recent automation run history for a project (newest first)."""
@@ -8694,13 +10330,20 @@ def get_automation_runs(project, limit=40):
     return frappe.get_all(
         "BP Automation Run",
         filters={"project": project},
-        fields=["name", "rule", "rule_name", "task_key", "trigger_event",
-                "action_type", "status", "message", "run_at"],
+        fields=[
+            "name",
+            "rule",
+            "rule_name",
+            "task_key",
+            "trigger_event",
+            "action_type",
+            "status",
+            "message",
+            "run_at",
+        ],
         order_by="run_at desc",
         limit_page_length=frappe.utils.cint(limit) or 40,
     )
-
-
 
 
 @frappe.whitelist()
@@ -8711,6 +10354,7 @@ def toggle_automation_rule(rule, is_active):
     if active:
         # Enabling consumes the premium feature; disabling is always allowed.
         from batch_projects.entitlements import require_feature
+
         require_feature("automations")
     doc.is_active = active
     doc.save(ignore_permissions=True)
@@ -8718,14 +10362,20 @@ def toggle_automation_rule(rule, is_active):
     return {"name": doc.name, "is_active": doc.is_active}
 
 
-
-
 @frappe.whitelist()
-def update_automation_rule(rule, rule_name=None, trigger_event=None, action_type=None,
-                           conditions=None, action_config=None, is_active=None):
+def update_automation_rule(
+    rule,
+    rule_name=None,
+    trigger_event=None,
+    action_type=None,
+    conditions=None,
+    action_config=None,
+    is_active=None,
+):
     doc = frappe.get_doc("BP Automation Rule", rule)
     _check_permission(doc.project, "BP Admin")
     from batch_projects.entitlements import require_feature
+
     require_feature("automations")
 
     if rule_name is not None:
@@ -8746,7 +10396,6 @@ def update_automation_rule(rule, rule_name=None, trigger_event=None, action_type
     return doc.as_dict()
 
 
-
 # get_portfolio was REMOVED here — the cross-project rollup (task
 # categorisation, overdue counting, health verdict, completion %, per-project
 # money masking, ordering and summary) now lives in bp-gateway's
@@ -8763,8 +10412,6 @@ def update_automation_rule(rule, rule_name=None, trigger_event=None, action_type
 # projectHealth is its counterpart and the two must be changed together.
 
 
-
-
 def _company_currency(company=None):
     """Return the currency for a given company, or the site default."""
     if company:
@@ -8775,10 +10422,23 @@ def _company_currency(company=None):
 
 
 _ERP_DOC_EVENT_DOCTYPES = [
-    "Sales Invoice", "Sales Order", "Purchase Invoice", "Purchase Order",
-    "Payment Entry", "Delivery Note", "Quotation", "Journal Entry",
-    "Customer", "Supplier", "Lead", "Opportunity", "Project",
-    "Timesheet", "Expense Claim", "Stock Entry", "Work Order",
+    "Sales Invoice",
+    "Sales Order",
+    "Purchase Invoice",
+    "Purchase Order",
+    "Payment Entry",
+    "Delivery Note",
+    "Quotation",
+    "Journal Entry",
+    "Customer",
+    "Supplier",
+    "Lead",
+    "Opportunity",
+    "Project",
+    "Timesheet",
+    "Expense Claim",
+    "Stock Entry",
+    "Work Order",
 ]
 
 
@@ -8812,6 +10472,7 @@ def get_erp_doctype_fields_readonly(doctype):
     if not frappe.has_permission(doctype, "read"):
         return []
     from batch_projects.api.erp_link import _doctype_field_rows
+
     return _doctype_field_rows(doctype, include_read_only=True)
 
 
@@ -8857,15 +10518,20 @@ def get_field_value_choices(doctype, fieldname, project=None):
 
     if doctype == "BP Task" and fieldname == "status":
         from batch_projects.permissions import get_accessible_projects
+
         if project:
             if not frappe.db.exists("BP Project", project):
                 return []
             accessible = get_accessible_projects()
             if accessible is not None and project not in accessible:
                 return []
-            return [s.get("name") for s in _parse_json(
-                frappe.db.get_value("BP Project", project, "workflow_states"), []
-            ) if s.get("name")]
+            return [
+                s.get("name")
+                for s in _parse_json(
+                    frappe.db.get_value("BP Project", project, "workflow_states"), []
+                )
+                if s.get("name")
+            ]
 
         accessible = get_accessible_projects()
         filters = {"name": ["in", list(accessible)]} if accessible is not None else {}
@@ -8887,8 +10553,16 @@ def get_field_value_choices(doctype, fieldname, project=None):
     # Long-text fieldtypes are never enum-like, whatever the data happens to
     # look like — skip the query entirely rather than scanning a big column
     # just to throw the answer away on the cardinality check below.
-    if field and field.fieldtype in ("Text", "Small Text", "Long Text", "Text Editor",
-                                     "Code", "HTML Editor", "Markdown Editor", "JSON"):
+    if field and field.fieldtype in (
+        "Text",
+        "Small Text",
+        "Long Text",
+        "Text Editor",
+        "Code",
+        "HTML Editor",
+        "Markdown Editor",
+        "JSON",
+    ):
         return []
 
     # Grounded fallback: real distinct values, not a schema guess. Scoped by
@@ -8896,9 +10570,12 @@ def get_field_value_choices(doctype, fieldname, project=None):
     # never leaks a value from a record the caller couldn't otherwise see.
     # Fetch one MORE than the ceiling so "did we exceed it?" is answerable
     # without a second COUNT(DISTINCT) round trip.
-    rows = frappe.get_list(doctype, fields=[fieldname], distinct=True,
-                           limit_page_length=_ENUM_MAX_CARDINALITY + 1, order_by=fieldname)
+    rows = frappe.get_list(
+        doctype,
+        fields=[fieldname],
+        distinct=True,
+        limit_page_length=_ENUM_MAX_CARDINALITY + 1,
+        order_by=fieldname,
+    )
     values = [r[fieldname] for r in rows if r.get(fieldname)]
     return [] if len(values) > _ENUM_MAX_CARDINALITY else values
-
-

@@ -35,11 +35,13 @@ from batch_projects.api import custom_fields as _cf
 
 def _guard():
     from batch_projects.gateway_guard import verify_gateway_request
+
     verify_gateway_request()
 
 
 def _require_system_user():
     from batch_projects.api.board import _require_system_user as _rsu
+
     _rsu()
 
 
@@ -71,7 +73,8 @@ def _template_dict(doc, usage_count=None) -> dict:
         "billing": _parse_json(doc.billing_json, {}),
         "task_count": len(tasks),
         "automation_count": len(automations),
-        "custom_field_count": len(cf.get("global_ids", [])) + len(cf.get("owner_fields", [])),
+        "custom_field_count": len(cf.get("global_ids", []))
+        + len(cf.get("owner_fields", [])),
         "modified": doc.modified,
         "creation": doc.creation,
         "owner": doc.owner,
@@ -88,6 +91,7 @@ def _require_save_permission(project):
 
 # ─── LIST / READ ─────────────────────────────────────────────────────────────
 
+
 @frappe.whitelist()
 def list_project_templates():
     """Every user template — workspace-wide, not project-scoped (mirrors the
@@ -98,12 +102,15 @@ def list_project_templates():
     create_project_from_template), not a query per template."""
     _require_system_user()
     names = frappe.get_all(
-        "BP Project Template", pluck="name", order_by="template_name asc",
+        "BP Project Template",
+        pluck="name",
+        order_by="template_name asc",
     )
     if not names:
         return []
     usage_rows = frappe.get_all(
-        "BP Project", filters={"template_used": ["like", "user:%"]},
+        "BP Project",
+        filters={"template_used": ["like", "user:%"]},
         fields=["template_used"],
     )
     usage_by_template = {}
@@ -111,7 +118,9 @@ def list_project_templates():
         tpl_name = (r["template_used"] or "").split("user:", 1)[-1]
         usage_by_template[tpl_name] = usage_by_template.get(tpl_name, 0) + 1
     return [
-        _template_dict(frappe.get_doc("BP Project Template", n), usage_by_template.get(n, 0))
+        _template_dict(
+            frappe.get_doc("BP Project Template", n), usage_by_template.get(n, 0)
+        )
         for n in names
     ]
 
@@ -124,11 +133,14 @@ def get_project_template(template):
     out = _template_dict(doc)
     out["tasks"] = _parse_json(doc.tasks_json, [])
     out["automations"] = _parse_json(doc.automations_json, [])
-    out["custom_fields"] = _parse_json(doc.custom_fields_json, {"global_ids": [], "owner_fields": []})
+    out["custom_fields"] = _parse_json(
+        doc.custom_fields_json, {"global_ids": [], "owner_fields": []}
+    )
     return out
 
 
 # ─── SNAPSHOT (save as template) ─────────────────────────────────────────────
+
 
 def _snapshot_custom_fields(project):
     """{global_ids: [{id, required}], owner_fields: [{old_id, ...full def}]}
@@ -138,19 +150,21 @@ def _snapshot_custom_fields(project):
     global_ids, owner_fields = [], []
     for link, cf in _cf._attached_fields(project, "all"):
         if cf.owner_project == project:
-            owner_fields.append({
-                "old_id": cf.name,
-                "field_label": cf.field_label,
-                "description": cf.description or "",
-                "field_type": cf.field_type,
-                "options": _parse_json(cf.options_json, []),
-                "applies_to": cf.applies_to or "Tasks",
-                "view_role": cf.view_role or "Viewer",
-                "edit_role": cf.edit_role or "Member",
-                "conditional_rules": _parse_json(cf.conditional_rules_json, []),
-                "show_in_list": bool(cf.show_in_list),
-                "required": bool(link.required),
-            })
+            owner_fields.append(
+                {
+                    "old_id": cf.name,
+                    "field_label": cf.field_label,
+                    "description": cf.description or "",
+                    "field_type": cf.field_type,
+                    "options": _parse_json(cf.options_json, []),
+                    "applies_to": cf.applies_to or "Tasks",
+                    "view_role": cf.view_role or "Viewer",
+                    "edit_role": cf.edit_role or "Member",
+                    "conditional_rules": _parse_json(cf.conditional_rules_json, []),
+                    "show_in_list": bool(cf.show_in_list),
+                    "required": bool(link.required),
+                }
+            )
         else:
             global_ids.append({"id": cf.name, "required": bool(link.required)})
     return {"global_ids": global_ids, "owner_fields": owner_fields}
@@ -166,26 +180,51 @@ def _snapshot_tasks(project, project_start_date):
     from frappe.utils import getdate
 
     rows = frappe.get_all(
-        "BP Task", filters={"project": project},
-        fields=["name", "title", "description", "task_type", "status", "priority",
-                "story_points", "labels", "estimated_hours", "billable",
-                "custom_field_values", "parent_task", "start_date", "due_date"],
+        "BP Task",
+        filters={"project": project, "is_deleted": 0},
+        fields=[
+            "name",
+            "title",
+            "description",
+            "task_type",
+            "status",
+            "priority",
+            "story_points",
+            "labels",
+            "estimated_hours",
+            "billable",
+            "custom_field_values",
+            "parent_task",
+            "start_date",
+            "due_date",
+        ],
         order_by="creation asc",
     )
     idx_of = {r.name: i for i, r in enumerate(rows)}
     start = getdate(project_start_date) if project_start_date else None
 
-    links = frappe.get_all(
-        "BP Task Link",
-        filters={"parent": ["in", [r.name for r in rows]], "link_type": "is blocked by"},
-        fields=["parent", "linked_task", "dep_type", "lag_days"],
-    ) if rows else []
+    links = (
+        frappe.get_all(
+            "BP Task Link",
+            filters={
+                "parent": ["in", [r.name for r in rows]],
+                "link_type": "is blocked by",
+            },
+            fields=["parent", "linked_task", "dep_type", "lag_days"],
+        )
+        if rows
+        else []
+    )
     deps_by_task = {}
     for l in links:
         if l.linked_task in idx_of:
-            deps_by_task.setdefault(l.parent, []).append({
-                "idx": idx_of[l.linked_task], "dep_type": l.dep_type or "FS", "lag_days": l.lag_days or 0,
-            })
+            deps_by_task.setdefault(l.parent, []).append(
+                {
+                    "idx": idx_of[l.linked_task],
+                    "dep_type": l.dep_type or "FS",
+                    "lag_days": l.lag_days or 0,
+                }
+            )
 
     def _offset(d):
         if not (start and d):
@@ -194,25 +233,39 @@ def _snapshot_tasks(project, project_start_date):
 
     tasks = []
     for r in rows:
-        tasks.append({
-            "title": r.title, "description": r.description or "",
-            "task_type": r.task_type or "Task", "status": r.status,
-            "priority": r.priority or "Medium", "story_points": r.story_points or 0,
-            "labels": _parse_json(r.labels, []),
-            "estimated_hours": r.estimated_hours or 0, "billable": bool(r.billable),
-            "custom_field_values": _parse_json(r.custom_field_values, {}),
-            "parent_idx": idx_of.get(r.parent_task) if r.parent_task else None,
-            "depends_on": deps_by_task.get(r.name, []),
-            "start_offset_days": _offset(r.start_date),
-            "due_offset_days": _offset(r.due_date),
-        })
+        tasks.append(
+            {
+                "title": r.title,
+                "description": r.description or "",
+                "task_type": r.task_type or "Task",
+                "status": r.status,
+                "priority": r.priority or "Medium",
+                "story_points": r.story_points or 0,
+                "labels": _parse_json(r.labels, []),
+                "estimated_hours": r.estimated_hours or 0,
+                "billable": bool(r.billable),
+                "custom_field_values": _parse_json(r.custom_field_values, {}),
+                "parent_idx": idx_of.get(r.parent_task) if r.parent_task else None,
+                "depends_on": deps_by_task.get(r.name, []),
+                "start_offset_days": _offset(r.start_date),
+                "due_offset_days": _offset(r.due_date),
+            }
+        )
     return tasks
 
 
 @frappe.whitelist()
-def save_project_as_template(project, template_name, description="", category="",
-                              icon=None, color=None,
-                              include_tasks=1, include_automations=1, include_custom_fields=1):
+def save_project_as_template(
+    project,
+    template_name,
+    description="",
+    category="",
+    icon=None,
+    color=None,
+    include_tasks=1,
+    include_automations=1,
+    include_custom_fields=1,
+):
     _guard()
     _require_save_permission(project)
     require_feature("templates")
@@ -253,20 +306,23 @@ def save_project_as_template(project, template_name, description="", category=""
     tpl.labels_json = proj.labels or "[]"
     tpl.enabled_views_json = proj.enabled_views or "[]"
     tpl.default_view = proj.default_view or "summary"
-    tpl.billing_json = json.dumps({
-        "project_type": proj.project_type or "internal",
-        "hourly_rate": float(proj.hourly_rate or 0),
-        "retainer_hours": int(proj.retainer_hours or 0),
-        # Defaults only — create_project_from_template lets the wizard
-        # override every one of these (a fixed-price template without a
-        # budget default would otherwise hard-fail create_project's
-        # "Total budget is required" validation).
-        "budget_amount": float(proj.budget_amount or 0),
-        "currency": proj.currency or "",
-    })
+    tpl.billing_json = json.dumps(
+        {
+            "project_type": proj.project_type or "internal",
+            "hourly_rate": float(proj.hourly_rate or 0),
+            "retainer_hours": int(proj.retainer_hours or 0),
+            # Defaults only — create_project_from_template lets the wizard
+            # override every one of these (a fixed-price template without a
+            # budget default would otherwise hard-fail create_project's
+            # "Total budget is required" validation).
+            "budget_amount": float(proj.budget_amount or 0),
+            "currency": proj.currency or "",
+        }
+    )
 
     tpl.custom_fields_json = json.dumps(
-        _snapshot_custom_fields(project) if int(include_custom_fields or 0)
+        _snapshot_custom_fields(project)
+        if int(include_custom_fields or 0)
         else {"global_ids": [], "owner_fields": []}
     )
 
@@ -276,14 +332,29 @@ def save_project_as_template(project, template_name, description="", category=""
         # project via project_filter isn't "this project's own" automation
         # and must never leak into a template as if it were.
         automations = frappe.get_all(
-            "BP Automation Rule", filters={"scope": "project", "project": project},
-            fields=["rule_name", "trigger_event", "trigger_config", "conditions",
-                     "actions", "action_type", "action_config", "is_active"],
+            "BP Automation Rule",
+            filters={"scope": "project", "project": project},
+            fields=[
+                "rule_name",
+                "trigger_event",
+                "trigger_config",
+                "conditions",
+                "actions",
+                "action_type",
+                "action_config",
+                "is_active",
+            ],
         )
         for a in automations:
             a["actions"] = _parse_json(a.get("actions"), []) or (
-                [{"type": a.get("action_type"), "config": _parse_json(a.get("action_config"), {})}]
-                if a.get("action_type") else []
+                [
+                    {
+                        "type": a.get("action_type"),
+                        "config": _parse_json(a.get("action_config"), {}),
+                    }
+                ]
+                if a.get("action_type")
+                else []
             )
             a["trigger_config"] = _parse_json(a.get("trigger_config"), {})
             a["conditions"] = _parse_json(a.get("conditions"), [])
@@ -304,8 +375,9 @@ def save_project_as_template(project, template_name, description="", category=""
 
 
 @frappe.whitelist()
-def update_project_template(template, template_name=None, description=None,
-                             category=None, icon=None, color=None):
+def update_project_template(
+    template, template_name=None, description=None, category=None, icon=None, color=None
+):
     """Rename/describe only — snapshots are immutable. Refresh = re-save
     from the source project (a new template), not an edit of this one."""
     _guard()
@@ -314,7 +386,9 @@ def update_project_template(template, template_name=None, description=None,
     if doc.source_project:
         _require_save_permission(doc.source_project)
     elif not access.is_workspace_admin():
-        frappe.throw("You need workspace admin access for this.", frappe.PermissionError)
+        frappe.throw(
+            "You need workspace admin access for this.", frappe.PermissionError
+        )
 
     if template_name is not None:
         doc.template_name = template_name.strip()
@@ -340,7 +414,9 @@ def delete_project_template(template):
     if doc.source_project:
         _require_save_permission(doc.source_project)
     elif not access.is_workspace_admin():
-        frappe.throw("You need workspace admin access for this.", frappe.PermissionError)
+        frappe.throw(
+            "You need workspace admin access for this.", frappe.PermissionError
+        )
     frappe.delete_doc("BP Project Template", template, ignore_permissions=True)
     frappe.db.commit()
     return {"ok": True}
@@ -348,10 +424,19 @@ def delete_project_template(template):
 
 # ─── CREATE FROM TEMPLATE ─────────────────────────────────────────────────────
 
+
 @frappe.whitelist()
-def create_project_from_template(template, project_name, key, start_date=None, client=None,
-                                  budget_amount=None, hourly_rate=None, retainer_hours=None,
-                                  currency=None):
+def create_project_from_template(
+    template,
+    project_name,
+    key,
+    start_date=None,
+    client=None,
+    budget_amount=None,
+    hourly_rate=None,
+    retainer_hours=None,
+    currency=None,
+):
     # Same bar as create_project itself (any real system user, no special
     # role — the new project doesn't exist yet, so there's no project-role
     # to check against) — the workspace-admin-or-project-admin gate applies
@@ -359,7 +444,12 @@ def create_project_from_template(template, project_name, key, start_date=None, c
     _require_system_user()
     require_feature("templates")
 
-    from batch_projects.api.board import create_project, create_task, create_automation_rule, add_task_link
+    from batch_projects.api.board import (
+        create_project,
+        create_task,
+        create_automation_rule,
+        add_task_link,
+    )
     from frappe.utils import add_days, getdate
 
     tpl = frappe.get_doc("BP Project Template", template)
@@ -371,9 +461,15 @@ def create_project_from_template(template, project_name, key, start_date=None, c
     # unfixable combination HERE, before any document exists (create_project
     # would throw the same thing, but a clear message beats a generic one
     # and nothing has been committed yet either way).
-    budget = budget_amount if budget_amount not in (None, "", 0, "0") else billing.get("budget_amount")
+    budget = (
+        budget_amount
+        if budget_amount not in (None, "", 0, "0")
+        else billing.get("budget_amount")
+    )
     if ptype == "fixed" and not budget:
-        frappe.throw("This template creates a fixed-price project — a total budget is required.")
+        frappe.throw(
+            "This template creates a fixed-price project — a total budget is required."
+        )
     if ptype != "internal" and not client:
         frappe.throw("This template creates a billable project — pick a client first.")
 
@@ -406,17 +502,24 @@ def create_project_from_template(template, project_name, key, start_date=None, c
         frappe.db.set_value("BP Project", new_project, updates)
 
     # ── Custom fields — owner fields FIRST (new ids), then global attach ────
-    cf_snapshot = _parse_json(tpl.custom_fields_json, {"global_ids": [], "owner_fields": []})
+    cf_snapshot = _parse_json(
+        tpl.custom_fields_json, {"global_ids": [], "owner_fields": []}
+    )
     old_to_new_field_id = {}
     carried_field_ids = set()
 
     for of in cf_snapshot.get("owner_fields", []):
         new_field = _cf.create_field(
-            field_label=of["field_label"], field_type=of["field_type"],
-            description=of.get("description", ""), options=of.get("options", []),
-            applies_to=of.get("applies_to", "Tasks"), view_role=of.get("view_role", "Viewer"),
-            edit_role=of.get("edit_role", "Member"), conditional_rules=of.get("conditional_rules", []),
-            show_in_list=1 if of.get("show_in_list") else 0, owner_project=new_project,
+            field_label=of["field_label"],
+            field_type=of["field_type"],
+            description=of.get("description", ""),
+            options=of.get("options", []),
+            applies_to=of.get("applies_to", "Tasks"),
+            view_role=of.get("view_role", "Viewer"),
+            edit_role=of.get("edit_role", "Member"),
+            conditional_rules=of.get("conditional_rules", []),
+            show_in_list=1 if of.get("show_in_list") else 0,
+            owner_project=new_project,
         )
         old_to_new_field_id[of["old_id"]] = new_field["name"]
         carried_field_ids.add(new_field["name"])
@@ -426,12 +529,15 @@ def create_project_from_template(template, project_name, key, start_date=None, c
             frappe.db.set_value(
                 "BP Custom Field Project",
                 {"parent": new_project, "custom_field": new_field["name"]},
-                "required", 1,
+                "required",
+                1,
             )
 
     for gf in cf_snapshot.get("global_ids", []):
         if frappe.db.exists("BP Custom Field", gf["id"]):
-            _cf.attach_field_to_project(new_project, gf["id"], required=1 if gf.get("required") else 0)
+            _cf.attach_field_to_project(
+                new_project, gf["id"], required=1 if gf.get("required") else 0
+            )
             carried_field_ids.add(gf["id"])
 
     # ── Tasks — single pass (parent_idx always precedes current index) ──────
@@ -440,12 +546,22 @@ def create_project_from_template(template, project_name, key, start_date=None, c
     new_start = getdate(start_date) if start_date else None
 
     for i, t in enumerate(tasks):
-        task_start = add_days(new_start, t["start_offset_days"]) if (new_start and t.get("start_offset_days") is not None) else None
-        task_due = add_days(new_start, t["due_offset_days"]) if (new_start and t.get("due_offset_days") is not None) else None
+        task_start = (
+            add_days(new_start, t["start_offset_days"])
+            if (new_start and t.get("start_offset_days") is not None)
+            else None
+        )
+        task_due = (
+            add_days(new_start, t["due_offset_days"])
+            if (new_start and t.get("due_offset_days") is not None)
+            else None
+        )
 
         remapped_cfv = {}
         for old_id, val in (t.get("custom_field_values") or {}).items():
-            new_id = old_to_new_field_id.get(old_id, old_id if old_id in carried_field_ids else None)
+            new_id = old_to_new_field_id.get(
+                old_id, old_id if old_id in carried_field_ids else None
+            )
             if new_id:
                 remapped_cfv[new_id] = val
 
@@ -456,23 +572,33 @@ def create_project_from_template(template, project_name, key, start_date=None, c
         # status is always valid here: the new project's workflow states are a
         # verbatim copy of the ones the snapshot was taken against.
         new_task = create_task(
-            project=new_project, title=t["title"], description=t.get("description", ""),
+            project=new_project,
+            title=t["title"],
+            description=t.get("description", ""),
             status=t.get("status") or None,
-            task_type=t.get("task_type", "Task"), priority=t.get("priority", "Medium"),
-            story_points=t.get("story_points", 0), labels=t.get("labels", []),
-            estimated_hours=t.get("estimated_hours", 0), billable=1 if t.get("billable") else 0,
-            start_date=task_start, due_date=task_due, parent_task=parent_name,
+            task_type=t.get("task_type", "Task"),
+            priority=t.get("priority", "Medium"),
+            story_points=t.get("story_points", 0),
+            labels=t.get("labels", []),
+            estimated_hours=t.get("estimated_hours", 0),
+            billable=1 if t.get("billable") else 0,
+            start_date=task_start,
+            due_date=task_due,
+            parent_task=parent_name,
             custom_field_values=remapped_cfv or None,
         )
         idx_to_name[i] = new_task["name"]
 
     # ── Dependencies — second pass (can point at a LATER index) ─────────────
     for i, t in enumerate(tasks):
-        for dep in (t.get("depends_on") or []):
+        for dep in t.get("depends_on") or []:
             if dep["idx"] in idx_to_name and i in idx_to_name:
                 add_task_link(
-                    idx_to_name[i], idx_to_name[dep["idx"]], "is blocked by",
-                    dep.get("dep_type", "FS"), dep.get("lag_days", 0),
+                    idx_to_name[i],
+                    idx_to_name[dep["idx"]],
+                    "is blocked by",
+                    dep.get("dep_type", "FS"),
+                    dep.get("lag_days", 0),
                 )
 
     # ── Automation rules ──────────────────────────────────────────────────
@@ -482,7 +608,8 @@ def create_project_from_template(template, project_name, key, start_date=None, c
     for r in _parse_json(tpl.automations_json, []):
         actions = r.get("actions") or (
             [{"type": r["action_type"], "config": r.get("action_config") or {}}]
-            if r.get("action_type") else []
+            if r.get("action_type")
+            else []
         )
         if not actions:
             continue
@@ -492,9 +619,13 @@ def create_project_from_template(template, project_name, key, start_date=None, c
         # the project, fields, and tasks — log it and keep going.
         try:
             create_automation_rule(
-                rule_name=r["rule_name"], trigger_event=r["trigger_event"], actions=actions,
-                scope="project", project=new_project,
-                conditions=r.get("conditions"), trigger_config=r.get("trigger_config"),
+                rule_name=r["rule_name"],
+                trigger_event=r["trigger_event"],
+                actions=actions,
+                scope="project",
+                project=new_project,
+                conditions=r.get("conditions"),
+                trigger_config=r.get("trigger_config"),
                 is_active=1 if r.get("is_active") else 0,
             )
         except Exception:

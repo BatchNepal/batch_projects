@@ -74,20 +74,27 @@ def _safe_json(raw, default):
 def get_project_facts(projects=None, **_):
     """Return ordered workflow-state data for raw project names."""
     _assert_gateway_service_caller()
-    projects = _clean_projects(projects if isinstance(projects, list) else _safe_json(projects, []))
+    projects = _clean_projects(
+        projects if isinstance(projects, list) else _safe_json(projects, [])
+    )
     out = []
     for project in projects:
         if not frappe.db.exists("BP Project", project):
             continue
         doc = frappe.get_cached_doc("BP Project", project)
-        out.append({
-            "project": project,
-            "workflow_states": [
-                {"name": state.get("name"), "category": state.get("category") or "unstarted"}
-                for state in doc.get_workflow_states()
-                if isinstance(state, dict) and state.get("name")
-            ],
-        })
+        out.append(
+            {
+                "project": project,
+                "workflow_states": [
+                    {
+                        "name": state.get("name"),
+                        "category": state.get("category") or "unstarted",
+                    }
+                    for state in doc.get_workflow_states()
+                    if isinstance(state, dict) and state.get("name")
+                ],
+            }
+        )
     return out
 
 
@@ -95,7 +102,12 @@ def get_project_facts(projects=None, **_):
 def list_projects(**_):
     """Return raw project identities. Scope/filter decisions happen in Go."""
     _assert_gateway_service_caller()
-    return frappe.get_all("BP Project", pluck="name", order_by="name asc", limit_page_length=_MAX_RESULT_ROWS)
+    return frappe.get_all(
+        "BP Project",
+        pluck="name",
+        order_by="name asc",
+        limit_page_length=_MAX_RESULT_ROWS,
+    )
 
 
 @frappe.whitelist()
@@ -106,7 +118,9 @@ def query_tasks_by_date(projects=None, field=None, date=None, **_):
     not know why that date was requested or which automation will consume it.
     """
     _assert_gateway_service_caller()
-    projects = _clean_projects(projects if isinstance(projects, list) else _safe_json(projects, []))
+    projects = _clean_projects(
+        projects if isinstance(projects, list) else _safe_json(projects, [])
+    )
     if not projects:
         return []
     if not isinstance(field, str) or not _FIELD_RE.match(field):
@@ -125,7 +139,7 @@ def query_tasks_by_date(projects=None, field=None, date=None, **_):
         value_filter = ["between", [f"{target} 00:00:00", f"{target} 23:59:59"]]
     names = frappe.get_all(
         "BP Task",
-        filters={"project": ["in", projects], field: value_filter},
+        filters={"project": ["in", projects], field: value_filter, "is_deleted": 0},
         pluck="name",
         order_by="name asc",
         limit_page_length=_MAX_RESULT_ROWS,
@@ -133,12 +147,14 @@ def query_tasks_by_date(projects=None, field=None, date=None, **_):
     out = []
     for name in names:
         task = frappe.get_doc("BP Task", name)
-        out.append({
-            "name": task.name,
-            "task_key": task.task_key,
-            "project": task.project,
-            "snapshot": _task_snapshot(task),
-        })
+        out.append(
+            {
+                "name": task.name,
+                "task_key": task.task_key,
+                "project": task.project,
+                "snapshot": _task_snapshot(task),
+            }
+        )
     return out
 
 
@@ -149,6 +165,9 @@ def get_recurring_task(task=None, **_):
     if not task or not frappe.db.exists("BP Task", task):
         return None
     doc = frappe.get_doc("BP Task", task)
+    # Return None unless the task is live and recurring
+    if doc.is_deleted or not doc.is_recurring:
+        return None
     return {
         "name": doc.name,
         "project": doc.project,
@@ -165,7 +184,9 @@ def get_recurring_task(task=None, **_):
         "due_date": str(doc.due_date) if doc.due_date else None,
         "is_recurring": bool(doc.is_recurring),
         "recurrence_frequency": doc.recurrence_frequency,
-        "recurrence_end_date": str(doc.recurrence_end_date) if doc.recurrence_end_date else None,
+        "recurrence_end_date": (
+            str(doc.recurrence_end_date) if doc.recurrence_end_date else None
+        ),
         "bridge_job_id": doc.bridge_job_id,
     }
 
@@ -210,17 +231,39 @@ def apply_task_occurrence(mutation=None, **_):
     _assert_gateway_service_caller()
     mutation = _parse_mutation(mutation)
     allowed = {
-        "idempotency_key", "project", "title", "priority", "task_type", "status",
-        "epic", "description", "estimated_hours", "billable", "labels",
-        "custom_field_values", "assignees", "due_date", "recurrence_source",
+        "idempotency_key",
+        "project",
+        "title",
+        "priority",
+        "task_type",
+        "status",
+        "epic",
+        "description",
+        "estimated_hours",
+        "billable",
+        "labels",
+        "custom_field_values",
+        "assignees",
+        "due_date",
+        "recurrence_source",
     }
     unknown = set(mutation) - allowed
     if unknown:
-        frappe.throw("Recurring occurrence contains unsupported field(s): " + ", ".join(sorted(unknown)))
+        frappe.throw(
+            "Recurring occurrence contains unsupported field(s): "
+            + ", ".join(sorted(unknown))
+        )
     key = mutation.get("idempotency_key")
     if not isinstance(key, str) or not key.strip() or len(key) > 128:
         frappe.throw("A bounded idempotency_key is required")
-    for required in ("project", "title", "priority", "task_type", "status", "recurrence_source"):
+    for required in (
+        "project",
+        "title",
+        "priority",
+        "task_type",
+        "status",
+        "recurrence_source",
+    ):
         if not mutation.get(required):
             frappe.throw(f"Recurring occurrence requires final {required}")
     if not frappe.db.exists("BP Project", mutation["project"]):
@@ -257,30 +300,58 @@ def apply_task_occurrence(mutation=None, **_):
         except Exception:
             frappe.throw("due_date must be YYYY-MM-DD")
 
-    doc = frappe.get_doc({
-        "doctype": "BP Task",
-        "project": mutation["project"],
-        "title": mutation["title"],
-        "priority": mutation["priority"],
-        "task_type": mutation["task_type"],
-        "status": mutation["status"],
-        "epic": mutation.get("epic"),
-        "description": mutation.get("description"),
-        "estimated_hours": mutation.get("estimated_hours"),
-        "billable": mutation.get("billable"),
-        "labels": json.dumps(labels),
-        "custom_field_values": json.dumps(custom, separators=(",", ":"), sort_keys=True, default=str),
-        "recurrence_source": mutation["recurrence_source"],
-        "due_date": due_date,
-        "assignees": [
-            {"user": user, "full_name": frappe.db.get_value("User", user, "full_name") or user}
-            for user in assignees
-        ],
-    }).insert(ignore_permissions=True)
+    doc = frappe.get_doc(
+        {
+            "doctype": "BP Task",
+            "project": mutation["project"],
+            "title": mutation["title"],
+            "priority": mutation["priority"],
+            "task_type": mutation["task_type"],
+            "status": mutation["status"],
+            "epic": mutation.get("epic"),
+            "description": mutation.get("description"),
+            "estimated_hours": mutation.get("estimated_hours"),
+            "billable": mutation.get("billable"),
+            "labels": json.dumps(labels),
+            "custom_field_values": json.dumps(
+                custom, separators=(",", ":"), sort_keys=True, default=str
+            ),
+            "recurrence_source": mutation["recurrence_source"],
+            "due_date": due_date,
+            "assignees": [
+                {
+                    "user": user,
+                    "full_name": frappe.db.get_value("User", user, "full_name") or user,
+                }
+                for user in assignees
+            ],
+        }
+    )
+
+    # Lock and validate source task before occurrence insert
+    source = frappe.db.sql(
+        """SELECT name, is_deleted, is_recurring, project
+           FROM `tabBP Task` WHERE name = %s FOR UPDATE""",
+        mutation["recurrence_source"],
+        as_dict=True,
+    )
+    if not source:
+        frappe.throw("Recurrence source task no longer exists")
+    source = source[0]
+    if source.is_deleted:
+        frappe.throw("Recurrence source task has been trashed")
+    if not source.is_recurring:
+        frappe.throw("Recurrence source task is no longer recurring")
+    if source.project != mutation["project"]:
+        frappe.throw("Recurrence source project mismatch")
+
+    doc.insert(ignore_permissions=True)
 
     result = {"doctype": "BP Task", "name": doc.name, "task_key": doc.task_key}
     receipt.target_name = doc.name
-    receipt.result_json = json.dumps(result, separators=(",", ":"), sort_keys=True, default=str)
+    receipt.result_json = json.dumps(
+        result, separators=(",", ":"), sort_keys=True, default=str
+    )
     receipt.applied_at = frappe.utils.now_datetime()
     receipt.save(ignore_permissions=True)
     return {"status": "applied", "result": result}

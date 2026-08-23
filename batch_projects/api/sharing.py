@@ -6,7 +6,7 @@ View-only public **share links** — distinct from invitations.
   • Invitation = "come work on this project" → an account + membership + role.
   • Share link = "come look at this"        → a bearer token in the URL is the
     credential. No account, no login, strictly read-only, revocable, optionally
-    expiring. 
+    expiring.
 
 Three scopes: `board` (the kanban, read-only), `project` (project + board), and
 `task` (a single task, read-only).
@@ -30,6 +30,7 @@ VALID_SCOPES = {"board", "project", "task"}
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _resolve_project(project: str) -> str:
     """Accept either the project name or its short key."""
@@ -65,13 +66,23 @@ def _public_dict(link, with_url=True) -> dict:
 
 # ─── management endpoints (authenticated, Manager+) ─────────────────────────────
 
+
 @frappe.whitelist()
-def create_share_link(project, scope="board", task=None, expires_in_days=None, label=None, access_level="view"):
+def create_share_link(
+    project,
+    scope="board",
+    task=None,
+    expires_in_days=None,
+    label=None,
+    access_level="view",
+):
     """Create a public link. Manager+ and Team tier or above.
     access_level: "view" (default), "comment" (task only), or "edit" (task only)."""
     from batch_projects.gateway_guard import verify_gateway_request
+
     verify_gateway_request()
     from batch_projects.entitlements import require_feature
+
     require_feature("share_links")
 
     project = _resolve_project(project)
@@ -102,15 +113,17 @@ def create_share_link(project, scope="board", task=None, expires_in_days=None, l
             pass
 
     link = frappe.new_doc("BP Share Link")
-    link.update({
-        "project": project,
-        "scope": scope,
-        "task": task if scope == "task" else None,
-        "label": (label or "").strip() or None,
-        "access_level": access_level,
-        "expires_on": expires_on,
-        "revoked": 0,
-    })
+    link.update(
+        {
+            "project": project,
+            "scope": scope,
+            "task": task if scope == "task" else None,
+            "label": (label or "").strip() or None,
+            "access_level": access_level,
+            "expires_on": expires_on,
+            "revoked": 0,
+        }
+    )
     link.insert(ignore_permissions=True)
     frappe.db.commit()
     return _public_dict(link)
@@ -120,6 +133,7 @@ def create_share_link(project, scope="board", task=None, expires_in_days=None, l
 def list_share_links(project, scope=None):
     """Live (non-revoked) share links for a project. Manager+."""
     from batch_projects.gateway_guard import verify_gateway_request
+
     verify_gateway_request()
     project = _resolve_project(project)
     access.require(project, "Manager")
@@ -131,14 +145,27 @@ def list_share_links(project, scope=None):
     rows = frappe.get_all(
         "BP Share Link",
         filters=filters,
-        fields=["name", "scope", "task", "label", "access_level", "token",
-                "expires_on", "revoked", "access_count", "last_accessed", "creation"],
+        fields=[
+            "name",
+            "scope",
+            "task",
+            "label",
+            "access_level",
+            "token",
+            "expires_on",
+            "revoked",
+            "access_count",
+            "last_accessed",
+            "creation",
+        ],
         order_by="creation desc",
     )
     out = []
     for r in rows:
         r["url"] = _share_url(r.pop("token"))
-        r["expired"] = bool(r["expires_on"]) and get_datetime(r["expires_on"]) < now_datetime()
+        r["expired"] = (
+            bool(r["expires_on"]) and get_datetime(r["expires_on"]) < now_datetime()
+        )
         r["expires_on"] = str(r["expires_on"]) if r["expires_on"] else None
         r["last_accessed"] = str(r["last_accessed"]) if r["last_accessed"] else None
         r["creation"] = str(r["creation"])
@@ -150,6 +177,7 @@ def list_share_links(project, scope=None):
 def revoke_share_link(name):
     """Revoke a link permanently. Manager+."""
     from batch_projects.gateway_guard import verify_gateway_request
+
     verify_gateway_request()
     link = frappe.get_doc("BP Share Link", name)
     access.require(link.project, "Manager")
@@ -160,6 +188,7 @@ def revoke_share_link(name):
 
 
 # ─── public read endpoint (allow_guest — token is the credential) ───────────────
+
 
 def _load_live_link(token):
     name = frappe.db.get_value("BP Share Link", {"token": token}, "name")
@@ -194,17 +223,20 @@ def _assignees_for(task_names):
     rows = frappe.get_all(
         "BP Task Assignee",
         filters={"parenttype": "BP Task", "parent": ["in", task_names]},
-        fields=["parent", "user"], order_by="idx asc",
+        fields=["parent", "user"],
+        order_by="idx asc",
     )
     users = list({r["user"] for r in rows})
     names = {}
     if users:
-        for u in frappe.get_all("User", filters={"name": ["in", users]},
-                                fields=["name", "full_name"]):
+        for u in frappe.get_all(
+            "User", filters={"name": ["in", users]}, fields=["name", "full_name"]
+        ):
             names[u["name"]] = u["full_name"] or u["name"]
     for r in rows:
         out.setdefault(r["parent"], []).append(
-            {"user": r["user"], "full_name": names.get(r["user"], r["user"])})
+            {"user": r["user"], "full_name": names.get(r["user"], r["user"])}
+        )
     return out
 
 
@@ -216,9 +248,18 @@ def _read_board(project):
 
     tasks = frappe.get_all(
         "BP Task",
-        filters={"project": project, "parent_task": ["is", "not set"]},
-        fields=["name", "task_key", "title", "status", "priority", "task_type",
-                "due_date", "board_order", "labels"],
+        filters={"project": project, "parent_task": ["is", "not set"], "is_deleted": 0},
+        fields=[
+            "name",
+            "task_key",
+            "title",
+            "status",
+            "priority",
+            "task_type",
+            "due_date",
+            "board_order",
+            "labels",
+        ],
         order_by="board_order asc, creation asc",
     )
     amap = _assignees_for([t["name"] for t in tasks])
@@ -249,7 +290,7 @@ def _read_task(task_name):
 
     subtasks = frappe.get_all(
         "BP Task",
-        filters={"parent_task": task_name},
+        filters={"parent_task": task_name, "is_deleted": 0},
         fields=["name", "task_key", "title", "status", "priority"],
         order_by="board_order asc, creation asc",
     )
@@ -291,19 +332,22 @@ def _comments_for(task_name):
     names = {}
     users = list({r["user"] for r in rows if r["user"] and r["user"] != "Guest"})
     if users:
-        for u in frappe.get_all("User", filters={"name": ["in", users]},
-                                 fields=["name", "full_name"]):
+        for u in frappe.get_all(
+            "User", filters={"name": ["in", users]}, fields=["name", "full_name"]
+        ):
             names[u["name"]] = u["full_name"] or u["name"]
     out = []
     for r in rows:
-        out.append({
-            "name": r["name"],
-            "user": r["user"],
-            "full_name": names.get(r["user"]) if r["user"] != "Guest" else None,
-            "guest_name": r["guest_name"] or None,
-            "comment_text": r["comment_text"] or "",
-            "creation": str(r["creation"]),
-        })
+        out.append(
+            {
+                "name": r["name"],
+                "user": r["user"],
+                "full_name": names.get(r["user"]) if r["user"] != "Guest" else None,
+                "guest_name": r["guest_name"] or None,
+                "comment_text": r["comment_text"] or "",
+                "creation": str(r["creation"]),
+            }
+        )
     return out
 
 
@@ -317,20 +361,30 @@ def get_shared(token):
 
     # Best-effort access accounting (don't fail the read if this errors).
     try:
-        frappe.db.set_value("BP Share Link", link.name, {
-            "access_count": (link.access_count or 0) + 1,
-            "last_accessed": now_datetime(),
-        }, update_modified=False)
+        frappe.db.set_value(
+            "BP Share Link",
+            link.name,
+            {
+                "access_count": (link.access_count or 0) + 1,
+                "last_accessed": now_datetime(),
+            },
+            update_modified=False,
+        )
         frappe.db.commit()
     except Exception:
         pass
 
-    base = {"scope": link.scope, "access_level": link.access_level,
-            "label": link.label or ""}
+    base = {
+        "scope": link.scope,
+        "access_level": link.access_level,
+        "label": link.label or "",
+    }
 
     if link.scope == "task":
         if not link.task or not frappe.db.exists("BP Task", link.task):
-            frappe.throw(_("The shared task no longer exists."), frappe.DoesNotExistError)
+            frappe.throw(
+                _("The shared task no longer exists."), frappe.DoesNotExistError
+            )
         base.update(_read_task(link.task))
     else:
         base.update(_read_board(link.project))
@@ -355,8 +409,12 @@ def _throttle_guest_comment(token):
     # otherwise the count freezes at whatever it read the first time.
     count = int(frappe.cache().get_value(key, expires=True) or 0)
     if count >= _GUEST_COMMENT_LIMIT:
-        frappe.throw(_("Too many comments from this link. Please wait a few minutes and try again."),
-                     frappe.PermissionError)
+        frappe.throw(
+            _(
+                "Too many comments from this link. Please wait a few minutes and try again."
+            ),
+            frappe.PermissionError,
+        )
     frappe.cache().set_value(key, count + 1, expires_in_sec=_GUEST_COMMENT_WINDOW_SEC)
 
 
@@ -372,13 +430,22 @@ def add_guest_comment(token, comment_text, guest_name=None):
     link = _load_live_link(token)
 
     if link.scope != "task":
-        frappe.throw(_("Comments are only supported on a shared task."), frappe.PermissionError)
+        frappe.throw(
+            _("Comments are only supported on a shared task."), frappe.PermissionError
+        )
     if link.access_level != "comment":
         frappe.throw(_("This link does not allow commenting."), frappe.PermissionError)
     if not link.task or not frappe.db.exists("BP Task", link.task):
         frappe.throw(_("The shared task no longer exists."), frappe.DoesNotExistError)
 
-    comment_text = frappe.utils.strip_html((comment_text or "").strip())[:_GUEST_COMMENT_MAX_LEN]
+    # Reject trashed tasks
+    task_data = frappe.db.get_value("BP Task", link.task, ["is_deleted"], as_dict=True)
+    if not task_data or task_data.is_deleted:
+        frappe.throw(_("The shared task has been trashed."), frappe.PermissionError)
+
+    comment_text = frappe.utils.strip_html((comment_text or "").strip())[
+        :_GUEST_COMMENT_MAX_LEN
+    ]
     if not comment_text:
         frappe.throw(_("Comment can't be empty."))
     guest_name = (guest_name or "").strip()[:140] or "Guest"
@@ -386,33 +453,43 @@ def add_guest_comment(token, comment_text, guest_name=None):
     _throttle_guest_comment(token)
 
     doc = frappe.get_doc("BP Task", link.task)
-    activity = frappe.get_doc({
-        "doctype": "BP Activity",
-        "task": link.task,
-        "action_type": "Comment",
-        "comment_text": comment_text,
-        "user": "Guest",
-        "guest_name": guest_name,
-    })
+    activity = frappe.get_doc(
+        {
+            "doctype": "BP Activity",
+            "task": link.task,
+            "action_type": "Comment",
+            "comment_text": comment_text,
+            "user": "Guest",
+            "guest_name": guest_name,
+        }
+    )
     activity.insert(ignore_permissions=True)
 
     from batch_projects.events import emit, COMMENT_ADDED
-    emit(COMMENT_ADDED, {
-        "project": doc.project,
-        "task": link.task,
-        "task_key": doc.task_key,
-        "comment_text": comment_text,
-        "activity": activity.name,
-        "mentions": [],
-        # Explicit, not left to _enrich's frappe.session.user fallback: a
-        # logged-in teammate could have this same public link open in another
-        # tab, and every guest comment must attribute as "Guest" regardless
-        # of whose browser session happens to be attached to the request.
-        "user": "Guest",
-    })
 
-    return {"ok": True, "activity": activity.name, "guest_name": guest_name,
-            "creation": str(activity.creation)}
+    emit(
+        COMMENT_ADDED,
+        {
+            "project": doc.project,
+            "task": link.task,
+            "task_key": doc.task_key,
+            "comment_text": comment_text,
+            "activity": activity.name,
+            "mentions": [],
+            # Explicit, not left to _enrich's frappe.session.user fallback: a
+            # logged-in teammate could have this same public link open in another
+            # tab, and every guest comment must attribute as "Guest" regardless
+            # of whose browser session happens to be attached to the request.
+            "user": "Guest",
+        },
+    )
+
+    return {
+        "ok": True,
+        "activity": activity.name,
+        "guest_name": guest_name,
+        "creation": str(activity.creation),
+    }
 
 
 # ─── guest task edit (allow_guest — second narrow exception to read-only) ─────
@@ -434,11 +511,18 @@ def update_shared_task(token, task, fields=None):
     link = _load_live_link(token)
 
     if link.scope != "task":
-        frappe.throw(_("Task edits are only supported on a shared task."), frappe.PermissionError)
+        frappe.throw(
+            _("Task edits are only supported on a shared task."), frappe.PermissionError
+        )
     if link.access_level != "edit":
         frappe.throw(_("This link does not allow editing."), frappe.PermissionError)
     if not link.task or not frappe.db.exists("BP Task", link.task):
         frappe.throw(_("The shared task no longer exists."), frappe.DoesNotExistError)
+
+    # Reject trashed tasks
+    task_data = frappe.db.get_value("BP Task", link.task, ["is_deleted"], as_dict=True)
+    if not task_data or task_data.is_deleted:
+        frappe.throw(_("The shared task has been trashed."), frappe.PermissionError)
 
     if link.task != task:
         frappe.throw(_("Token is not valid for this task."), frappe.PermissionError)
@@ -455,7 +539,9 @@ def update_shared_task(token, task, fields=None):
 
     # Strip HTML from description (same sanitization as guest comments)
     if "description" in safe:
-        safe["description"] = frappe.utils.strip_html((safe["description"] or "").strip())[:2000]
+        safe["description"] = frappe.utils.strip_html(
+            (safe["description"] or "").strip()
+        )[:2000]
 
     # Throttle (same as guest comments)
     _throttle_guest_comment(token)
@@ -468,10 +554,13 @@ def update_shared_task(token, task, fields=None):
     # do. A guest has no way to override, so `force` is never offered here.
     if "status" in safe:
         from batch_projects.api.board import _completing_into_blocked
+
         blockers = _completing_into_blocked(doc, safe["status"], False)
         if blockers:
             frappe.throw(
-                _("This task is still blocked by {0} unfinished task(s).").format(len(blockers)),
+                _("This task is still blocked by {0} unfinished task(s).").format(
+                    len(blockers)
+                ),
                 frappe.ValidationError,
             )
 
@@ -480,4 +569,3 @@ def update_shared_task(token, task, fields=None):
     frappe.db.commit()
 
     return {"ok": True, "updated": list(safe.keys())}
-

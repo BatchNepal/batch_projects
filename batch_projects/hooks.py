@@ -50,26 +50,55 @@ website_route_rules = [
 
 # Fixtures for export — roles must match what board.py actually uses
 fixtures = [
-    {"dt": "Role", "filters": [[
-        "name", "in", ["BP Admin", "BP Manager", "BP Member", "BP Viewer", "BP Guest"]
-    ]]},
+    {
+        "dt": "Role",
+        "filters": [
+            [
+                "name",
+                "in",
+                ["BP Admin", "BP Manager", "BP Member", "BP Viewer", "BP Guest"],
+            ]
+        ],
+    },
     # Custom fields on core ERPNext doctypes — NEVER edit erpnext JSON directly,
     # these ship as fixtures. Filtered to exactly the fields we own.
-    {"dt": "Custom Field", "filters": [[
-        "name", "in", ["Timesheet Detail-custom_bp_task", "Sales Order-custom_bp_project",
-                       "Expense Claim Detail-custom_is_billable",
-                       "Expense Claim Detail-custom_sales_invoice",
-                       "Expense Claim Type-custom_reinvoice_policy",
-                       "Expense Claim Type-custom_markup_percent",
-                       "Lead-custom_bp_project", "Opportunity-custom_bp_project",
-                       "Quotation-custom_bp_project"]
-    ]]},
+    {
+        "dt": "Custom Field",
+        "filters": [
+            [
+                "name",
+                "in",
+                [
+                    "Timesheet Detail-custom_bp_task",
+                    "Sales Order-custom_bp_project",
+                    "Expense Claim Detail-custom_is_billable",
+                    "Expense Claim Detail-custom_sales_invoice",
+                    "Expense Claim Type-custom_reinvoice_policy",
+                    "Expense Claim Type-custom_markup_percent",
+                    "Lead-custom_bp_project",
+                    "Opportunity-custom_bp_project",
+                    "Quotation-custom_bp_project",
+                ],
+            ]
+        ],
+    },
     # Client Script on Sales Order (8C) / Lead / Opportunity / Quotation —
     # the "Create Batch Project" button, one per stage of the pipeline.
-    {"dt": "Client Script", "filters": [[
-        "name", "in", ["Sales Order Batch Project Button", "Lead Batch Project Button",
-                       "Opportunity Batch Project Button", "Quotation Batch Project Button"]
-    ]]},
+    {
+        "dt": "Client Script",
+        "filters": [
+            [
+                "name",
+                "in",
+                [
+                    "Sales Order Batch Project Button",
+                    "Lead Batch Project Button",
+                    "Opportunity Batch Project Button",
+                    "Quotation Batch Project Button",
+                ],
+            ]
+        ],
+    },
 ]
 
 # Hooks
@@ -95,132 +124,103 @@ auth_hooks = ["batch_projects.gateway_guard.apply_gateway_identity"]
 # REST (mark_notification_read/_unread are the correct, redundant-but-
 # harmless whitelisted path for the SPA).
 permission_query_conditions = {
-    "BP Task":            "batch_projects.permissions.bp_task_query_conditions",
-    "BP Project":         "batch_projects.permissions.bp_project_query_conditions",
-    "BP Sprint":          "batch_projects.permissions.bp_sprint_query_conditions",
-    "BP Epic":            "batch_projects.permissions.bp_epic_query_conditions",
-    "BP Report":          "batch_projects.permissions.bp_report_query_conditions",
-    "BP Milestone":       "batch_projects.permissions.bp_milestone_query_conditions",
-    "BP Risk":            "batch_projects.permissions.bp_risk_query_conditions",
-    "BP Automation Run":  "batch_projects.permissions.bp_automation_run_query_conditions",
-    "BP Notification":    "batch_projects.notification_permissions.query_conditions",
-    "BP Webhook Token":   "batch_projects.permissions.bp_webhook_token_query_conditions",
+    "BP Task": "batch_projects.permissions.bp_task_query_conditions",
+    "BP Project": "batch_projects.permissions.bp_project_query_conditions",
+    "BP Sprint": "batch_projects.permissions.bp_sprint_query_conditions",
+    "BP Epic": "batch_projects.permissions.bp_epic_query_conditions",
+    "BP Report": "batch_projects.permissions.bp_report_query_conditions",
+    "BP Milestone": "batch_projects.permissions.bp_milestone_query_conditions",
+    "BP Risk": "batch_projects.permissions.bp_risk_query_conditions",
+    "BP Automation Run": "batch_projects.permissions.bp_automation_run_query_conditions",
+    "BP Notification": "batch_projects.notification_permissions.query_conditions",
+    "BP Webhook Token": "batch_projects.permissions.bp_webhook_token_query_conditions",
+    "BP Team": "batch_projects.permissions.bp_team_query_conditions",
     # Project-scoped doctypes with a `project` field but no hook without
     # this (see permissions.py for the shared query-condition primitives).
-    "BP Drawing":           "batch_projects.permissions.bp_drawing_query_conditions",
-    "BP Intake Form":       "batch_projects.permissions.bp_intake_form_query_conditions",
-    "BP Invitation":        "batch_projects.permissions.bp_invitation_query_conditions",
-    "BP Note":              "batch_projects.permissions.bp_note_query_conditions",
-    "BP Share Link":        "batch_projects.permissions.bp_share_link_query_conditions",
-    "BP SLA Policy":        "batch_projects.permissions.bp_sla_policy_query_conditions",
-    "BP Task Template":     "batch_projects.permissions.bp_task_template_query_conditions",
-    "BP View":              "batch_projects.permissions.bp_view_query_conditions",
-    "BP Activity":          "batch_projects.permissions.bp_activity_query_conditions",
-    "BP Audit Log":         "batch_projects.permissions.bp_audit_log_query_conditions",
-    "BP Automation Rule":   "batch_projects.permissions.bp_automation_rule_query_conditions",
+    "BP Drawing": "batch_projects.permissions.bp_drawing_query_conditions",
+    "BP Intake Form": "batch_projects.permissions.bp_intake_form_query_conditions",
+    "BP Invitation": "batch_projects.permissions.bp_invitation_query_conditions",
+    "BP Note": "batch_projects.permissions.bp_note_query_conditions",
+    "BP Share Link": "batch_projects.permissions.bp_share_link_query_conditions",
+    "BP SLA Policy": "batch_projects.permissions.bp_sla_policy_query_conditions",
+    "BP Task Template": "batch_projects.permissions.bp_task_template_query_conditions",
+    "BP View": "batch_projects.permissions.bp_view_query_conditions",
+    "BP Activity": "batch_projects.permissions.bp_activity_query_conditions",
+    "BP Audit Log": "batch_projects.permissions.bp_audit_log_query_conditions",
+    "BP Automation Rule": "batch_projects.permissions.bp_automation_rule_query_conditions",
     "BP Notification Mute": "batch_projects.permissions.bp_notification_mute_query_conditions",
     "BP Notification Rule": "batch_projects.permissions.bp_notification_rule_query_conditions",
-    "BP SLA Breach":        "batch_projects.permissions.bp_sla_breach_query_conditions",
-    "BP Task Watcher":      "batch_projects.permissions.bp_task_watcher_query_conditions",
-    "BP View Preference":   "batch_projects.permissions.bp_view_preference_query_conditions",
-    "BP Workflow":          "batch_projects.permissions.bp_workflow_query_conditions",
+    "BP SLA Breach": "batch_projects.permissions.bp_sla_breach_query_conditions",
+    "BP Task Watcher": "batch_projects.permissions.bp_task_watcher_query_conditions",
+    "BP View Preference": "batch_projects.permissions.bp_view_preference_query_conditions",
+    "BP Workflow": "batch_projects.permissions.bp_workflow_query_conditions",
 }
 has_permission = {
-    "BP Task":            "batch_projects.permissions.bp_task_has_permission",
-    "BP Project":         "batch_projects.permissions.bp_doc_has_permission",
-    "BP Sprint":          "batch_projects.permissions.bp_doc_has_permission",
-    "BP Epic":            "batch_projects.permissions.bp_doc_has_permission",
-    "BP Report":          "batch_projects.permissions.bp_doc_has_permission",
-    "BP Milestone":       "batch_projects.permissions.bp_doc_has_permission",
-    "BP Risk":            "batch_projects.permissions.bp_doc_has_permission",
-    "BP Automation Run":  "batch_projects.permissions.bp_doc_has_permission",
-    "BP Notification":    "batch_projects.notification_permissions.has_permission",
-    "BP Webhook Token":   "batch_projects.permissions.bp_webhook_token_has_permission",
-    "BP Drawing":           "batch_projects.permissions.bp_doc_has_permission",
-    "BP Intake Form":       "batch_projects.permissions.bp_doc_has_permission",
-    "BP Invitation":        "batch_projects.permissions.bp_doc_has_permission",
-    "BP Note":              "batch_projects.permissions.bp_doc_has_permission",
-    "BP Share Link":        "batch_projects.permissions.bp_doc_has_permission",
-    "BP SLA Policy":        "batch_projects.permissions.bp_doc_has_permission",
-    "BP Task Template":     "batch_projects.permissions.bp_doc_has_permission",
-    "BP View":              "batch_projects.permissions.bp_doc_has_permission",
-    "BP Activity":          "batch_projects.permissions.bp_doc_has_permission",
-    "BP Audit Log":         "batch_projects.permissions.bp_doc_has_permission",
-    "BP Automation Rule":   "batch_projects.permissions.bp_doc_has_permission",
+    "BP Task": "batch_projects.permissions.bp_task_has_permission",
+    "BP Project": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Sprint": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Epic": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Report": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Milestone": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Risk": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Automation Run": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Notification": "batch_projects.notification_permissions.has_permission",
+    "BP Webhook Token": "batch_projects.permissions.bp_webhook_token_has_permission",
+    "BP Team": "batch_projects.permissions.bp_team_has_permission",
+    "BP Drawing": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Intake Form": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Invitation": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Note": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Share Link": "batch_projects.permissions.bp_doc_has_permission",
+    "BP SLA Policy": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Task Template": "batch_projects.permissions.bp_doc_has_permission",
+    "BP View": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Activity": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Audit Log": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Automation Rule": "batch_projects.permissions.bp_doc_has_permission",
     "BP Notification Mute": "batch_projects.permissions.bp_doc_has_permission",
     "BP Notification Rule": "batch_projects.permissions.bp_doc_has_permission",
-    "BP SLA Breach":        "batch_projects.permissions.bp_doc_has_permission",
-    "BP Task Watcher":      "batch_projects.permissions.bp_doc_has_permission",
-    "BP View Preference":   "batch_projects.permissions.bp_doc_has_permission",
-    "BP Workflow":          "batch_projects.permissions.bp_doc_has_permission",
+    "BP SLA Breach": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Task Watcher": "batch_projects.permissions.bp_doc_has_permission",
+    "BP View Preference": "batch_projects.permissions.bp_doc_has_permission",
+    "BP Workflow": "batch_projects.permissions.bp_doc_has_permission",
 }
 
 # Transparently redirects a whitelisted dotted path's real implementation to
 # a hardened replacement, without every existing caller (frontend, gateway)
 # needing to change what it calls.
 override_whitelisted_methods = {
-    "batch_projects.api.automation.apply_action":
-        "batch_projects.automation_security.apply_action",
-    "batch_projects.api.automation.run_rule_node":
-        "batch_projects.automation_security.run_rule_node",
-    "batch_projects.api.automation.run_scheduled_event":
-        "batch_projects.automation_security.run_scheduled_event",
-    "batch_projects.api.board.update_project_members":
-        "batch_projects.membership_invariants.update_project_members",
-    "batch_projects.api.board.get_task":
-        "batch_projects.task_reads.get_task",
-    "batch_projects.api.board.get_export_data":
-        "batch_projects.task_reads.get_export_data",
-    "batch_projects.api.board.delete_task":
-        "batch_projects.task_lifecycle.delete_task",
-    "batch_projects.api.board.restore_task":
-        "batch_projects.task_lifecycle.restore_task",
-    "batch_projects.api.board.bulk_delete_tasks":
-        "batch_projects.task_lifecycle.bulk_delete_tasks",
-    "batch_projects.api.board.get_milestone_report":
-        "batch_projects.task_aggregates.get_milestone_report",
-    "batch_projects.api.board.get_sprint_capacity":
-        "batch_projects.task_aggregates.get_sprint_capacity",
-    "batch_projects.api.board.get_reports":
-        "batch_projects.task_aggregates.get_reports",
-    "batch_projects.api.board.complete_sprint":
-        "batch_projects.task_surfaces.complete_sprint",
-    "batch_projects.api.board.get_project_files":
-        "batch_projects.task_surfaces.get_project_files",
-    "batch_projects.api.dashboards.get_column_widget_data":
-        "batch_projects.dashboard_task_reads.get_column_widget_data",
-    "batch_projects.api.dashboards.get_widget_source_fields":
-        "batch_projects.dashboard_security.get_widget_source_fields",
-    "batch_projects.api.dashboards.get_widget_source_field_options":
-        "batch_projects.dashboard_security.get_widget_source_field_options",
-    "batch_projects.api.dashboards.get_multi_source_count":
-        "batch_projects.dashboard_security.get_multi_source_count",
-    "batch_projects.api.dashboards.get_doctype_group_data":
-        "batch_projects.dashboard_security.get_doctype_group_data",
-    "batch_projects.api.dashboards.get_doctype_column_data":
-        "batch_projects.dashboard_security.get_doctype_column_data",
-    "batch_projects.api.dashboards.update_widget_source_field":
-        "batch_projects.dashboard_security.update_widget_source_field",
-    "batch_projects.api.dashboards.get_widget_source_doc_quickview":
-        "batch_projects.dashboard_security.get_widget_source_doc_quickview",
-    "batch_projects.api.board.get_notifications":
-        "batch_projects.notification_reads.get_notifications",
-    "batch_projects.api.board.get_notification_count":
-        "batch_projects.notification_reads.get_notification_count",
-    "batch_projects.api.board.mark_notification_read":
-        "batch_projects.notification_reads.mark_notification_read",
-    "batch_projects.api.board.mark_notification_unread":
-        "batch_projects.notification_reads.mark_notification_unread",
-    "batch_projects.api.board.mark_all_notifications_read":
-        "batch_projects.notification_reads.mark_all_notifications_read",
-    "batch_projects.api.workflows.list_workflows":
-        "batch_projects.workflow_security.list_workflows",
-    "batch_projects.api.workflows.test_workflow":
-        "batch_projects.workflow_security.test_workflow",
-    "batch_projects.api.automation.run_workflow_node":
-        "batch_projects.workflow_security.run_workflow_node",
-    "batch_projects.api.automation.run_local_workflow_step":
-        "batch_projects.workflow_security.run_local_workflow_step",
+    "batch_projects.api.automation.apply_action": "batch_projects.automation_security.apply_action",
+    "batch_projects.api.automation.run_rule_node": "batch_projects.automation_security.run_rule_node",
+    "batch_projects.api.automation.run_scheduled_event": "batch_projects.automation_security.run_scheduled_event",
+    "batch_projects.api.board.update_project_members": "batch_projects.membership_invariants.update_project_members",
+    "batch_projects.api.board.get_task": "batch_projects.task_reads.get_task",
+    "batch_projects.api.board.get_export_data": "batch_projects.task_reads.get_export_data",
+    "batch_projects.api.board.delete_task": "batch_projects.task_lifecycle.delete_task",
+    "batch_projects.api.board.restore_task": "batch_projects.task_lifecycle.restore_task",
+    "batch_projects.api.board.bulk_delete_tasks": "batch_projects.task_lifecycle.bulk_delete_tasks",
+    "batch_projects.api.board.get_milestone_report": "batch_projects.task_aggregates.get_milestone_report",
+    "batch_projects.api.board.get_sprint_capacity": "batch_projects.task_aggregates.get_sprint_capacity",
+    "batch_projects.api.board.get_reports": "batch_projects.task_aggregates.get_reports",
+    "batch_projects.api.board.complete_sprint": "batch_projects.task_surfaces.complete_sprint",
+    "batch_projects.api.board.get_project_files": "batch_projects.task_surfaces.get_project_files",
+    "batch_projects.api.dashboards.get_column_widget_data": "batch_projects.dashboard_task_reads.get_column_widget_data",
+    "batch_projects.api.dashboards.get_widget_source_fields": "batch_projects.dashboard_security.get_widget_source_fields",
+    "batch_projects.api.dashboards.get_widget_source_field_options": "batch_projects.dashboard_security.get_widget_source_field_options",
+    "batch_projects.api.dashboards.get_multi_source_count": "batch_projects.dashboard_security.get_multi_source_count",
+    "batch_projects.api.dashboards.get_doctype_group_data": "batch_projects.dashboard_security.get_doctype_group_data",
+    "batch_projects.api.dashboards.get_doctype_column_data": "batch_projects.dashboard_security.get_doctype_column_data",
+    "batch_projects.api.dashboards.update_widget_source_field": "batch_projects.dashboard_security.update_widget_source_field",
+    "batch_projects.api.dashboards.get_widget_source_doc_quickview": "batch_projects.dashboard_security.get_widget_source_doc_quickview",
+    "batch_projects.api.board.get_notifications": "batch_projects.notification_reads.get_notifications",
+    "batch_projects.api.board.get_notification_count": "batch_projects.notification_reads.get_notification_count",
+    "batch_projects.api.board.mark_notification_read": "batch_projects.notification_reads.mark_notification_read",
+    "batch_projects.api.board.mark_notification_unread": "batch_projects.notification_reads.mark_notification_unread",
+    "batch_projects.api.board.mark_all_notifications_read": "batch_projects.notification_reads.mark_all_notifications_read",
+    "batch_projects.api.workflows.list_workflows": "batch_projects.workflow_security.list_workflows",
+    "batch_projects.api.workflows.test_workflow": "batch_projects.workflow_security.test_workflow",
+    "batch_projects.api.automation.run_workflow_node": "batch_projects.workflow_security.run_workflow_node",
+    "batch_projects.api.automation.run_local_workflow_step": "batch_projects.workflow_security.run_local_workflow_step",
 }
 
 # BPEmailQueue scopes its override to BP-Task-referenced mail only (see the
@@ -244,7 +244,6 @@ doc_events = {
         # P0 billing reservation: native ERPNext draft creation/editing must
         # obey the same Timesheet Detail exclusivity as BatchProjects.
         "validate": "batch_projects.billing_reservation.validate_sales_invoice_sources",
-
         # Milestone billing lifecycle. on_submit also delegates to the existing
         # erp.invoice_submitted automation emitter so there remains exactly one
         # specific Sales Invoice submit hook.
