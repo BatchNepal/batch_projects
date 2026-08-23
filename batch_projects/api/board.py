@@ -7947,8 +7947,11 @@ def get_widget_data(config):
 
     filters, proj_name, proj_names = _resolve_scope(scope)
 
+    # _task_filters adds the is_deleted=0 boundary every other task
+    # collection applies — without it a trashed task still counted toward
+    # dashboard widget metrics after the scope check above.
     tasks = frappe.get_all(
-        "BP Task", filters=filters,
+        "BP Task", filters=_task_filters(filters),
         fields=["name", "status", "priority", "task_type", "project", "epic",
                 "story_points", "estimated_hours", "actual_hours"],
     )
@@ -8069,8 +8072,9 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
     # Delegate to get_widget_data logic but with pre-filtered scope
     config = {"scope": proj_name or scope, "group_by": group_by, "metric": metric}
     # Temporarily override get_all to use our filters by calling core logic directly
+    # Same live-task boundary as get_widget_data above.
     tasks = frappe.get_all(
-        "BP Task", filters=db_filters,
+        "BP Task", filters=_task_filters(db_filters),
         fields=["name", "status", "priority", "task_type", "project", "epic",
                 "story_points", "estimated_hours", "actual_hours"],
     )

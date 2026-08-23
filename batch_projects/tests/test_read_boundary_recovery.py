@@ -506,3 +506,34 @@ class TestMilestonesAndRisksAccessibleProjectsFilter(FrappeTestCase):
 if __name__ == "__main__":
     import unittest
     unittest.main()
+
+
+class TestWidgetAndBqlAggregationsExcludeTrashedTasks(FrappeTestCase):
+    """get_widget_data()/query_bql_group_by() aggregated over a bare
+    frappe.get_all with no live-task filter — a trashed task still counted
+    toward dashboard widget metrics. Both now wrap their task query in
+    _task_filters (is_deleted=0), same as every other task collection."""
+
+    KEY = "RBRWBQ"
+
+    def setUp(self):
+        self.project = _make_project(self.KEY, "RBR Widget Trash Test")
+        self.live = _make_task(self.project, "widget live task")
+        self.trashed = _make_task(self.project, "widget trashed task")
+        frappe.db.set_value("BP Task", self.trashed, "is_deleted", 1)
+        frappe.db.commit()
+
+    def tearDown(self):
+        frappe.set_user("Administrator")
+        _delete_project(self.KEY)
+        frappe.db.commit()
+
+    def test_get_widget_data_excludes_trashed_tasks(self):
+        result = board.get_widget_data({
+            "scope": self.project, "group_by": "status", "metric": "count",
+        })
+        self.assertEqual(result["total"], 1, result)
+
+    def test_query_bql_group_by_excludes_trashed_tasks(self):
+        result = board.query_bql_group_by(self.project, {}, "status", "count")
+        self.assertEqual(result["total"], 1, result)
