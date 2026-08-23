@@ -158,7 +158,7 @@ jobs:
           # minimal install the index does not survive. Persist the Property
           # Setter explicitly and let the following migrate's schema sync
           # create the index deterministically.
-          bench --site "$SITE_NAME" execute frappe.client.insert --kwargs '{"doc": {"doctype": "Property Setter", "doc_type": "Sales Invoice Timesheet", "field_name": "timesheet_detail", "property": "search_index", "property_type": "Check", "value": "1", "is_system_generated": 1}}' || true
+          bench --site "$SITE_NAME" execute frappe.client.insert --kwargs '{"doc": {"doctype": "Property Setter", "doctype_or_field": "DocField", "doc_type": "Sales Invoice Timesheet", "field_name": "timesheet_detail", "property": "search_index", "property_type": "Check", "value": "1", "is_system_generated": 1}}' || true
           bench --site "$SITE_NAME" migrate
 
       - name: Run the batch_projects test suite
