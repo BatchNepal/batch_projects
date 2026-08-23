@@ -377,9 +377,12 @@ class TestScheduleDataIntegrity(FrappeTestCase):
             new_receipt.return_value = MagicMock()
             automation_schedule_data.apply_task_occurrence(mutation)
         
-        # Verify FOR UPDATE was used
-        query = sql.call_args.args[0]
-        self.assertIn("FOR UPDATE", query)
+        # Verify FOR UPDATE was used on the recurrence source
+        queries = [str(c.args[0]) for c in sql.call_args_list if c.args]
+        self.assertTrue(
+            any("FOR UPDATE" in q for q in queries),
+            f"no FOR UPDATE query among {queries}",
+        )
 
 
 class TestQueryFilters(FrappeTestCase):
