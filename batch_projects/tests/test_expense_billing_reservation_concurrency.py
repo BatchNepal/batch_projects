@@ -70,6 +70,10 @@ def _close(db):
             pass
 
 
+@unittest.skipUnless(
+    frappe.db.exists("DocType", "Expense Claim"),
+    "requires the ERPNext Expense Claim doctype",
+)
 class TestExpenseBillingReservationConcurrency(
     unittest.TestCase
 ):

@@ -20,23 +20,32 @@ from batch_projects.batch_projects.doctype.bp_automation_rule.bp_automation_rule
 
 
 class TestGatewayServiceBoundary(unittest.TestCase):
+    """The session user must be swapped with ``patch.dict``, never ``patch.object``.
+
+    ``frappe.session`` proxies a ``frappe._dict``, which declares ``__slots__ = ()``
+    and ``__getattr__ = dict.get``.  Reading ``.__dict__`` off it therefore returns
+    ``None`` instead of a mapping, and ``mock._patch.get_original()`` -- which does
+    ``target.__dict__[name]`` -- dies with "'NoneType' object is not subscriptable"
+    before the test body ever runs.  Patching the underlying dict entry sidesteps it.
+    """
+
     def test_browser_session_is_rejected(self):
-        with patch.object(frappe, "get_request_header", return_value=""), patch.object(
-            frappe.session, "user", "Administrator"
+        with patch.object(frappe, "get_request_header", return_value=""), patch.dict(
+            frappe.local.session, {"user": "Administrator"}
         ), self.assertRaises(frappe.PermissionError):
             automation_data._assert_gateway_service_caller()
 
     def test_token_user_requires_system_manager(self):
-        with patch.object(frappe, "get_request_header", return_value="token key:secret"), patch.object(
-            frappe.session, "user", "gateway@example.com"
+        with patch.object(frappe, "get_request_header", return_value="token key:secret"), patch.dict(
+            frappe.local.session, {"user": "gateway@example.com"}
         ), patch.object(frappe, "get_roles", return_value=["Projects User"]), self.assertRaises(
             frappe.PermissionError
         ):
             automation_data._assert_gateway_service_caller()
 
     def test_token_system_manager_is_accepted(self):
-        with patch.object(frappe, "get_request_header", return_value="token key:secret"), patch.object(
-            frappe.session, "user", "gateway@example.com"
+        with patch.object(frappe, "get_request_header", return_value="token key:secret"), patch.dict(
+            frappe.local.session, {"user": "gateway@example.com"}
         ), patch.object(frappe, "get_roles", return_value=["System Manager"]):
             automation_data._assert_gateway_service_caller()
 

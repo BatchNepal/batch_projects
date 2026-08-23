@@ -3,10 +3,18 @@
 This is intentionally run explicitly against the development Gateway.  It uses
 the normal BP Task event hook and replay through ``events.emit``; it never
 calls the durable coordinator APIs directly.
+
+Because the assertions only pass when a real bp-gateway is reachable and
+processing the event stream, this file is opt-in: it runs only when
+``BP_LIVE_GATEWAY_SMOKE`` is set in the environment.  A generic full-suite
+invocation (``bench run-tests --app batch_projects``, including the CI gate)
+skips it, so the standard suite stays deterministic and self-contained.
 """
 
 import json
+import os
 import time
+import unittest
 import uuid
 from unittest.mock import patch
 
@@ -15,6 +23,10 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import random_string
 
 
+@unittest.skipUnless(
+    os.environ.get("BP_LIVE_GATEWAY_SMOKE"),
+    "requires a live bp-gateway; not run in standard CI. Set BP_LIVE_GATEWAY_SMOKE=1 to run.",
+)
 class TestDurableWorkflowLiveSmoke(FrappeTestCase):
     def _wait_for(self, predicate, message, timeout=30):
         deadline = time.monotonic() + timeout
