@@ -25,6 +25,28 @@ from frappe.tests.utils import FrappeTestCase
 from batch_projects.api import board, dashboards, forms
 from batch_projects import permissions
 
+_patched_gates = None
+
+
+def setUpModule():
+    """The entitlement tier gate (require_feature) resolves to starter in the
+    test environment — the gate itself is not what this module exercises, so
+    patch the shared entrypoint the BP Report / BP Dashboard doctype
+    validators import at call time. api.dashboards/api.forms are patched
+    per-class (they bind the symbol at import time)."""
+    global _patched_gates
+    from unittest.mock import patch
+    _patched_gates = patch("batch_projects.entitlements.require_feature",
+                           side_effect=lambda *a, **k: None)
+    _patched_gates.start()
+
+
+def tearDownModule():
+    global _patched_gates
+    if _patched_gates is not None:
+        _patched_gates.stop()
+        _patched_gates = None
+
 
 def _ensure_user(email):
     """Throwaway System User fixture — same convention as
