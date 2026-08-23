@@ -82,6 +82,27 @@ def get_dashboard(dashboard):
     return _dashboard_out(doc, with_layout=True)
 
 
+def _assert_dashboard_write_authority(doc):
+    """Ownership policy for updating/deleting a dashboard — the API twin of
+    permissions.bp_dashboard_has_permission: admins bypass; private rows are
+    owner-only; workspace rows are owner, or the project's Admin when
+    project-scoped (projectless workspace rows: owner-only)."""
+    from batch_projects import access
+    user = frappe.session.user
+    if access.is_instance_admin(user) or access.is_workspace_admin(user):
+        return
+    if doc.visibility == "private":
+        if doc.owner != user:
+            frappe.throw("Not permitted", frappe.PermissionError)
+        return
+    if doc.owner == user:
+        return
+    if doc.project:
+        _check_permission(doc.project, "BP Admin")
+        return
+    frappe.throw("Not permitted", frappe.PermissionError)
+
+
 @frappe.whitelist()
 def save_dashboard(dashboard_name=None, project=None, milestone=None, period="last_30_days",
                     icon="LayoutDashboard", color=None, layout=None, dashboard=None,
@@ -94,10 +115,7 @@ def save_dashboard(dashboard_name=None, project=None, milestone=None, period="la
 
     if dashboard:
         doc = frappe.get_doc("BP Dashboard", dashboard)
-        if doc.visibility == "private" and doc.owner != frappe.session.user:
-            frappe.throw("Not permitted", frappe.PermissionError)
-        if doc.project:
-            _check_permission(doc.project, "BP Member")
+        _assert_dashboard_write_authority(doc)
         if dashboard_name is not None: doc.dashboard_name = dashboard_name
         if project is not None or dashboard_name is not None: doc.project = project
         if milestone is not None: doc.milestone = milestone or None
@@ -130,10 +148,7 @@ def save_dashboard(dashboard_name=None, project=None, milestone=None, period="la
 def delete_dashboard(dashboard):
     require_feature("dashboards")
     doc = frappe.get_doc("BP Dashboard", dashboard)
-    if doc.visibility == "private" and doc.owner != frappe.session.user:
-        frappe.throw("Not permitted", frappe.PermissionError)
-    if doc.project:
-        _check_permission(doc.project, "BP Member")
+    _assert_dashboard_write_authority(doc)
     frappe.delete_doc("BP Dashboard", dashboard)
     frappe.db.commit()
     return {"deleted": dashboard}
