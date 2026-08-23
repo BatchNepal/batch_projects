@@ -126,38 +126,3 @@ def can_receive_task_delivery(
     from batch_projects.task_invariants import _user_can_view_task
 
     return bool(_user_can_view_task(row.project, row.name, user))
-
-
-def revalidate_pending_task_email_recipients():
-    """Recheck task-notification email recipients immediately before they're
-    eligible for SMTP delivery, not just at enqueue time (_send_notification_
-    email in events.py checks once, when the notification is generated).
-
-    Runs on the same "all" scheduler cadence as frappe.email.queue.flush
-    (frappe/hooks.py) so this is as close to actual delivery as this
-    architecture allows without overriding Frappe's core send() path — that
-    override point (override_email_send) is framework-wide and would affect
-    every outgoing email on the site, not just batch_projects notifications,
-    which is a far larger blast radius than this specific gap calls for.
-
-    Email Queue Recipient.status only has "" / "Not Sent" / "Sent" (see its
-    doctype JSON) — there is no truthful "blocked" value, so a recipient who
-    has lost access is REMOVED from the still-pending row rather than marked
-    Sent (which would corrupt delivery history) or left Not Sent (which would
-    just be retried forever by Frappe's own retry_sending_emails). Recipients
-    who already show Sent are never touched.
-    """
-    pending = frappe.db.sql(
-        """
-        SELECT eqr.name AS recipient_row, eqr.recipient AS email, eq.reference_name AS task
-        FROM `tabEmail Queue Recipient` eqr
-        INNER JOIN `tabEmail Queue` eq ON eq.name = eqr.parent
-        WHERE eq.reference_doctype = 'BP Task'
-          AND eq.status IN ('Not Sent', 'Partially Sent')
-          AND (eqr.status IS NULL OR eqr.status = '' OR eqr.status = 'Not Sent')
-        """,
-        as_dict=True,
-    )
-    for row in pending:
-        if not can_receive_task_delivery(row.email, row.task):
-            frappe.db.delete("Email Queue Recipient", {"name": row.recipient_row})

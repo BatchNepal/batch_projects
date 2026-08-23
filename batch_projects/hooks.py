@@ -223,6 +223,13 @@ override_whitelisted_methods = {
         "batch_projects.workflow_security.run_local_workflow_step",
 }
 
+# BPEmailQueue scopes its override to BP-Task-referenced mail only (see the
+# class docstring) — every other Email Queue doc on the site behaves exactly
+# as Frappe core ships it.
+override_doctype_class = {
+    "Email Queue": "batch_projects.secure_email_queue.BPEmailQueue",
+}
+
 # actual_hours rollup — resync every BP Task a submitted/cancelled
 # Timesheet's rows point at (via the custom_bp_task fixture field).
 # erp.* automation triggers fire onto the same events.emit() bus every
@@ -306,15 +313,15 @@ doc_events = {
     },
 }
 
+# Task-email delivery authorization is enforced at the actual send()
+# boundary via BPEmailQueue below, not a separate scheduled recheck — a
+# scheduler job on Frappe v15's "all" cadence runs independently of and in
+# unpredictable order relative to frappe.email.queue.flush (jobs are
+# shuffled and enqueued independently), so it could not reliably run
+# "immediately before" delivery. See secure_email_queue.py.
+
 # Scheduled jobs
 scheduler_events = {
-    "all": [
-        # Runs on the same cadence as frappe.email.queue.flush — see
-        # notification_delivery.revalidate_pending_task_email_recipients'
-        # doc comment for why this is the delivery-recheck point rather than
-        # overriding Frappe's core send().
-        "batch_projects.notification_delivery.revalidate_pending_task_email_recipients",
-    ],
     "hourly": [
         "batch_projects.events.send_scheduled_reports",
         "batch_projects.api.timers.send_timer_reminders",
