@@ -368,14 +368,13 @@ class TestScheduleDataIntegrity(FrappeTestCase):
             "due_date": "2026-09-05",
         }
 
-        with patch("batch_projects.api.automation_schedule_data.frappe.get_doc") as get_doc:
-            def gd_side_effect(*args, **kwargs):
-                first = args[0] if args else None
-                if isinstance(first, dict) and first.get("recurrence_source"):
-                    return MagicMock()
-                return _REAL_GET_DOC(*args, **kwargs)
-
-            get_doc.side_effect = gd_side_effect
+        # The receipt helper returns a freshly-inserted doc which
+        # apply_task_occurrence then .save()s — on Frappe v15 that hits
+        # check_if_latest with no _original_modified (pre-existing defect in
+        # the occurrence path, tracked separately). This test only verifies
+        # the FOR UPDATE source validation, so stub the receipt.
+        with patch("batch_projects.api.automation_schedule_data._new_receipt") as new_receipt:
+            new_receipt.return_value = MagicMock()
             automation_schedule_data.apply_task_occurrence(mutation)
         
         # Verify FOR UPDATE was used
