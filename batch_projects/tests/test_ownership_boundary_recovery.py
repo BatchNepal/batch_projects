@@ -220,6 +220,12 @@ class TestDashboardOwnershipBoundary(FrappeTestCase):
     OTHER = "rbr-other-dash@example.com"
 
     def setUp(self):
+        # require_feature resolves through the licensed tier, which is
+        # starter in the test environment — the gate itself is not what this
+        # class exercises, so patch the check rather than faking a license.
+        from unittest.mock import patch
+        self._feat = patch("batch_projects.api.dashboards.require_feature", side_effect=lambda *a, **k: None)
+        self._feat.start()
         frappe.set_user("Administrator")
         self.project = _make_project(self.KEY, "RBR Ownership Dashboard Project")
         _ensure_user(self.OWNER)
@@ -241,6 +247,7 @@ class TestDashboardOwnershipBoundary(FrappeTestCase):
         _delete_project(self.KEY)
         _delete_user(self.OWNER)
         _delete_user(self.OTHER)
+        self._feat.stop()
         frappe.db.commit()
 
     def test_private_dashboard_update_denied_for_other_user(self):
@@ -405,6 +412,11 @@ class TestIntakeFormProjectMoveBoundary(FrappeTestCase):
     MANAGER = "rbr-form-manager@example.com"
 
     def setUp(self):
+        # Same rationale as TestDashboardOwnershipBoundary: the entitlement
+        # tier gate is not what this class exercises.
+        from unittest.mock import patch
+        self._feat = patch("batch_projects.api.forms.require_feature", side_effect=lambda *a, **k: None)
+        self._feat.start()
         frappe.set_user("Administrator")
         self.proj_a = _make_project(self.KEY_A, "RBR Form Project A")
         self.proj_b = _make_project(
@@ -439,6 +451,7 @@ class TestIntakeFormProjectMoveBoundary(FrappeTestCase):
         _delete_project(self.KEY_A)
         _delete_project(self.KEY_B)
         _delete_user(self.MANAGER)
+        self._feat.stop()
         frappe.db.commit()
 
     def test_api_project_move_rejected(self):
