@@ -1571,24 +1571,46 @@ def send_due_date_reminders():
 
 
 def send_daily_digest():
-    """Daily scheduled job: one summary email per user with their day's work."""
+    """Daily scheduled job: one summary email per user with their day's work.
+
+    Digest recipients/tasks come from BP Task Assignee, joined live rather
+    than trusting a set collected before per-task authorization is known —
+    a digest is one email covering MANY tasks, so it can't be filtered at
+    the Email Queue send() boundary the way a single-task notification can
+    (secure_email_queue.py's BPEmailQueue is scoped to one reference_name).
+    Each task is therefore rechecked here, twice: once while assembling the
+    digest body, and again immediately before frappe.sendmail — access can
+    still change in between candidate discovery and this function reaching
+    that user's turn in the loop.
+    """
     if not _has_outgoing_email():
         return
 
+    from batch_projects.notification_delivery import can_receive_task_delivery, resolve_system_user
+    from batch_projects.notification_reads import visible_unread_count
+
     today = frappe.utils.getdate()
-    # Candidate users = anyone with at least one open assigned task
-    candidates = set(frappe.get_all("BP Task Assignee", pluck="user"))
+    # Candidates derived from live (non-deleted) task assignments only —
+    # BP Task Assignee rows for a trashed task are not themselves cleaned
+    # up, so an unfiltered pluck would resurface assignees of dead tasks.
+    candidates = set(frappe.db.sql_list(
+        """
+        SELECT DISTINCT a.user
+        FROM `tabBP Task Assignee` a
+        INNER JOIN `tabBP Task` t ON t.name = a.parent
+        WHERE a.parenttype = 'BP Task' AND t.is_deleted = 0
+        """
+    ))
     completed_cache = {}
 
-    for user in candidates:
-        if user in ("Guest", "Administrator"):
+    for candidate in candidates:
+        user = resolve_system_user(candidate)
+        if not user or user == "Administrator" or "@" not in user:
             continue
         pref = frappe.db.get_value(
             "BP Notification Preference", user, ["email_enabled", "email_digest"], as_dict=True
         )
         if pref and (not pref.email_enabled or not pref.email_digest):
-            continue
-        if not (frappe.db.get_value("User", user, "enabled") and "@" in user):
             continue
 
         task_names = frappe.get_all("BP Task Assignee", filters={"user": user}, pluck="parent")
@@ -1601,6 +1623,14 @@ def send_daily_digest():
         )
         due_today, overdue, open_tasks = [], [], []
         for t in tasks:
+            try:
+                allowed = can_receive_task_delivery(user, t.name, t.project)
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "bp daily digest authorization failed")
+                allowed = False
+            if not allowed:
+                continue
+
             comp = completed_cache.get(t.project)
             if comp is None:
                 comp = set(_completed_statuses(t.project))
@@ -1618,7 +1648,23 @@ def send_daily_digest():
         if not open_tasks:
             continue  # nothing to report → don't send an empty digest
 
-        unread = frappe.db.count("BP Notification", {"recipient": user, "is_read": 0})
+        # Final recheck immediately before building/sending: rebuild the
+        # allowed set from the initially selected names rather than trusting
+        # the loop above, which already ran some time before this send.
+        allowed_names = set()
+        for t in open_tasks:
+            try:
+                if can_receive_task_delivery(user, t.name, t.project):
+                    allowed_names.add(t.name)
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "bp daily digest authorization failed")
+        if not allowed_names:
+            continue
+        due_today = [t for t in due_today if t.name in allowed_names]
+        overdue = [t for t in overdue if t.name in allowed_names]
+        open_tasks = [t for t in open_tasks if t.name in allowed_names]
+
+        unread = visible_unread_count(user)
         user_full_name = frappe.db.get_value("User", user, "full_name") or user.split("@")[0].title()
         html = _build_digest_html(due_today, overdue, open_tasks, unread, user_full_name)
         parts = []
@@ -1634,7 +1680,13 @@ def send_daily_digest():
                 recipients=[user],
                 subject=subject,
                 message=html,
-                delayed=True,
+                # A multi-task digest has no single BP Task reference_name,
+                # so it cannot be scoped/filtered by BPEmailQueue's
+                # single-reference send() boundary (secure_email_queue.py) —
+                # send immediately, having just rechecked every task above,
+                # rather than queue it for a later flush with no further
+                # per-recipient authorization gate.
+                delayed=False,
                 retry=1,
             )
         except Exception:
@@ -1657,6 +1709,8 @@ def send_weekly_project_summary():
     """Weekly scheduled job: email project leads + managers a summary of their project."""
     if not _has_outgoing_email():
         return
+    from batch_projects.notification_delivery import can_receive_project_delivery, resolve_system_user
+
     today = frappe.utils.getdate()
     week_ago = frappe.utils.add_days(today, -7)
 
@@ -1696,16 +1750,29 @@ def send_weekly_project_summary():
         summary_line = f"{p.project_name}: {completed_week} completed, {open_count} open, {overdue} overdue"
         html = _build_weekly_html(p.project_name, completed_week, created_week, open_count, overdue)
 
-        for user in recipients:
-            if user in ("Guest", "Administrator"):
+        for candidate in recipients:
+            user = resolve_system_user(candidate)
+            if not user or user == "Administrator" or "@" not in user:
                 continue
             pref = frappe.db.get_value(
                 "BP Notification Preference", user, ["email_enabled", "email_weekly_summary"], as_dict=True
             )
             if pref and (not pref.email_enabled or not pref.email_weekly_summary):
                 continue
-            if not (frappe.db.get_value("User", user, "enabled") and "@" in user):
+
+            # Recipients above come from BP Project Member rows, which can
+            # go stale (a manager/lead removed from the project after this
+            # function's own recipient-discovery loop already ran). Recheck
+            # current access immediately before dispatch rather than
+            # trusting that membership snapshot.
+            try:
+                allowed = can_receive_project_delivery(user, p.name, "Viewer")
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "BP weekly summary authorization failed")
+                allowed = False
+            if not allowed:
                 continue
+
             _send_notification_email(
                 recipient=user, notification_type="Summary", task=None, task_key=None,
                 task_title=None, project=p.name, actor_name=None, message=summary_line,
@@ -1758,6 +1825,15 @@ def run_due_soon_automations():
                 "run_at": [">", dedup_after],
             }):
                 continue
+
+            # Re-read durable state immediately before dispatch — the task
+            # could have been trashed, or moved to a different project, in
+            # the time between this project's query above and this specific
+            # task's turn in the loop.
+            live = frappe.db.get_value("BP Task", t.name, ["is_deleted", "project"], as_dict=True)
+            if not live or live.is_deleted or live.project != project:
+                continue
+
             try:
                 # Must go through _evaluate_automations, not a direct
                 # run_for_event() call — the latter always evaluates
@@ -1822,6 +1898,13 @@ def run_overdue_automations():
                 "run_at": [">", dedup_after],
             }):
                 continue
+
+            # Re-read durable state immediately before dispatch — same race
+            # window as run_due_soon_automations above.
+            live = frappe.db.get_value("BP Task", t.name, ["is_deleted", "project"], as_dict=True)
+            if not live or live.is_deleted or live.project != project:
+                continue
+
             try:
                 # Same bypass risk as due_soon above — route through the
                 # shared dispatch point so bp_automation_engine ("gateway"
