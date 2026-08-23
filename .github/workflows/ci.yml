@@ -158,10 +158,10 @@ jobs:
           # + add_index path is unreliable there). Add the index directly so
           # the reservation-concurrency suite is runnable.
           bench --site "$SITE_NAME" console <<'PYEOF'
-import frappe
-frappe.db.add_index("Sales Invoice Timesheet", ["timesheet_detail"], "bp_timesheet_detail_index")
-frappe.db.commit()
-PYEOF
+          import frappe
+          frappe.db.add_index("Sales Invoice Timesheet", ["timesheet_detail"], "bp_timesheet_detail_index")
+          frappe.db.commit()
+          PYEOF
 
       - name: Run the batch_projects test suite
         working-directory: ${{ env.BENCH_PATH }}
