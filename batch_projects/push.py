@@ -65,7 +65,27 @@ def dispatch(*, recipient, ntype, actor, title, body, task=None, task_key=None,
 def _deliver(*, recipient, ntype, actor, title, body, task, task_key, project, deep_link):
     """Worker side: hand the notification to erpdesktop_agent's producer, which
     creates the durable Event + publishes agent:notification:new. Silent no-op if
-    the agent app isn't installed; never raises."""
+    the agent app isn't installed; never raises.
+
+    dispatch() enqueues this off the request hot-path, so the recipient's
+    access could have been revoked (unassigned, removed from the project,
+    task trashed) in the time between the triggering event and this worker
+    actually running — recipient selection upstream is advisory, same as
+    notification_delivery's module doc says for every other channel. Recheck
+    here, at the one point closest to the real OS-level delivery this
+    process controls.
+    """
+    from batch_projects.notification_delivery import (
+        can_receive_project_delivery, can_receive_task_delivery,
+    )
+
+    if task:
+        if not can_receive_task_delivery(recipient, task, project):
+            return
+    elif project:
+        if not can_receive_project_delivery(recipient, project):
+            return
+
     try:
         from erpdesktop_agent.dispatch.fanout import push_notification
     except ImportError:

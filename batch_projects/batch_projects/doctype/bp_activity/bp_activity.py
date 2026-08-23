@@ -3,6 +3,16 @@ from frappe.model.document import Document
 
 
 class BPActivity(Document):
+    def validate(self):
+        """Enforce mention authorization on every write path, not just the
+        board.py comment API — a direct doc.insert()/doc.save() (console,
+        import, another whitelisted method) must not be able to bypass it.
+        validate_comment_mentions() itself is a no-op for non-Comment rows.
+        """
+        from batch_projects.task_invariants import validate_comment_mentions
+
+        validate_comment_mentions(self)
+
     def before_insert(self):
         """Every durable activity row must carry an origin.
 
