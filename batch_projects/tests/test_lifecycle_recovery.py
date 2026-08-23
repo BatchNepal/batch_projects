@@ -351,7 +351,11 @@ class TestScheduleDataIntegrity(FrappeTestCase):
         sql.side_effect = sql_side_effect
         proj = self._make_project()
         state["project"] = proj
-        task = self._make_task(proj, is_recurring=1)
+        # Non-recurring source: the FOR UPDATE row fabricated by sql_side_effect
+        # carries is_recurring=1, so the live-validation path is still covered
+        # without triggering the bridge-registration insert path of a real
+        # recurring task under a patched frappe.db.sql.
+        task = self._make_task(proj)
 
         mutation = {
             "idempotency_key": "test-occurrence-key-1",
