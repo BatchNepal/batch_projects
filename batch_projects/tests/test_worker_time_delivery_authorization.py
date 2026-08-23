@@ -18,6 +18,7 @@ Run with:
     bench run-tests --module batch_projects.tests.test_worker_time_delivery_authorization
 """
 
+import unittest
 from unittest.mock import patch
 
 import frappe
