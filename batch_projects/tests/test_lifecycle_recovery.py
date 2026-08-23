@@ -23,6 +23,11 @@ from batch_projects.api import project_templates
 from batch_projects.task_validation import require_live_task, validate_live_task_edits
 from batch_projects import entitlements
 
+# The real database sql method, bound once at import before any test patches
+# frappe.db.sql. Side-effect delegation must route through this, not through
+# frappe.db.sql (which is the mock while a test is running).
+_REAL_DB_SQL = frappe.db.sql
+
 
 class TestTrashBoundaryEnforcement(FrappeTestCase):
     """P1-5: Trash boundary — trashed tasks rejected at mutation and read."""
@@ -237,14 +242,12 @@ class TestSeatCapacityAndTeamREST(FrappeTestCase):
     @patch("batch_projects.api.board.frappe.db.sql")
     def test_update_project_members_uses_advisory_lock(self, sql, assert_seats):
         """update_project_members uses GET_LOCK for seat decision atomicity."""
-        _db_type = type(frappe.db)
-
         def sql_side_effect(query, *args, **kwargs):
             if "GET_LOCK" in str(query):
                 return [[1]]
             if "RELEASE_LOCK" in str(query):
                 return [[1]]
-            return _db_type.sql(frappe.db, query, *args, **kwargs)
+            return _REAL_DB_SQL(query, *args, **kwargs)
 
         sql.side_effect = sql_side_effect
         proj = self._make_project()
@@ -337,12 +340,10 @@ class TestScheduleDataIntegrity(FrappeTestCase):
     @patch.object(automation_schedule_data.frappe.db, "sql")
     def test_apply_task_occurrence_uses_for_update(self, sql, assert_caller):
         """apply_task_occurrence uses FOR UPDATE lock on source."""
-        _db_type = type(frappe.db)
-
         def sql_side_effect(query, *args, **kwargs):
             if "FOR UPDATE" in str(query):
                 return [frappe._dict(name="TASKX", is_deleted=0, is_recurring=1, project="PROJX")]
-            return _db_type.sql(frappe.db, query, *args, **kwargs)
+            return _REAL_DB_SQL(query, *args, **kwargs)
 
         sql.side_effect = sql_side_effect
         proj = self._make_project()
@@ -440,6 +441,9 @@ class TestQueryFilters(FrappeTestCase):
     def test_get_sprint_report_filters_trash(self, get_all, check_perm):
         """get_sprint_report includes is_deleted:0 in task query."""
         get_all.return_value = []
+        proj = self._make_project()
+        team = self._make_team()
+        sprint = self._make_sprint(proj, team)
 
         board.get_sprint_report(proj, sprint)
         
