@@ -173,3 +173,44 @@ def validate_task(doc, method=None):
     validate_link_visibility(doc, old)
     validate_completion_dependencies(doc, old)
     validate_trash_state(doc, old)
+    validate_live_task_edits(doc, old)
+
+
+def validate_live_task_edits(doc, old=None) -> None:
+    """Reject ordinary saves when BOTH old and new rows are deleted, unless
+    explicitly allowed. Restore itself is a lifecycle operation handled by
+    task_lifecycle.restore_task, which flags the save accordingly."""
+    if not old:
+        return
+    old_deleted = int(old.get("is_deleted") or 0)
+    new_deleted = int(doc.get("is_deleted") or 0)
+    if old_deleted and new_deleted:
+        if not (getattr(doc, "flags", None) and doc.flags.get("allow_trash_edit")):
+            frappe.throw(
+                "Cannot edit a trashed task. Restore it first.",
+                frappe.ValidationError,
+                title="Task is trashed",
+            )
+
+
+def require_live_task(name: str, for_update: bool = False):
+    """Load a BP Task and reject it if trashed — the common live-task guard
+    for task-facing API boundaries. Returns the task doc.
+
+    for_update=True additionally takes a row lock (SELECT ... FOR UPDATE) so a
+    read-modify-write boundary holds the row across the mutation."""
+    if for_update:
+        row = frappe.db.sql(
+            "SELECT name, is_deleted FROM `tabBP Task` WHERE name = %s FOR UPDATE",
+            name,
+            as_dict=True,
+        )
+        if not row:
+            frappe.throw("Task not found.", frappe.DoesNotExistError)
+        if row[0].is_deleted:
+            frappe.throw("Task has been trashed.", frappe.PermissionError)
+        return frappe.get_doc("BP Task", name)
+    doc = frappe.get_doc("BP Task", name)
+    if doc.is_deleted:
+        frappe.throw("Task has been trashed.", frappe.PermissionError)
+    return doc
