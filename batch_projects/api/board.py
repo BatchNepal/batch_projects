@@ -3130,22 +3130,49 @@ def delete_epic(epic):
 # ─── SAVED REPORTS ──────────────────────────────────────────────────────────────
 
 
+def _assert_report_write_authority(doc):
+    """Ownership policy for updating/deleting a saved report — the API twin
+    of permissions.bp_report_has_permission (see that function for the one
+    documented policy): admins bypass; private rows are owner-only; workspace
+    rows are owner, or the project's Admin when project-scoped."""
+    from batch_projects import access
+    user = frappe.session.user
+    if access.is_instance_admin(user) or access.is_workspace_admin(user):
+        return
+    if doc.visibility == "private":
+        if doc.owner != user:
+            frappe.throw("Not permitted", frappe.PermissionError)
+        return
+    if doc.owner == user:
+        return
+    if doc.project:
+        _check_permission(doc.project, "BP Admin")
+        return
+    frappe.throw("Not permitted", frappe.PermissionError)
+
+
 @frappe.whitelist()
 def get_saved_reports():
     """List saved reports visible to the user: workspace reports + reports on
-    projects they can access."""
+    projects they can access. Private reports are owner-only (instance/workspace
+    admins see everything)."""
+    from batch_projects import access
     from batch_projects.permissions import get_accessible_projects
     accessible = get_accessible_projects()
+    is_admin = access.is_instance_admin() or access.is_workspace_admin()
     rows = frappe.get_all(
         "BP Report",
         fields=["name", "report_name", "icon", "color", "starred", "pinned",
                 "project", "milestone", "period", "schedule_enabled",
                 "schedule_frequency", "schedule_day", "schedule_hour",
-                "schedule_recipients", "last_sent", "modified", "owner"],
+                "schedule_recipients", "last_sent", "modified", "owner",
+                "visibility"],
         order_by="modified desc",
     )
     out = []
     for r in rows:
+        if not is_admin and r.visibility == "private" and r.owner != frappe.session.user:
+            continue
         if accessible is None or not r.project or r.project in accessible:
             out.append({
                 "id": r.name, "report_name": r.report_name,
@@ -3168,6 +3195,10 @@ def get_saved_reports():
 @frappe.whitelist()
 def get_saved_report(report):
     doc = frappe.get_doc("BP Report", report)
+    from batch_projects import access
+    if (not access.is_instance_admin() and not access.is_workspace_admin()
+            and doc.visibility == "private" and doc.owner != frappe.session.user):
+        frappe.throw("Not permitted", frappe.PermissionError)
     if doc.project:
         _check_permission(doc.project, "BP Viewer")
     return _report_out(doc, with_layout=True)
@@ -3243,8 +3274,7 @@ def save_report(report_name=None, project=None, milestone=None, period="last_30_
 
     if report:
         doc = frappe.get_doc("BP Report", report)
-        if doc.project:
-            _check_permission(doc.project, "BP Member")
+        _assert_report_write_authority(doc)
         if report_name is not None: doc.report_name = report_name
         if project is not None or report_name is not None: doc.project = project
         if milestone is not None: doc.milestone = milestone or None
@@ -3290,8 +3320,7 @@ def save_report(report_name=None, project=None, milestone=None, period="last_30_
 @frappe.whitelist()
 def delete_saved_report(report):
     doc = frappe.get_doc("BP Report", report)
-    if doc.project:
-        _check_permission(doc.project, "BP Member")
+    _assert_report_write_authority(doc)
     frappe.delete_doc("BP Report", report)
     frappe.db.commit()
     return {"deleted": report}

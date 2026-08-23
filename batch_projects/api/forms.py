@@ -72,16 +72,25 @@ def create_intake_form(project, form_title, fields_json=None,
 
 @frappe.whitelist()
 def update_intake_form(form, fields):
-    """Update an intake form's fields/title/etc."""
+    """Update an intake form's fields/title/etc.
+
+    Allowlist, not denylist: only the form's content fields are writable
+    through this endpoint. `project` in particular is NOT writable — moving
+    a public intake form to a project the caller can't access would let the
+    still-valid public token create tasks inside that project. A project
+    move (if it ever becomes a feature) needs its own endpoint requiring
+    Manager+ on BOTH projects and rotating the public form identifier."""
     if isinstance(fields, str):
         fields = json.loads(fields)
     doc = frappe.get_doc("BP Intake Form", form)
     _check_permission(doc.project, "BP Manager")
     require_feature("intake_forms")
+    _ALLOWED_FIELDS = {"form_title", "fields_json", "task_type", "default_status", "is_active"}
+    if fields.get("project") and fields["project"] != doc.project:
+        frappe.throw("Intake forms can't be moved between projects.", frappe.PermissionError)
     for k, v in fields.items():
-        if k in ("name", "doctype", "cmd") or k.startswith("_"):
-            continue
-        setattr(doc, k, v)
+        if k in _ALLOWED_FIELDS:
+            setattr(doc, k, v)
     doc.save(ignore_permissions=True)
     frappe.db.commit()
     return {"ok": True}
