@@ -153,6 +153,13 @@ jobs:
           # Timesheet Detail-custom_bp_task field the suite depends on. Create
           # that field explicitly so the deterministic suite is runnable.
           bench --site "$SITE_NAME" execute frappe.client.insert --kwargs '{"doc": {"doctype": "Custom Field", "dt": "Timesheet Detail", "fieldname": "custom_bp_task", "fieldtype": "Link", "label": "BP Task", "options": "BP Task", "insert_after": "task", "module": "Batch Projects"}}' || true
+          # The add_sales_invoice_timesheet_detail_index patch persists a
+          # search_index Property Setter then adds the DB index; on a fresh
+          # minimal install the index does not survive. Persist the Property
+          # Setter explicitly and let the following migrate's schema sync
+          # create the index deterministically.
+          bench --site "$SITE_NAME" execute frappe.client.insert --kwargs '{"doc": {"doctype": "Property Setter", "doc_type": "Sales Invoice Timesheet", "field_name": "timesheet_detail", "property": "search_index", "property_type": "Check", "value": "1", "is_system_generated": 1}}' || true
+          bench --site "$SITE_NAME" migrate
 
       - name: Run the batch_projects test suite
         working-directory: ${{ env.BENCH_PATH }}
