@@ -159,6 +159,112 @@ def _normalize_workflow_states(raw_states):
 
 _VALID_TRANSITION_MIN_ROLES = ("Manager", "Admin")
 
+# ─── PROJECT SCHEMA MUTATION SAFETY ─────────────────────────────────────────
+# Workflow states, task types and labels are referenced by durable BP Task
+# rows (status/task_type/labels) — they are schemas, not free-form JSON
+# settings, and update_project_workflow/_issue_types/_labels used to replace
+# them wholesale with no check for whether a removed/renamed entry still had
+# live tasks pointing at it.
+
+def _active_task_field_values(project, field) -> set[str]:
+    """Distinct non-empty values of `field` currently in use by live tasks."""
+    rows = frappe.get_all(
+        "BP Task", filters=_task_filters({"project": project}), pluck=field
+    )
+    return {str(v) for v in rows if v not in (None, "")}
+
+
+def _active_task_labels(project) -> set[str]:
+    """Distinct label NAMES (BP Task.labels is a list of plain strings —
+    see _normalize_project_labels' doc comment for how this differs from
+    BP Project.labels' {id,label,color} object shape) currently in use.
+
+    Fails closed on malformed task label JSON rather than silently skipping
+    it: a destructive catalog change (deleting/renaming a label) must never
+    proceed on an incomplete "in use" set just because one task's stored
+    JSON happened to be corrupt — that's exactly the scenario where
+    silently under-counting usage would let a still-referenced label
+    disappear."""
+    used = set()
+    for row in frappe.get_all(
+        "BP Task", filters=_task_filters({"project": project}), fields=["name", "labels"]
+    ):
+        raw = row.get("labels")
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            frappe.throw(
+                f"Task {row.get('name')} has malformed label data. Repair it "
+                "before changing the project label schema.",
+                frappe.ValidationError,
+                title="Invalid task label data",
+            )
+        if isinstance(parsed, list):
+            used.update(str(v) for v in parsed if v not in (None, ""))
+    return used
+
+
+def _normalize_project_labels(raw_labels: list) -> list[dict]:
+    """Validate + normalize an incoming BP Project.labels payload.
+
+    BP Project.labels is a list of {id, label, color} objects (see
+    frontend/src/stores/project.js's labelMap, keyed by l.id) — a
+    DIFFERENT shape from BP Task.labels, which stores plain label-name
+    strings. Comparing the two by object-repr string (the original bug
+    here) can never match production data.
+    """
+    rows = []
+    seen_names = set()
+    seen_ids = set()
+
+    for raw in raw_labels:
+        if not isinstance(raw, dict):
+            frappe.throw("Each label must be an object.", frappe.ValidationError)
+        row = dict(raw)
+        name = str(row.get("label") or "").strip()
+        if not name:
+            frappe.throw("Each label requires a name.", frappe.ValidationError)
+        if name in seen_names:
+            frappe.throw(f"Duplicate label name: {name}.", frappe.ValidationError)
+        seen_names.add(name)
+
+        label_id = str(row.get("id") or "").strip()
+        if not label_id:
+            label_id = "lbl_" + frappe.generate_hash(length=10)
+        if label_id in seen_ids:
+            frappe.throw(f"Duplicate label id: {label_id}.", frappe.ValidationError)
+        seen_ids.add(label_id)
+
+        row["id"] = label_id
+        row["label"] = name
+        rows.append(row)
+    return rows
+
+
+def _assert_schema_names_survive(removed: set, in_use: set, label: str) -> None:
+    blocked = sorted(removed & in_use)
+    if blocked:
+        frappe.throw(
+            f"Cannot remove or rename {label} {', '.join(blocked)} while active "
+            "tasks still use it. Move those tasks to a replacement value first, "
+            "then retry.",
+            frappe.ValidationError,
+            title=f"{label.title()} still in use",
+        )
+
+
+def _assert_no_duplicate_names(names: list, label: str) -> None:
+    seen = set()
+    for name in names:
+        if name in seen:
+            frappe.throw(
+                f"Duplicate {label} name: {name}.", frappe.ValidationError,
+                title=f"Duplicate {label}",
+            )
+        seen.add(name)
+
 
 def _normalize_allowed_to(allowed, valid_names):
     """Sanitize one state's `allowed_to` against the sibling states actually
@@ -813,9 +919,42 @@ def update_project_workflow(project, workflow_states):
         s.setdefault("category", "unstarted")
         if s["category"] not in ("unstarted", "started", "completed", "cancelled"):
             s["category"] = "unstarted"
+    _assert_no_duplicate_names([s["name"] for s in states], "workflow state")
+
+    existing_raw = _deep_parse_json(
+        frappe.db.get_value("BP Project", project, "workflow_states") or "[]"
+    )
+    existing = existing_raw if isinstance(existing_raw, list) else []
+    old_by_name = {
+        s.get("name"): str(s.get("category") or "unstarted").lower()
+        for s in existing if isinstance(s, dict) and s.get("name")
+    }
+    new_names = {s["name"] for s in states}
+    used_statuses = _active_task_field_values(project, "status")
+    _assert_schema_names_survive(set(old_by_name) - new_names, used_statuses, "workflow state")
+
+    # A lifecycle-category change is effectively a migration for every task
+    # currently in that state — timestamps/resolution derived from the old
+    # category (e.g. resolved_on set on entering "completed") don't retroactively
+    # apply. Block it while tasks are still there rather than silently stranding
+    # their derived data.
+    changed_category = {
+        name for name in old_by_name.keys() & new_names
+        if old_by_name[name] != next(s["category"] for s in states if s["name"] == name)
+    }
+    blocked_category = sorted(changed_category & used_statuses)
+    if blocked_category:
+        frappe.throw(
+            "Cannot change the lifecycle category of in-use workflow state(s): "
+            + ", ".join(blocked_category)
+            + ". Move those tasks to a different state first, then retry.",
+            frappe.ValidationError,
+            title="Workflow category still in use",
+        )
+
     # Sanitize `allowed_to` (transition restrictions) against the sibling
     # states in this same save — see _normalize_allowed_to.
-    valid_names = {s["name"] for s in states}
+    valid_names = new_names
     for s in states:
         cleaned = _normalize_allowed_to(s.get("allowed_to"), valid_names)
         if cleaned:
@@ -848,6 +987,18 @@ def update_project_issue_types(project, issue_types):
             clean.append(t)
     if not clean:
         frappe.throw("At least one issue type is required")
+    _assert_no_duplicate_names([t["name"] for t in clean], "task type")
+
+    existing_raw = _deep_parse_json(
+        frappe.db.get_value("BP Project", project, "issue_types") or "[]"
+    )
+    existing = existing_raw if isinstance(existing_raw, list) else []
+    old_names = {t.get("name") for t in existing if isinstance(t, dict) and t.get("name")}
+    new_names = {t["name"] for t in clean}
+    _assert_schema_names_survive(
+        old_names - new_names, _active_task_field_values(project, "task_type"), "task type"
+    )
+
     frappe.db.set_value("BP Project", project, {
         "issue_types": json.dumps(clean),
         "modified": frappe.utils.now(),
@@ -862,12 +1013,67 @@ def update_project_labels(project, labels):
     labels_list = _deep_parse_json(labels)
     if not isinstance(labels_list, list):
         frappe.throw("labels must be a list")
+    incoming = _normalize_project_labels(labels_list)
+
+    existing_raw = _deep_parse_json(
+        frappe.db.get_value("BP Project", project, "labels") or "[]"
+    )
+    if not isinstance(existing_raw, list):
+        frappe.throw(
+            "Current project labels are invalid.", frappe.ValidationError,
+            title="Invalid label catalog",
+        )
+    if any(not isinstance(row, dict) for row in existing_raw):
+        frappe.throw(
+            "Current project labels use an invalid schema. Repair them "
+            "before editing labels.",
+            frappe.ValidationError, title="Invalid label catalog",
+        )
+    current = existing_raw
+
+    old_by_id = {str(row.get("id")): row for row in current if row.get("id")}
+    new_by_id = {row["id"]: row for row in incoming}
+    new_names = {row["label"] for row in incoming}
+    used = _active_task_labels(project)
+    blocked = []
+
+    for label_id, old in old_by_id.items():
+        old_name = str(old.get("label") or "").strip()
+        if not old_name or old_name not in used:
+            continue
+        replacement = new_by_id.get(label_id)
+        if replacement is None:
+            blocked.append(f"'{old_name}' (delete)")
+        elif replacement["label"] != old_name:
+            blocked.append(f"'{old_name}' (rename)")
+
+    # Legacy catalog rows without IDs remain name-addressed. Deleting or
+    # renaming one is represented by the old name disappearing.
+    legacy_names = {
+        str(row.get("label") or "").strip()
+        for row in current
+        if not row.get("id") and row.get("label")
+    }
+    blocked.extend(
+        f"'{name}' (delete/rename)"
+        for name in sorted((legacy_names - new_names) & used)
+    )
+
+    if blocked:
+        frappe.throw(
+            "Cannot change labels still referenced by active tasks: "
+            + ", ".join(blocked)
+            + ". Detach or migrate those task labels first.",
+            frappe.ValidationError,
+            title="Label is still in use",
+        )
+
     frappe.db.set_value("BP Project", project, {
-        "labels": json.dumps(labels_list),
+        "labels": json.dumps(incoming),
         "modified": frappe.utils.now(),
     })
     frappe.db.commit()
-    return labels_list
+    return incoming
 
 
 @frappe.whitelist()
@@ -2128,11 +2334,42 @@ def sync_rebac_state(resource, offset=0, limit=500):
     offset = max(int(offset or 0), 0)
     limit = min(max(int(limit or 500), 1), 1000)
 
-    rows = frappe.get_all(
-        doctype, fields=fields,
-        limit_start=offset, limit_page_length=limit,
-        order_by="creation asc",
-    )
+    if resource == "tasks":
+        # A full rebuild must not recreate ReBAC tuples for trashed tasks —
+        # see _task_filters' doc comment: frappe.get_all always runs with
+        # ignore_permissions=True and skips the permission_query_conditions
+        # hook, so this exclusion has to be explicit here too, same as every
+        # other BP Task get_all call site.
+        rows = frappe.get_all(
+            doctype, fields=fields, filters=_task_filters(),
+            limit_start=offset, limit_page_length=limit,
+            order_by="creation asc",
+        )
+    elif resource == "task_assignees":
+        # BP Task Assignee is a child table with no is_deleted of its own —
+        # trashed-ness lives on the parent BP Task. get_all can't filter a
+        # child table by a joined parent field, so this is a raw join
+        # (matching the frappe.db.sql convention already used elsewhere in
+        # this module, e.g. the status-count query above) rather than a
+        # two-step fetch-then-filter that would break pagination.
+        rows = frappe.db.sql(
+            """
+            SELECT ta.parent AS task, ta.user AS user
+            FROM `tabBP Task Assignee` ta
+            INNER JOIN `tabBP Task` t ON t.name = ta.parent
+            WHERE t.is_deleted = 0
+            ORDER BY ta.creation ASC
+            LIMIT %(limit)s OFFSET %(offset)s
+            """,
+            {"limit": limit, "offset": offset},
+            as_dict=True,
+        )
+    else:
+        rows = frappe.get_all(
+            doctype, fields=fields,
+            limit_start=offset, limit_page_length=limit,
+            order_by="creation asc",
+        )
     if resource == "project_members":
         # Legacy rows can carry the "BP "-prefixed alias (BP Admin/BP Manager/
         # ...) — normalize here so the gateway only ever sees the canonical

@@ -21,8 +21,12 @@ from batch_projects.setup.install import TIMER_ACTIVITY_TYPE
 @frappe.whitelist()
 def get_active_timer():
     """The current user's running timer, or None. Also self-heals: an
-    active-timer row pointing at a since-deleted task is cleaned up rather
-    than surfaced as a broken timer."""
+    active-timer row pointing at a since-deleted (hard-deleted OR soft-
+    trashed) task is cleaned up rather than surfaced as a broken timer.
+    A trashed task's timer is resolved through the same capped-duration
+    path _stop uses (see _stop's doc comment) so legitimate pre-deletion
+    work isn't silently lost — it just doesn't keep accruing once the
+    task is gone."""
     _require_system_user()
 
     row = frappe.db.get_value(
@@ -33,10 +37,10 @@ def get_active_timer():
         return None
 
     task = frappe.db.get_value(
-        "BP Task", row.task, ["name", "task_key", "title", "project"], as_dict=True
+        "BP Task", row.task, ["name", "task_key", "title", "project", "is_deleted"], as_dict=True
     )
-    if not task:
-        frappe.delete_doc("BP Active Timer", row.name, ignore_permissions=True)
+    if not task or task.is_deleted:
+        _stop(row.name)
         frappe.db.commit()
         return None
 
@@ -59,6 +63,8 @@ def start_timer(task):
 
     task_doc = frappe.get_doc("BP Task", task)
     _check_task_permission(task, task_doc.project, "BP Member")
+    if task_doc.is_deleted:
+        frappe.throw("This task has been deleted. Restore it before timing work against it.")
 
     existing = frappe.db.get_value("BP Active Timer", {"user": frappe.session.user}, "name")
     stopped_previous = _stop(existing) if existing else None
@@ -262,21 +268,67 @@ def _append_time_log(task, user, from_time, to_time, hours, description=None):
 
 
 def _stop(active_timer_name):
-    """Stop one BP Active Timer row: delete the state row, resolve the
-    elapsed time into a Timesheet Detail row. Returns a summary dict, or
-    None if the elapsed time rounds to zero (row deleted, nothing logged)."""
+    """Stop one BP Active Timer row: resolve the elapsed time into a
+    Timesheet Detail row, then delete the state row. Returns a summary
+    dict, or None if the elapsed time rounds to zero (row deleted, nothing
+    logged).
+
+    A legacy timer whose task was trashed while it kept running is capped
+    at the task's deleted_on, not now() — the task stopped being live work
+    the moment it was deleted, so time that kept ticking after that point
+    was never real work against it. Time genuinely worked before deletion
+    is still logged, against the (now-trashed) task; get_doc still loads a
+    soft-deleted row, only list/permission-query views hide it.
+
+    A deleted task with NO deleted_on (a legacy row predating that field,
+    or corrupted by direct DB manipulation) has no defensible cutoff at
+    all — falling back to now() would silently inflate/bill however long
+    the timer had been forgotten, exactly the unsafe behavior this
+    function exists to prevent. Raise instead and leave the active-timer
+    row in place for an admin to repair (backfill deleted_on, or resolve
+    the timer directly): the row is NOT deleted until every fail-closed
+    check above has passed, so the evidence needed for that repair is
+    never destroyed by the attempt to stop it.
+
+    Policy: new timing/logging against a deleted task is blocked
+    (start_timer/log_time). Existing draft time entries remain viewable
+    and correctable by an authorized user via list_time_entries/
+    update_time_entry/delete_time_entry — trashing a task does not itself
+    lock already-logged draft time, only submitted ERPNext time is
+    immutable through this UI, by ERPNext's own docstatus rules."""
     row = frappe.get_doc("BP Active Timer", active_timer_name)
     started_at = get_datetime(row.started_at)
     user = row.user
     task_name = row.task
-    elapsed_hours = round(time_diff_in_hours(now_datetime(), started_at), 4)
+
+    task_row = frappe.db.get_value(
+        "BP Task", task_name, ["is_deleted", "deleted_on"], as_dict=True
+    )
+    if not task_row:
+        frappe.delete_doc("BP Active Timer", active_timer_name, ignore_permissions=True)
+        return None
+
+    if task_row.is_deleted:
+        if not task_row.deleted_on:
+            frappe.throw(
+                "This deleted task has no deletion timestamp. Repair the "
+                "task before stopping its timer.",
+                frappe.ValidationError,
+                title="Timer requires repair",
+            )
+        to_time = min(now_datetime(), get_datetime(task_row.deleted_on))
+    else:
+        to_time = now_datetime()
+
+    # Delete only after every fail-closed validation above has passed.
     frappe.delete_doc("BP Active Timer", active_timer_name, ignore_permissions=True)
 
-    if elapsed_hours <= 0 or not frappe.db.exists("BP Task", task_name):
+    elapsed_hours = round(time_diff_in_hours(to_time, started_at), 4)
+    if elapsed_hours <= 0:
         return None
 
     task = frappe.get_doc("BP Task", task_name)
-    return _append_time_log(task, user, started_at, now_datetime(), elapsed_hours)
+    return _append_time_log(task, user, started_at, to_time, elapsed_hours)
 
 
 @frappe.whitelist()
@@ -295,6 +347,8 @@ def log_time(task, hours, date=None, description=None):
 
     task_doc = frappe.get_doc("BP Task", task)
     _check_task_permission(task, task_doc.project, "BP Member")
+    if task_doc.is_deleted:
+        frappe.throw("This task has been deleted. Restore it before logging time against it.")
 
     day = frappe.utils.getdate(date) if date else frappe.utils.getdate()
     from_time = get_datetime(f"{day} 09:00:00")
@@ -430,9 +484,9 @@ def send_timer_reminders():
         if not row.task or _reminder_sent_today(row.user, row.task, "Timer Reminder"):
             continue
         task = frappe.db.get_value(
-            "BP Task", row.task, ["task_key", "title", "project"], as_dict=True
+            "BP Task", row.task, ["task_key", "title", "project", "is_deleted"], as_dict=True
         )
-        if not task:
+        if not task or task.is_deleted:
             continue
         elapsed = round(time_diff_in_hours(now_datetime(), get_datetime(row.started_at)), 1)
         message = (
