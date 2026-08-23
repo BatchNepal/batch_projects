@@ -873,6 +873,8 @@ _NODE_REGISTRY = {
                  {"value": "task.field_changed", "label": "has a specific field changed"},
                  {"value": "task.moved_sprint", "label": "is moved to another sprint"},
                  {"value": "task.deleted", "label": "is deleted"},
+                 {"value": "task.trashed", "label": "is moved to trash"},
+                 {"value": "task.restored", "label": "is restored from trash"},
              ]},
             {"name": "from_status", "label": "From status", "type": "select",
              "options_source": "statuses", "allow_custom": True,

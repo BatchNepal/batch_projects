@@ -4,7 +4,8 @@ import re
 
 from batch_projects.events import (
     emit,
-    TASK_CREATED, TASK_UPDATED, TASK_STATUS_CHANGED, COMMENT_ADDED, PROJECT_CREATED,
+    TASK_CREATED, TASK_UPDATED, TASK_STATUS_CHANGED, COMMENT_ADDED, COMMENT_EDITED,
+    COMMENT_DELETED, PROJECT_CREATED,
     PROJECT_ROLE_CHANGED,
     SPRINT_STARTED, SPRINT_COMPLETED
 )
@@ -2776,7 +2777,27 @@ def edit_comment(activity, comment_text):
 
     doc.comment_text = comment_text
     doc.save(ignore_permissions=True)
-    frappe.db.commit()
+
+    # emit() registers its realtime broadcast on frappe.db.after_commit (see
+    # _broadcast's after_commit=True) — it must be called BEFORE the
+    # transaction commits, not after, so "no event on rollback, event
+    # published once the mutation is actually durable" is the guarantee
+    # that's kept, not merely coincidental. Matches add_comment's existing
+    # convention just above, which never manually commits before its own
+    # emit() call at all.
+    #
+    # Realtime signal for every edit — an open task detail elsewhere must
+    # refetch to see the new text, whether or not this particular edit added
+    # a mention. Separate from the mentions_only emit below: that one exists
+    # purely to route notifications to the newly-mentioned users, not to
+    # signal the edit itself, which used to have no broadcast at all.
+    emit(COMMENT_EDITED, {
+        "project": task.project,
+        "task": doc.task,
+        "task_key": task.task_key,
+        "comment_text": comment_text,
+        "activity": doc.name,
+    })
 
     if new_mentions:
         emit(COMMENT_ADDED, {
@@ -2790,6 +2811,7 @@ def edit_comment(activity, comment_text):
             "mentions_only": True,
         })
 
+    frappe.db.commit()
     return {"ok": True, "activity": doc.name, "comment_text": doc.comment_text}
 
 
@@ -2807,7 +2829,18 @@ def delete_comment(activity):
     if doc.user != user:
         _check_permission(task.project, "BP Manager")
 
+    activity_name = doc.name
     frappe.delete_doc("BP Activity", activity, ignore_permissions=True, force=True)
+
+    # See edit_comment's comment on why emit() must precede the commit, not
+    # follow it: _broadcast registers on frappe.db.after_commit.
+    emit(COMMENT_DELETED, {
+        "project": task.project,
+        "task": doc.task,
+        "task_key": task.task_key,
+        "activity": activity_name,
+    })
+
     frappe.db.commit()
 
     return {"ok": True}
@@ -4910,6 +4943,8 @@ _AUTOMATION_TRIGGERS = [
     {"value": "task.due_soon",       "label": "When a task is due soon"},
     {"value": "comment.added",       "label": "When a comment is added"},
     {"value": "task.deleted",        "label": "When a task is deleted"},
+    {"value": "task.trashed",        "label": "When a task is moved to trash"},
+    {"value": "task.restored",       "label": "When a task is restored from trash"},
 ]
 
 
@@ -8518,6 +8553,8 @@ _AUTOMATION_TRIGGERS = [
     {"value": "task.due_soon",       "label": "When a task is due soon"},
     {"value": "comment.added",       "label": "When a comment is added"},
     {"value": "task.deleted",        "label": "When a task is deleted"},
+    {"value": "task.trashed",        "label": "When a task is moved to trash"},
+    {"value": "task.restored",       "label": "When a task is restored from trash"},
 ]
 
 _AUTOMATION_ACTIONS = [
