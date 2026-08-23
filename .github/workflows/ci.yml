@@ -130,6 +130,19 @@ jobs:
           bench --site "$SITE_NAME" install-app erpnext
           bench --site "$SITE_NAME" install-app batch_projects
 
+      - name: Seed ERPNext test fixtures missing from a fresh site
+        working-directory: ${{ env.BENCH_PATH }}
+        env:
+          CI: "Yes"
+        run: |
+          # ERPNext's own test records (Warehouse / Company) reference the
+          # "Transit" Warehouse Type, which is only created lazily by
+          # erpnext.stock tests. On a fresh site the batch_projects suite's
+          # make_test_records for those doctypes fails with
+          # "Could not find Warehouse Type: Transit" before any test runs.
+          # Create it up front so the deterministic suite is actually runnable.
+          bench --site "$SITE_NAME" execute frappe.client.insert --kwargs '{"doc": {"doctype": "Warehouse Type", "name": "Transit"}}' || true
+
       - name: Run the batch_projects test suite
         working-directory: ${{ env.BENCH_PATH }}
         env:
