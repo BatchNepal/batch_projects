@@ -115,7 +115,7 @@ class TestTrashBoundaryEnforcement(FrappeTestCase):
     @patch.object(sharing.frappe.db, "get_value")
     def test_guest_comment_on_trashed_task_rejected(self, get_value, load_link):
         """sharing.add_guest_comment rejects trashed tasks."""
-        get_value.return_value = 1  # is_deleted=1
+        get_value.return_value = frappe._dict(is_deleted=1)
         link = MagicMock()
         link.scope = "task"
         link.access_level = "comment"
@@ -129,7 +129,7 @@ class TestTrashBoundaryEnforcement(FrappeTestCase):
     @patch.object(sharing.frappe.db, "get_value")
     def test_guest_update_shared_task_rejects_trashed(self, get_value, load_link):
         """sharing.update_shared_task rejects trashed tasks."""
-        get_value.return_value = 1  # is_deleted=1
+        get_value.return_value = frappe._dict(is_deleted=1)
         link = MagicMock()
         link.scope = "task"
         link.access_level = "edit"
@@ -177,6 +177,10 @@ class TestSeatCapacityAndTeamREST(FrappeTestCase):
             "user_type": "System User",
         })
         doc.insert(ignore_permissions=True)
+        # Frappe's User controller ignores user_type passed to insert() — the
+        # row lands as Website User. Set it directly so assignability checks
+        # (task_invariants._assert_assignable_user) see a System User.
+        frappe.db.set_value("User", email, "user_type", "System User")
         self._users.append(email)
         return email
 
@@ -233,14 +237,14 @@ class TestSeatCapacityAndTeamREST(FrappeTestCase):
     @patch("batch_projects.api.board.frappe.db.sql")
     def test_update_project_members_uses_advisory_lock(self, sql, assert_seats):
         """update_project_members uses GET_LOCK for seat decision atomicity."""
-        real_sql = frappe.db.sql
+        _db_type = type(frappe.db)
 
         def sql_side_effect(query, *args, **kwargs):
             if "GET_LOCK" in str(query):
                 return [[1]]
             if "RELEASE_LOCK" in str(query):
                 return [[1]]
-            return real_sql(query, *args, **kwargs)
+            return _db_type.sql(frappe.db, query, *args, **kwargs)
 
         sql.side_effect = sql_side_effect
         proj = self._make_project()
@@ -333,12 +337,12 @@ class TestScheduleDataIntegrity(FrappeTestCase):
     @patch.object(automation_schedule_data.frappe.db, "sql")
     def test_apply_task_occurrence_uses_for_update(self, sql, assert_caller):
         """apply_task_occurrence uses FOR UPDATE lock on source."""
-        real_sql = frappe.db.sql
+        _db_type = type(frappe.db)
 
         def sql_side_effect(query, *args, **kwargs):
             if "FOR UPDATE" in str(query):
                 return [frappe._dict(name="TASKX", is_deleted=0, is_recurring=1, project="PROJX")]
-            return real_sql(query, *args, **kwargs)
+            return _db_type.sql(frappe.db, query, *args, **kwargs)
 
         sql.side_effect = sql_side_effect
         proj = self._make_project()
@@ -435,12 +439,8 @@ class TestQueryFilters(FrappeTestCase):
     @patch.object(board.frappe, "get_all")
     def test_get_sprint_report_filters_trash(self, get_all, check_perm):
         """get_sprint_report includes is_deleted:0 in task query."""
-        proj = self._make_project()
-        team = self._make_team()
-        sprint = self._make_sprint(proj, team)
-        
         get_all.return_value = []
-        
+
         board.get_sprint_report(proj, sprint)
         
         # Find the BP Task call
@@ -455,11 +455,10 @@ class TestQueryFilters(FrappeTestCase):
     @patch.object(board.frappe, "get_all")
     def test_get_team_velocity_filters_trash_and_accessible(self, get_all, acc_proj, check_perm):
         """get_team_velocity includes is_deleted:0 and accessible project constraint."""
-        team = self._make_team()
-        
         acc_proj.return_value = None  # Admin
         get_all.return_value = []
-        
+        team = self._make_team()
+
         board.get_team_velocity(team, last_n_sprints=1)
         
         # Find the BP Task call
@@ -511,10 +510,9 @@ class TestQueryFilters(FrappeTestCase):
     @patch.object(project_templates.frappe, "get_all")
     def test_snapshot_tasks_filters_trash(self, get_all):
         """_snapshot_tasks includes is_deleted:0."""
-        proj = self._make_project()
-        
         get_all.return_value = []
-        
+        proj = self._make_project()
+
         project_templates._snapshot_tasks(proj, "2026-09-01")
         
         filters = get_all.call_args.kwargs["filters"]
