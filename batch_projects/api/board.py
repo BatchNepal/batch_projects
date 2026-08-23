@@ -1404,8 +1404,9 @@ def move_task(issue, status=None, prev=None, next=None, force=False):
     from batch_projects.cache import invalidate_project
     from batch_projects import rank as rankutil
     from batch_projects.events import emit, TASK_MOVED
+    from batch_projects.task_validation import require_live_task
 
-    doc = frappe.get_doc("BP Task", issue)
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
 
     old_status = doc.status
@@ -1475,7 +1476,8 @@ def request_approval(issue, approver):
 @frappe.whitelist()
 def approve_task(issue):
     """Approve a task. Only the designated approver may approve."""
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
     from frappe.utils import now_datetime
     user = frappe.session.user
@@ -1502,7 +1504,8 @@ def approve_task(issue):
 @frappe.whitelist()
 def reject_task(issue, reason=None):
     """Reject a task. Only the designated approver may reject."""
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
     from frappe.utils import now_datetime
     user = frappe.session.user
@@ -1545,6 +1548,8 @@ def reject_task(issue, reason=None):
 @frappe.whitelist()
 def get_task(issue):
     doc = frappe.get_doc("BP Task", issue)
+    if doc.is_deleted:
+        frappe.throw("Task has been trashed.", frappe.PermissionError)
     _check_task_permission(issue, doc.project, "BP Viewer")
     data = doc.as_dict()
     hidden_cf_ids = _custom_fields.hidden_field_ids_for_project(doc.project, "tasks")
@@ -1770,7 +1775,8 @@ def update_task(issue, fields, force=False):
     if isinstance(fields, str):
         fields = json.loads(fields)
 
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+    doc = require_live_task(issue)
     _check_task_permission(issue, doc.project, "BP Member")
 
     # Same view-independent blocker guard for status changes via the generic path.
@@ -2733,7 +2739,8 @@ def move_task_to_sprint(issue, sprint):
 
 @frappe.whitelist()
 def add_comment(issue, comment_text):
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
 
     activity = frappe.get_doc({
@@ -3612,7 +3619,7 @@ def get_sprint_capacity(sprint):
     _check_permission(doc.project, "BP Viewer")
 
     tasks = frappe.get_all(
-        "BP Task", filters={"sprint": sprint},
+        "BP Task", filters={"sprint": sprint, "is_deleted": 0},
         fields=["name", "estimated_hours"],
     )
     task_names = [t["name"] for t in tasks]
@@ -7010,7 +7017,7 @@ def get_dashboard():
     if issue_names:
         my_issues = frappe.get_all(
             "BP Task",
-            filters={"name": ["in", issue_names]},
+            filters={"name": ["in", issue_names], "is_deleted": 0},
             fields=["name", "task_key", "title", "status", "priority",
                     "project", "due_date", "epic", "story_points", "task_type",
                     "estimated_hours", "modified"],
@@ -7594,7 +7601,9 @@ def update_sprint(sprint, sprint_name=None, goal=None, start_date=None, end_date
 def watch_task(task):
     """Current user starts watching a task."""
     from batch_projects.events import add_watcher
+    from batch_projects.task_validation import require_live_task
     _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
+    require_live_task(task)
     add_watcher(task, frappe.session.user, reason="manual")
     return {"watching": True}
 
@@ -7604,7 +7613,9 @@ def watch_task(task):
 @frappe.whitelist()
 def unwatch_task(task):
     """Current user stops watching a task."""
+    from batch_projects.task_validation import require_live_task
     _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
+    require_live_task(task)
     for w in frappe.get_all(
         "BP Task Watcher", filters={"task": task, "user": frappe.session.user}, pluck="name"
     ):
@@ -7734,47 +7745,62 @@ def update_project_members(project, members):
             role = "Member"
         clean.append({"user": m["user"], "role": role})
 
-    # Enforce seat cap for new members not already in this project.
-    # Existing members keep their seat; users already seated elsewhere
-    # via another project are also fine (assert_seat_available handles
-    # is_seated internally). Same pattern as board.py:3239-3244 and
-    # invitations.py:298-303.
-    current = frappe.get_all("BP Project Member",
-        filters={"parent": project},
-        fields=["user", "role"])
-    current_users = {m["user"] for m in current}
-    old_roles = {m["user"]: m["role"] for m in current}
-    from batch_projects.entitlements import assert_seats_available, is_seated
-    new_users = {m["user"] for m in clean if not is_seated(m["user"])}
-    assert_seats_available(len(new_users))
-
-    from batch_projects import access
-    for u in {m["user"] for m in clean} - current_users:
-        access.ensure_member_role(u)
-
-    frappe.db.sql(
-        "DELETE FROM `tabBP Project Member` WHERE parent=%s",
-        project
-    )
-    for i, m in enumerate(clean):
-        frappe.db.sql(
-            """INSERT INTO `tabBP Project Member`
-               (name, parent, parenttype, parentfield, idx, user, role,
-                owner, creation, modified, modified_by)
-               VALUES (%s, %s, 'BP Project', 'members', %s, %s, %s,
-                       %s, NOW(), NOW(), %s)""",
-            (
-                frappe.generate_hash(length=10),
-                project, i + 1,
-                m["user"], m["role"],
-                frappe.session.user, frappe.session.user,
-            )
+    # Atomic seat decision: one advisory lock serializes the count+assert+
+    # write across concurrent membership mutations, so two requests racing
+    # for the final seat cannot both pass the check.
+    import hashlib
+    digest = hashlib.sha256(f"bp_seat:{project}".encode()).hexdigest()
+    lock_name = f"bp_seat:{digest[:48]}"  # 56 chars, under MySQL's 64-char limit
+    acquired = frappe.db.sql("SELECT GET_LOCK(%s, 8)", (lock_name,))[0][0]
+    if not acquired:
+        frappe.throw(
+            "Could not acquire seat lock for this project. Retry.",
+            frappe.ValidationError,
         )
-    frappe.db.sql(
-        "UPDATE `tabBP Project` SET modified=NOW(), modified_by=%s WHERE name=%s",
-        (frappe.session.user, project)
-    )
-    frappe.db.commit()
+
+    try:
+        # Enforce seat cap for new members not already in this project.
+        # Existing members keep their seat; users already seated elsewhere
+        # via another project are also fine (assert_seat_available handles
+        # is_seated internally).
+        current = frappe.get_all("BP Project Member",
+            filters={"parent": project},
+            fields=["user", "role"])
+        current_users = {m["user"] for m in current}
+        old_roles = {m["user"]: m["role"] for m in current}
+        from batch_projects.entitlements import assert_seats_available, is_seated
+        new_users = {m["user"] for m in clean if not is_seated(m["user"])}
+        assert_seats_available(len(new_users))
+
+        from batch_projects import access
+        for u in {m["user"] for m in clean} - current_users:
+            access.ensure_member_role(u)
+
+        frappe.db.sql(
+            "DELETE FROM `tabBP Project Member` WHERE parent=%s",
+            project
+        )
+        for i, m in enumerate(clean):
+            frappe.db.sql(
+                """INSERT INTO `tabBP Project Member`
+                   (name, parent, parenttype, parentfield, idx, user, role,
+                    owner, creation, modified, modified_by)
+                   VALUES (%s, %s, 'BP Project', 'members', %s, %s, %s,
+                           %s, NOW(), NOW(), %s)""",
+                (
+                    frappe.generate_hash(length=10),
+                    project, i + 1,
+                    m["user"], m["role"],
+                    frappe.session.user, frappe.session.user,
+                )
+            )
+        frappe.db.sql(
+            "UPDATE `tabBP Project` SET modified=NOW(), modified_by=%s WHERE name=%s",
+            (frappe.session.user, project)
+        )
+        frappe.db.commit()
+    finally:
+        frappe.db.sql("SELECT RELEASE_LOCK(%s)", (lock_name,))
 
     # ReBAC sync: this is a whole-list replace, so diff old vs
     # new roles rather than emitting for everyone — emit() fires an event
@@ -8231,7 +8257,7 @@ def get_sprint_report(project, sprint_name):
 
     tasks = frappe.get_all(
         "BP Task",
-        filters={"project": project, "sprint": sprint_name},
+        filters={"project": project, "sprint": sprint_name, "is_deleted": 0},
         fields=["name", "title", "task_key", "status", "priority", "story_points",
                 "started_on", "completed_on", "creation", "docstatus"],
         order_by="creation asc",
@@ -8342,6 +8368,14 @@ def get_sprint_report(project, sprint_name):
 def get_team_velocity(team, last_n_sprints=5):
     """Sprint velocity data for a team — completed points per sprint."""
     _check_team_permission(team, "Viewer")
+
+    # Team browsing is not a project-data grant: constrain the task reads to
+    # the caller's accessible projects (None = unrestricted/admin).
+    from batch_projects.permissions import get_accessible_projects
+    accessible = get_accessible_projects()
+    if accessible is not None and not accessible:
+        return []
+
     sprints = frappe.get_all(
         "BP Sprint",
         filters={"team": team, "status": "Completed"},
@@ -8352,9 +8386,12 @@ def get_team_velocity(team, last_n_sprints=5):
 
     result = []
     for sprint in sprints:
+        filters = {"sprint": sprint["name"], "is_deleted": 0}
+        if accessible is not None:
+            filters["project"] = ["in", list(accessible)]
         issues = frappe.get_all(
             "BP Task",
-            filters={"sprint": sprint["name"]},
+            filters=filters,
             fields=["story_points", "status", "project"],
         )
         total_points    = sum((i["story_points"] or 0) for i in issues)

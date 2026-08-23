@@ -144,12 +144,24 @@ class BPProject(Document):
 
         if self.is_new():
             if access.is_instance_admin() or after == {frappe.session.user: "Admin"}:
+                # Incremental seat check for new projects.
+                from batch_projects.entitlements import assert_seats_available, is_seated
+                new_users = [u for u in after.keys() if not is_seated(u)]
+                if new_users:
+                    assert_seats_available(len(new_users))
                 return
             frappe.throw(
                 "Project members can't be set this way.", frappe.PermissionError
             )
 
         access.require(self.name, "Admin")
+
+        # Incremental seat check for member additions (covers the generic
+        # REST/ORM parent-save path that bypasses the child before_insert hook).
+        from batch_projects.entitlements import assert_seats_available, is_seated
+        added_users = [u for u in (after.keys() - before.keys()) if not is_seated(u)]
+        if added_users:
+            assert_seats_available(len(added_users))
 
     def _validate_json_field(self, fieldname, expected_type):
         val = getattr(self, fieldname, None)

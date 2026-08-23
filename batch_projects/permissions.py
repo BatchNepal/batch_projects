@@ -509,6 +509,55 @@ def bp_task_has_permission(doc, user=None, permission_type=None):
     return False
 
 
+def bp_team_query_conditions(user=None):
+    """BP Team list visibility: instance admins bypass; org System Users
+    (non-guest) may read any team; guests may read only teams where they are
+    a BP Team Member."""
+    user = user or frappe.session.user
+    if _is_admin(user):
+        return ""
+    from batch_projects import access
+    if access.is_guest(user):
+        return f"""
+            `tabBP Team`.`name` IN (
+                SELECT parent FROM `tabBP Team Member` WHERE user = {frappe.db.escape(user)}
+            )
+        """
+    return ""
+
+
+def bp_team_has_permission(doc, user=None, permission_type=None):
+    """BP Team per-document gate: instance admins bypass; org System Users may
+    read any team; guests may read only teams where they are a BP Team Member;
+    write/delete require team membership with sufficient role."""
+    from batch_projects import access
+    user = user or frappe.session.user
+    if access.is_instance_admin(user):
+        return True
+    if doc.get("__islocal"):
+        return frappe.db.get_value("User", user, "user_type") == "System User"
+    if permission_type == "read":
+        if access.is_guest(user):
+            member_row = frappe.db.get_value(
+                "BP Team Member", {"parent": doc.name, "user": user}, "role"
+            )
+            return bool(member_row)
+        return True
+    member_role = frappe.db.get_value(
+        "BP Team Member", {"parent": doc.name, "user": user}, "role"
+    )
+    if not member_role:
+        return False
+    hierarchy = {"Admin": 3, "Manager": 2, "Member": 1}
+    if permission_type in ("write", "create"):
+        required = "Member"
+    elif permission_type in ("delete", "submit", "cancel"):
+        required = "Admin"
+    else:
+        required = "Viewer"
+    return hierarchy.get(member_role, 0) >= hierarchy.get(required, 0)
+
+
 # ─── Owned/workspace rows: BP Report / BP Dashboard ────────────────────────
 #
 # The one documented ownership policy for both doctypes (mirrored at the API

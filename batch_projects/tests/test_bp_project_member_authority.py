@@ -66,7 +66,13 @@ class TestBPProjectMemberMutationAuthority(FrappeTestCase):
 
     def test_new_project_instance_admin_bypasses_shape_check(self):
         doc = self._doc(_members(("anyone@example.com", "Admin")), is_new=True)
-        with patch.object(access, "is_instance_admin", return_value=True):
+        # Seat accounting is a separate licensing concern from the shape/
+        # authority check this test covers — the parent validator now runs
+        # incremental seat validation on member additions (P1-6), so stub it.
+        with (
+            patch.object(access, "is_instance_admin", return_value=True),
+            patch("batch_projects.entitlements.assert_seats_available"),
+        ):
             doc._validate_members_mutation_authority()  # must not raise
 
     # ── existing project: any member-table change requires Admin ────────

@@ -166,7 +166,7 @@ def _snapshot_tasks(project, project_start_date):
     from frappe.utils import getdate
 
     rows = frappe.get_all(
-        "BP Task", filters={"project": project},
+        "BP Task", filters={"project": project, "is_deleted": 0},
         fields=["name", "title", "description", "task_type", "status", "priority",
                 "story_points", "labels", "estimated_hours", "billable",
                 "custom_field_values", "parent_task", "start_date", "due_date"],

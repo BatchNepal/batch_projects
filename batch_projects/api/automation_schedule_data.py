@@ -125,7 +125,7 @@ def query_tasks_by_date(projects=None, field=None, date=None, **_):
         value_filter = ["between", [f"{target} 00:00:00", f"{target} 23:59:59"]]
     names = frappe.get_all(
         "BP Task",
-        filters={"project": ["in", projects], field: value_filter},
+        filters={"project": ["in", projects], field: value_filter, "is_deleted": 0},
         pluck="name",
         order_by="name asc",
         limit_page_length=_MAX_RESULT_ROWS,
@@ -149,6 +149,10 @@ def get_recurring_task(task=None, **_):
     if not task or not frappe.db.exists("BP Task", task):
         return None
     doc = frappe.get_doc("BP Task", task)
+    # A trashed or no-longer-recurring task must not serve as a recurrence
+    # template — the scheduler would otherwise admit new occurrences from it.
+    if doc.is_deleted or not doc.is_recurring:
+        return None
     return {
         "name": doc.name,
         "project": doc.project,
@@ -276,7 +280,27 @@ def apply_task_occurrence(mutation=None, **_):
             {"user": user, "full_name": frappe.db.get_value("User", user, "full_name") or user}
             for user in assignees
         ],
-    }).insert(ignore_permissions=True)
+    })
+
+    # Lock and re-validate the recurrence source inside the same transaction
+    # as the occurrence insert: live, still recurring, same project.
+    source = frappe.db.sql(
+        """SELECT name, is_deleted, is_recurring, project
+           FROM `tabBP Task` WHERE name = %s FOR UPDATE""",
+        mutation["recurrence_source"],
+        as_dict=True,
+    )
+    if not source:
+        frappe.throw("Recurrence source task no longer exists")
+    source = source[0]
+    if source.is_deleted:
+        frappe.throw("Recurrence source task has been trashed")
+    if not source.is_recurring:
+        frappe.throw("Recurrence source task is no longer recurring")
+    if source.project != mutation["project"]:
+        frappe.throw("Recurrence source project mismatch")
+
+    doc.insert(ignore_permissions=True)
 
     result = {"doctype": "BP Task", "name": doc.name, "task_key": doc.task_key}
     receipt.target_name = doc.name
