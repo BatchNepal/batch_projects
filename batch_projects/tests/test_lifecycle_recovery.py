@@ -27,6 +27,7 @@ from batch_projects import entitlements
 # frappe.db.sql. Side-effect delegation must route through this, not through
 # frappe.db.sql (which is the mock while a test is running).
 _REAL_DB_SQL = frappe.db.sql
+_REAL_GET_DOC = frappe.get_doc
 
 
 class TestTrashBoundaryEnforcement(FrappeTestCase):
@@ -252,14 +253,9 @@ class TestSeatCapacityAndTeamREST(FrappeTestCase):
         sql.side_effect = sql_side_effect
         proj = self._make_project()
         user = self._make_user()
-        
+
         with patch("batch_projects.api.board._check_permission"):
-            with patch("batch_projects.api.board.frappe.get_doc") as get_doc:
-                mock_doc = MagicMock()
-                mock_doc.members = []
-                get_doc.return_value = mock_doc
-                
-                board.update_project_members(proj, [{"user": user, "role": "Developer"}])
+            board.update_project_members(proj, [{"user": user, "role": "Member"}])
         
         # Check GET_LOCK was called
         lock_calls = [c for c in sql.call_args_list if "GET_LOCK" in str(c)]
@@ -340,13 +336,21 @@ class TestScheduleDataIntegrity(FrappeTestCase):
     @patch.object(automation_schedule_data.frappe.db, "sql")
     def test_apply_task_occurrence_uses_for_update(self, sql, assert_caller):
         """apply_task_occurrence uses FOR UPDATE lock on source."""
+        state = {"project": None}
+
         def sql_side_effect(query, *args, **kwargs):
             if "FOR UPDATE" in str(query):
-                return [frappe._dict(name="TASKX", is_deleted=0, is_recurring=1, project="PROJX")]
+                return [
+                    frappe._dict(
+                        name=args[0], is_deleted=0, is_recurring=1,
+                        project=state["project"],
+                    )
+                ]
             return _REAL_DB_SQL(query, *args, **kwargs)
 
         sql.side_effect = sql_side_effect
         proj = self._make_project()
+        state["project"] = proj
         task = self._make_task(proj, is_recurring=1)
 
         mutation = {
@@ -360,7 +364,14 @@ class TestScheduleDataIntegrity(FrappeTestCase):
             "due_date": "2026-09-05",
         }
 
-        with patch("batch_projects.api.automation_schedule_data.frappe.get_doc"):
+        with patch("batch_projects.api.automation_schedule_data.frappe.get_doc") as get_doc:
+            def gd_side_effect(*args, **kwargs):
+                first = args[0] if args else None
+                if isinstance(first, dict) and first.get("recurrence_source"):
+                    return MagicMock()
+                return _REAL_GET_DOC(*args, **kwargs)
+
+            get_doc.side_effect = gd_side_effect
             automation_schedule_data.apply_task_occurrence(mutation)
         
         # Verify FOR UPDATE was used
