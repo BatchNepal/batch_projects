@@ -47,6 +47,12 @@ class TestAutomationExecutionMetadata(FrappeTestCase):
             frappe.cache().set_value("bp_current_tier", "dev", expires_in_sec=600)
         except Exception:
             pass
+        # run_scheduled also requires the gateway engine (the paid matcher
+        # boundary). A fresh CI site has no bp_gateway_shared_secret, so the
+        # derived engine would be "python" and every scheduled rule would
+        # skip. Pin the explicit override for the duration of the class.
+        cls._bp_engine_prev = frappe.conf.get("bp_automation_engine")
+        frappe.conf.bp_automation_engine = "gateway"
 
     @classmethod
     def tearDownClass(cls):
@@ -56,6 +62,10 @@ class TestAutomationExecutionMetadata(FrappeTestCase):
             frappe.cache().delete_value("bp_current_tier")
         except Exception:
             pass
+        if getattr(cls, "_bp_engine_prev", None) is None:
+            frappe.conf.pop("bp_automation_engine", None)
+        else:
+            frappe.conf.bp_automation_engine = cls._bp_engine_prev
         super().tearDownClass()
 
     # ── per-test state ────────────────────────────────────────────────────

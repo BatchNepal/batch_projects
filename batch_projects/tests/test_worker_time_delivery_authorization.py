@@ -28,6 +28,18 @@ from batch_projects import push
 from batch_projects.secure_email_queue import BPEmailQueue
 
 
+def _erpdesktop_agent_available():
+    try:
+        import erpdesktop_agent  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@unittest.skipUnless(
+    _erpdesktop_agent_available(),
+    "requires the proprietary erpdesktop_agent app; not installed in public CI",
+)
 class TestDesktopPushWorkerRecheck(FrappeTestCase):
     def test_delivery_skipped_when_task_access_was_revoked_since_enqueue(self):
         with (

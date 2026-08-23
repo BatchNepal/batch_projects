@@ -129,6 +129,11 @@ jobs:
             "$SITE_NAME"
           bench --site "$SITE_NAME" install-app erpnext
           bench --site "$SITE_NAME" install-app batch_projects
+          # Explicit migrate: loads batch_projects fixtures (Custom Fields on
+          # ERPNext doctypes, e.g. Timesheet Detail-custom_bp_task) that the
+          # suite's tests depend on. install-app runs migrate, but an explicit
+          # pass guarantees fixture sync even if the app was already installed.
+          bench --site "$SITE_NAME" migrate
 
       - name: Seed ERPNext test fixtures missing from a fresh site
         working-directory: ${{ env.BENCH_PATH }}
