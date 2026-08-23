@@ -308,6 +308,13 @@ doc_events = {
 
 # Scheduled jobs
 scheduler_events = {
+    "all": [
+        # Runs on the same cadence as frappe.email.queue.flush — see
+        # notification_delivery.revalidate_pending_task_email_recipients'
+        # doc comment for why this is the delivery-recheck point rather than
+        # overriding Frappe's core send().
+        "batch_projects.notification_delivery.revalidate_pending_task_email_recipients",
+    ],
     "hourly": [
         "batch_projects.events.send_scheduled_reports",
         "batch_projects.api.timers.send_timer_reminders",

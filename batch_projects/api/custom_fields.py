@@ -118,6 +118,16 @@ def _validate_field_payload(field_type, applies_to, view_role, edit_role, condit
         frappe.throw(f"Invalid applies_to '{applies_to}'.")
     if view_role not in _ROLES or edit_role not in _ROLES:
         frappe.throw("Invalid role.")
+    if access.rank(edit_role) < access.rank(view_role):
+        # get_project_fields strips a field below view_role entirely, but
+        # assert_can_edit_field_values only checks edit_role — a lower
+        # edit_role than view_role would let a role that can't even see the
+        # field's schema pass the edit-time check, granting edit rights on a
+        # field the same user is supposed to have zero visibility into.
+        frappe.throw(
+            f"Edit access ({edit_role}) cannot be weaker than view access ({view_role}).",
+            frappe.ValidationError,
+        )
     if conditional_rules and field_type not in _NUMERIC_TYPES:
         frappe.throw("Conditional markers only apply to number/currency/percent/rating fields.")
     if field_type == "link":
@@ -510,9 +520,13 @@ def strip_unviewable_field_values(values: dict, hidden_ids: set) -> dict:
 def search_field_link_options(project, field, txt=""):
     """Autocomplete for a 'link'-type custom field's value picker: searches
     real records of whatever ERPNext doctype the field was configured
-    against. Uses frappe.get_list (permission-aware for the *current
-    session user* on that doctype), not frappe.get_all — the row-level
-    enforcement is real, not cosmetic."""
+    against. The BP project-role gate below is not an ERPNext data-read
+    grant — the target DocType's own read permission and permlevel field
+    restrictions for the *current session user* remain authoritative, same
+    as any other ERPNext integration surface. A user with no read permission
+    on the link_doctype at all gets [], not a PermissionError; a user who
+    does hold it only ever sees rows/fields frappe.get_list would actually
+    return them through the desk."""
     _guard()
     access.require(project, "Viewer")
 
@@ -528,8 +542,12 @@ def search_field_link_options(project, field, txt=""):
     cf = frappe.get_cached_doc("BP Custom Field", field)
     if cf.field_type != "link":
         frappe.throw("Not a linked-record field.")
-    if not access.has_at_least(project, cf.edit_role or "Member"):
-        frappe.throw("You don't have permission to edit this field.", frappe.PermissionError)
+    # Never let edit permission exceed visibility — also catches legacy
+    # field definitions saved before the role-order guard existed.
+    if not access.has_at_least(project, cf.view_role or "Viewer") or not access.has_at_least(
+        project, cf.edit_role or "Member"
+    ):
+        frappe.throw("You don't have permission to use this field.", frappe.PermissionError)
 
     link_doctype = _parse_json(cf.options_json, {}).get("link_doctype")
     # The allowlist check applies at search time too, not just field
@@ -539,22 +557,32 @@ def search_field_link_options(project, field, txt=""):
         return []
     if not frappe.db.exists("DocType", link_doctype):
         return []
+    if not frappe.has_permission(link_doctype, "read", user=frappe.session.user, raise_exception=False):
+        return []
 
+    from frappe.model import get_permitted_fields
+
+    permitted = set(get_permitted_fields(link_doctype, user=frappe.session.user, permission_type="read"))
     title_field = frappe.db.get_value("DocType", link_doctype, "title_field") or "name"
-    fields = ["name"] if title_field == "name" else ["name", title_field]
-    or_filters = [["name", "like", f"%{txt}%"]]
-    if title_field != "name":
-        or_filters.append([title_field, "like", f"%{txt}%"])
+    can_read_title = title_field == "name" or title_field in permitted
+    fields = ["name"] + ([title_field] if title_field != "name" and can_read_title else [])
 
-    # frappe.get_all (permission-blind), NOT frappe.get_list: SPA users hold
-    # zero ERPNext doctype perms by design, so get_list throws
-    # PermissionError for every real user and this endpoint would return []
-    # forever. The project-role gate + binding
-    # check + edit_role check above plus the _LINK_DOCTYPES allowlist are
-    # the authorization, same posture as board.search_erp_documents.
-    rows = frappe.get_all(
-        link_doctype,
-        or_filters=or_filters if txt else None,
-        fields=fields, limit=20, order_by="modified desc",
-    )
-    return [{"name": r["name"], "label": r.get(title_field) or r["name"]} for r in rows]
+    or_filters = None
+    if txt:
+        or_filters = [["name", "like", f"%{txt}%"]]
+        if title_field != "name" and can_read_title:
+            or_filters.append([title_field, "like", f"%{txt}%"])
+
+    try:
+        rows = frappe.get_list(
+            link_doctype,
+            or_filters=or_filters,
+            fields=fields, limit_page_length=20, order_by="modified desc",
+        )
+    except frappe.PermissionError:
+        return []
+
+    return [
+        {"name": r["name"], "label": (r.get(title_field) if can_read_title else None) or r["name"]}
+        for r in rows
+    ]

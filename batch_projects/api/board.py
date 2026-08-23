@@ -2128,11 +2128,42 @@ def sync_rebac_state(resource, offset=0, limit=500):
     offset = max(int(offset or 0), 0)
     limit = min(max(int(limit or 500), 1), 1000)
 
-    rows = frappe.get_all(
-        doctype, fields=fields,
-        limit_start=offset, limit_page_length=limit,
-        order_by="creation asc",
-    )
+    if resource == "tasks":
+        # A full rebuild must not recreate ReBAC tuples for trashed tasks —
+        # see _task_filters' doc comment: frappe.get_all always runs with
+        # ignore_permissions=True and skips the permission_query_conditions
+        # hook, so this exclusion has to be explicit here too, same as every
+        # other BP Task get_all call site.
+        rows = frappe.get_all(
+            doctype, fields=fields, filters=_task_filters(),
+            limit_start=offset, limit_page_length=limit,
+            order_by="creation asc",
+        )
+    elif resource == "task_assignees":
+        # BP Task Assignee is a child table with no is_deleted of its own —
+        # trashed-ness lives on the parent BP Task. get_all can't filter a
+        # child table by a joined parent field, so this is a raw join
+        # (matching the frappe.db.sql convention already used elsewhere in
+        # this module, e.g. the status-count query above) rather than a
+        # two-step fetch-then-filter that would break pagination.
+        rows = frappe.db.sql(
+            """
+            SELECT ta.parent AS task, ta.user AS user
+            FROM `tabBP Task Assignee` ta
+            INNER JOIN `tabBP Task` t ON t.name = ta.parent
+            WHERE t.is_deleted = 0
+            ORDER BY ta.creation ASC
+            LIMIT %(limit)s OFFSET %(offset)s
+            """,
+            {"limit": limit, "offset": offset},
+            as_dict=True,
+        )
+    else:
+        rows = frappe.get_all(
+            doctype, fields=fields,
+            limit_start=offset, limit_page_length=limit,
+            order_by="creation asc",
+        )
     if resource == "project_members":
         # Legacy rows can carry the "BP "-prefixed alias (BP Admin/BP Manager/
         # ...) — normalize here so the gateway only ever sees the canonical
