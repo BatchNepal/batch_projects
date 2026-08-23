@@ -252,8 +252,29 @@ def bp_epic_query_conditions(user=None):
 
 def bp_report_query_conditions(user=None):
     """Reports: workspace reports (no project) are visible to all; project
-    reports follow project access."""
-    return _project_in_clause_or_null("`tabBP Report`.`project`", user or frappe.session.user)
+    reports follow project access; private reports are visible only to their
+    owner — the list twin of bp_report_has_permission."""
+    from batch_projects import access
+    user = user or frappe.session.user
+    if access.is_instance_admin(user) or access.is_workspace_admin(user):
+        return ""
+    proj_clause = _project_in_clause_or_null("`tabBP Report`.`project`", user)
+    owner = frappe.db.escape(user)
+    private_own = f"(`tabBP Report`.`visibility` = 'private' and `tabBP Report`.`owner` = {owner})"
+    return f"(`tabBP Report`.`visibility` != 'private' and {proj_clause}) or {private_own}"
+
+
+def bp_dashboard_query_conditions(user=None):
+    """Dashboards: same visibility/ownership list policy as BP Report.
+    Previously no query-condition hook existed at all for this doctype."""
+    from batch_projects import access
+    user = user or frappe.session.user
+    if access.is_instance_admin(user) or access.is_workspace_admin(user):
+        return ""
+    proj_clause = _project_in_clause_or_null("`tabBP Dashboard`.`project`", user)
+    owner = frappe.db.escape(user)
+    private_own = f"(`tabBP Dashboard`.`visibility` = 'private' and `tabBP Dashboard`.`owner` = {owner})"
+    return f"(`tabBP Dashboard`.`visibility` != 'private' and {proj_clause}) or {private_own}"
 
 
 def bp_project_query_conditions(user=None):
@@ -398,7 +419,11 @@ def bp_automation_rule_query_conditions(user=None):
 
 
 def bp_notification_mute_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP Notification Mute`.`project`", user or frappe.session.user)
+    from batch_projects import access
+    user = user or frappe.session.user
+    if access.is_instance_admin(user) or access.is_workspace_admin(user):
+        return ""
+    return f"`tabBP Notification Mute`.`user` = {frappe.db.escape(user)}"
 
 
 def bp_notification_rule_query_conditions(user=None):
@@ -414,7 +439,11 @@ def bp_task_watcher_query_conditions(user=None):
 
 
 def bp_view_preference_query_conditions(user=None):
-    return _project_in_clause_or_null("`tabBP View Preference`.`project`", user or frappe.session.user)
+    from batch_projects import access
+    user = user or frappe.session.user
+    if access.is_instance_admin(user) or access.is_workspace_admin(user):
+        return ""
+    return f"`tabBP View Preference`.`user` = {frappe.db.escape(user)}"
 
 
 def bp_workflow_query_conditions(user=None):
@@ -478,3 +507,126 @@ def bp_task_has_permission(doc, user=None, permission_type=None):
         return access.is_task_assignee(doc.name, user)
 
     return False
+
+
+def bp_team_query_conditions(user=None):
+    """BP Team list visibility: instance admins bypass; org System Users
+    (non-guest) may read any team; guests may read only teams where they are
+    a BP Team Member."""
+    user = user or frappe.session.user
+    if _is_admin(user):
+        return ""
+    from batch_projects import access
+    if access.is_guest(user):
+        return f"""
+            `tabBP Team`.`name` IN (
+                SELECT parent FROM `tabBP Team Member` WHERE user = {frappe.db.escape(user)}
+            )
+        """
+    return ""
+
+
+def bp_team_has_permission(doc, user=None, permission_type=None):
+    """BP Team per-document gate: instance admins bypass; org System Users may
+    read any team; guests may read only teams where they are a BP Team Member;
+    write/delete require team membership with sufficient role."""
+    from batch_projects import access
+    user = user or frappe.session.user
+    if access.is_instance_admin(user):
+        return True
+    if doc.get("__islocal"):
+        return frappe.db.get_value("User", user, "user_type") == "System User"
+    if permission_type == "read":
+        if access.is_guest(user):
+            member_row = frappe.db.get_value(
+                "BP Team Member", {"parent": doc.name, "user": user}, "role"
+            )
+            return bool(member_row)
+        return True
+    member_role = frappe.db.get_value(
+        "BP Team Member", {"parent": doc.name, "user": user}, "role"
+    )
+    if not member_role:
+        return False
+    hierarchy = {"Admin": 3, "Manager": 2, "Member": 1}
+    if permission_type in ("write", "create"):
+        required = "Member"
+    elif permission_type in ("delete", "submit", "cancel"):
+        required = "Admin"
+    else:
+        required = "Viewer"
+    return hierarchy.get(member_role, 0) >= hierarchy.get(required, 0)
+
+
+# ─── Owned/workspace rows: BP Report / BP Dashboard ────────────────────────
+#
+# The one documented ownership policy for both doctypes (mirrored at the API
+# layer in api/board.py's report helpers and api/dashboards.py):
+#   - instance/workspace admins: everything;
+#   - private rows: owner only, every permission type;
+#   - workspace rows: read = any System User (a project-scoped row still
+#     requires project visibility); write/delete = owner, the project's
+#     Admin when project-scoped, or an instance/workspace admin;
+#   - create: authenticated System User; Member+ on the project when the
+#     new row is project-scoped.
+def _owned_or_workspace_has_permission(doc, user=None, permission_type=None):
+    from batch_projects import access
+
+    user = user or frappe.session.user
+    if access.is_instance_admin(user) or access.is_workspace_admin(user):
+        return True
+
+    ptype = permission_type or "read"
+
+    if doc.get("__islocal") or ptype == "create":
+        if frappe.db.get_value("User", user, "user_type") != "System User":
+            return False
+        project = doc.get("project")
+        if project:
+            return access.has_at_least(project, "Member", user)
+        return True
+
+    if doc.get("visibility") == "private":
+        return doc.get("owner") == user
+
+    # workspace rows
+    if ptype == "read":
+        project = doc.get("project")
+        if not project:
+            return True  # projectless workspace rows are visible to all System Users
+        return access.has_at_least(project, "Viewer", user)
+
+    # write/delete/anything beyond read
+    project = doc.get("project")
+    if doc.get("owner") == user:
+        return True
+    if project:
+        return access.has_at_least(project, "Admin", user)
+    return False
+
+
+def bp_report_has_permission(doc, user=None, permission_type=None):
+    """Per-document gate for BP Report — private rows owner-only; workspace
+    rows follow the policy documented above. Replaces the generic project-only
+    hook, which could not express ownership/visibility at all."""
+    return _owned_or_workspace_has_permission(doc, user, permission_type)
+
+
+def bp_dashboard_has_permission(doc, user=None, permission_type=None):
+    """Per-document gate for BP Dashboard — same documented policy as BP
+    Report. BP Dashboard previously had NO has_permission hook, so the generic
+    REST API bypassed api/dashboards.py's checks entirely."""
+    return _owned_or_workspace_has_permission(doc, user, permission_type)
+
+
+def bp_user_owned_has_permission(doc, user=None, permission_type=None):
+    """Per-document gate for personal rows keyed on a `user` field
+    (BP View Preference / BP Notification Mute). These are never shared:
+    owner or an instance/workspace admin only, every permission type —
+    including create-as-someone-else through the generic REST/ORM path."""
+    from batch_projects import access
+
+    user = user or frappe.session.user
+    if access.is_instance_admin(user) or access.is_workspace_admin(user):
+        return True
+    return doc.get("user") == user

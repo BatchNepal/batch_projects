@@ -216,7 +216,7 @@ def _read_board(project):
 
     tasks = frappe.get_all(
         "BP Task",
-        filters={"project": project, "parent_task": ["is", "not set"]},
+        filters={"project": project, "parent_task": ["is", "not set"], "is_deleted": 0},
         fields=["name", "task_key", "title", "status", "priority", "task_type",
                 "due_date", "board_order", "labels"],
         order_by="board_order asc, creation asc",
@@ -249,7 +249,7 @@ def _read_task(task_name):
 
     subtasks = frappe.get_all(
         "BP Task",
-        filters={"parent_task": task_name},
+        filters={"parent_task": task_name, "is_deleted": 0},
         fields=["name", "task_key", "title", "status", "priority"],
         order_by="board_order asc, creation asc",
     )
@@ -378,6 +378,11 @@ def add_guest_comment(token, comment_text, guest_name=None):
     if not link.task or not frappe.db.exists("BP Task", link.task):
         frappe.throw(_("The shared task no longer exists."), frappe.DoesNotExistError)
 
+    # Trash is a durable boundary: comments on trashed tasks are rejected.
+    task_data = frappe.db.get_value("BP Task", link.task, ["is_deleted"], as_dict=True)
+    if not task_data or task_data.is_deleted:
+        frappe.throw(_("The shared task has been trashed."), frappe.PermissionError)
+
     comment_text = frappe.utils.strip_html((comment_text or "").strip())[:_GUEST_COMMENT_MAX_LEN]
     if not comment_text:
         frappe.throw(_("Comment can't be empty."))
@@ -439,6 +444,11 @@ def update_shared_task(token, task, fields=None):
         frappe.throw(_("This link does not allow editing."), frappe.PermissionError)
     if not link.task or not frappe.db.exists("BP Task", link.task):
         frappe.throw(_("The shared task no longer exists."), frappe.DoesNotExistError)
+
+    # Trash is a durable boundary: edits on trashed tasks are rejected.
+    task_data = frappe.db.get_value("BP Task", link.task, ["is_deleted"], as_dict=True)
+    if not task_data or task_data.is_deleted:
+        frappe.throw(_("The shared task has been trashed."), frappe.PermissionError)
 
     if link.task != task:
         frappe.throw(_("Token is not valid for this task."), frappe.PermissionError)

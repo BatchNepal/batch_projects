@@ -33,11 +33,12 @@ def _get_user_project_role(project: str) -> str | None:
 def get_my_capabilities(project):
     """The caller's effective role + capability set for `project`,
     resolved fresh on every call — deliberately NOT folded into get_board's
-    payload, which IS cached per-project with no user dimension
-    (batch_projects/cache.py's VIEW_BOARD key is (view, project) only, no
-    user); embedding a per-user role there would leak one user's role to the
-    next user who hits the same cached board. Cheap enough to call on every
-    project switch."""
+    payload. get_board's cache key (batch_projects/cache.py) is now
+    per-(view, project, generation, user), so it no longer cross-leaks
+    between different callers, but the role is still kept out of the cached
+    blob: a role can change (membership edit, project archived) mid-TTL
+    without a mutation that bumps the project's cache generation. Cheap
+    enough to call on every project switch."""
     from batch_projects.gateway_guard import verify_gateway_request
     verify_gateway_request()
 
@@ -1403,8 +1404,9 @@ def move_task(issue, status=None, prev=None, next=None, force=False):
     from batch_projects.cache import invalidate_project
     from batch_projects import rank as rankutil
     from batch_projects.events import emit, TASK_MOVED
+    from batch_projects.task_validation import require_live_task
 
-    doc = frappe.get_doc("BP Task", issue)
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
 
     old_status = doc.status
@@ -1474,7 +1476,8 @@ def request_approval(issue, approver):
 @frappe.whitelist()
 def approve_task(issue):
     """Approve a task. Only the designated approver may approve."""
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
     from frappe.utils import now_datetime
     user = frappe.session.user
@@ -1501,7 +1504,8 @@ def approve_task(issue):
 @frappe.whitelist()
 def reject_task(issue, reason=None):
     """Reject a task. Only the designated approver may reject."""
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
     from frappe.utils import now_datetime
     user = frappe.session.user
@@ -1544,6 +1548,8 @@ def reject_task(issue, reason=None):
 @frappe.whitelist()
 def get_task(issue):
     doc = frappe.get_doc("BP Task", issue)
+    if doc.is_deleted:
+        frappe.throw("Task has been trashed.", frappe.PermissionError)
     _check_task_permission(issue, doc.project, "BP Viewer")
     data = doc.as_dict()
     hidden_cf_ids = _custom_fields.hidden_field_ids_for_project(doc.project, "tasks")
@@ -1769,7 +1775,8 @@ def update_task(issue, fields, force=False):
     if isinstance(fields, str):
         fields = json.loads(fields)
 
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+    doc = require_live_task(issue)
     _check_task_permission(issue, doc.project, "BP Member")
 
     # Same view-independent blocker guard for status changes via the generic path.
@@ -2675,9 +2682,25 @@ def get_backlog(project):
             })
         refs_map = _fetch_task_refs(issue_names)
         epics = _fetch_epics(issues)
+
+        # Same sanitization query_tasks() applies before a task payload goes
+        # out (custom-field stripping) plus the view_money gate task_reads.py
+        # applies for the single-task detail view — get_backlog previously
+        # returned custom_field_values and billable raw with neither check,
+        # and that unsanitized payload was then cached and served verbatim
+        # to every subsequent caller within the TTL window.
+        hidden_cf_ids = _custom_fields.hidden_field_ids_for_project(project, "tasks")
+        from batch_projects import access
+        can_view_money = access.has_capability(project, "view_money")
+
         for issue in issues:
             issue["assignees"] = assignee_map.get(issue["name"], [])
             issue["references"] = refs_map.get(issue["name"], [])
+            issue["custom_field_values"] = _custom_fields.strip_unviewable_field_values(
+                _parse_json(issue.get("custom_field_values"), {}), hidden_cf_ids
+            )
+            if not can_view_money:
+                issue.pop("billable", None)
             if issue.get("epic") and issue["epic"] in epics:
                 issue["epic_title"] = epics[issue["epic"]]["title"]
                 issue["epic_color"] = epics[issue["epic"]]["color"]
@@ -2716,7 +2739,8 @@ def move_task_to_sprint(issue, sprint):
 
 @frappe.whitelist()
 def add_comment(issue, comment_text):
-    doc = frappe.get_doc("BP Task", issue)
+    from batch_projects.task_validation import require_live_task
+    doc = require_live_task(issue)
     _check_permission(doc.project, "BP Member")
 
     activity = frappe.get_doc({
@@ -3113,22 +3137,49 @@ def delete_epic(epic):
 # ─── SAVED REPORTS ──────────────────────────────────────────────────────────────
 
 
+def _assert_report_write_authority(doc):
+    """Ownership policy for updating/deleting a saved report — the API twin
+    of permissions.bp_report_has_permission (see that function for the one
+    documented policy): admins bypass; private rows are owner-only; workspace
+    rows are owner, or the project's Admin when project-scoped."""
+    from batch_projects import access
+    user = frappe.session.user
+    if access.is_instance_admin(user) or access.is_workspace_admin(user):
+        return
+    if doc.visibility == "private":
+        if doc.owner != user:
+            frappe.throw("Not permitted", frappe.PermissionError)
+        return
+    if doc.owner == user:
+        return
+    if doc.project:
+        _check_permission(doc.project, "BP Admin")
+        return
+    frappe.throw("Not permitted", frappe.PermissionError)
+
+
 @frappe.whitelist()
 def get_saved_reports():
     """List saved reports visible to the user: workspace reports + reports on
-    projects they can access."""
+    projects they can access. Private reports are owner-only (instance/workspace
+    admins see everything)."""
+    from batch_projects import access
     from batch_projects.permissions import get_accessible_projects
     accessible = get_accessible_projects()
+    is_admin = access.is_instance_admin() or access.is_workspace_admin()
     rows = frappe.get_all(
         "BP Report",
         fields=["name", "report_name", "icon", "color", "starred", "pinned",
                 "project", "milestone", "period", "schedule_enabled",
                 "schedule_frequency", "schedule_day", "schedule_hour",
-                "schedule_recipients", "last_sent", "modified", "owner"],
+                "schedule_recipients", "last_sent", "modified", "owner",
+                "visibility"],
         order_by="modified desc",
     )
     out = []
     for r in rows:
+        if not is_admin and r.visibility == "private" and r.owner != frappe.session.user:
+            continue
         if accessible is None or not r.project or r.project in accessible:
             out.append({
                 "id": r.name, "report_name": r.report_name,
@@ -3151,6 +3202,10 @@ def get_saved_reports():
 @frappe.whitelist()
 def get_saved_report(report):
     doc = frappe.get_doc("BP Report", report)
+    from batch_projects import access
+    if (not access.is_instance_admin() and not access.is_workspace_admin()
+            and doc.visibility == "private" and doc.owner != frappe.session.user):
+        frappe.throw("Not permitted", frappe.PermissionError)
     if doc.project:
         _check_permission(doc.project, "BP Viewer")
     return _report_out(doc, with_layout=True)
@@ -3226,8 +3281,7 @@ def save_report(report_name=None, project=None, milestone=None, period="last_30_
 
     if report:
         doc = frappe.get_doc("BP Report", report)
-        if doc.project:
-            _check_permission(doc.project, "BP Member")
+        _assert_report_write_authority(doc)
         if report_name is not None: doc.report_name = report_name
         if project is not None or report_name is not None: doc.project = project
         if milestone is not None: doc.milestone = milestone or None
@@ -3273,8 +3327,7 @@ def save_report(report_name=None, project=None, milestone=None, period="last_30_
 @frappe.whitelist()
 def delete_saved_report(report):
     doc = frappe.get_doc("BP Report", report)
-    if doc.project:
-        _check_permission(doc.project, "BP Member")
+    _assert_report_write_authority(doc)
     frappe.delete_doc("BP Report", report)
     frappe.db.commit()
     return {"deleted": report}
@@ -3566,7 +3619,7 @@ def get_sprint_capacity(sprint):
     _check_permission(doc.project, "BP Viewer")
 
     tasks = frappe.get_all(
-        "BP Task", filters={"sprint": sprint},
+        "BP Task", filters={"sprint": sprint, "is_deleted": 0},
         fields=["name", "estimated_hours"],
     )
     task_names = [t["name"] for t in tasks]
@@ -3998,8 +4051,11 @@ def _resolve_scope(scope):
 				_check_permission(p, "BP Viewer")
 				resolved.append(p)
 		if not resolved:
+			# Every entry in the requested scope was invalid or inaccessible —
+			# used to fall through to an unrestricted (unfiltered) query.
+			# Must fail closed, not silently widen to "everything".
 			_require_system_user()
-			return {}, None, None
+			frappe.throw("Invalid or inaccessible project scope.", frappe.ValidationError)
 		if len(resolved) == 1:
 			return {"project": resolved[0]}, resolved[0], resolved
 		return {"project": ["in", resolved]}, None, resolved
@@ -4009,8 +4065,10 @@ def _resolve_scope(scope):
 	if proj_name:
 		_check_permission(proj_name, "BP Viewer")
 		return {"project": proj_name}, proj_name, [proj_name]
+	# Same fail-closed fix as the multi-item list branch above — an invalid
+	# single-project scope must not fall through to an unrestricted query.
 	_require_system_user()
-	return {}, None, None
+	frappe.throw("Invalid or inaccessible project scope.", frappe.ValidationError)
 
 
 
@@ -4348,13 +4406,21 @@ def create_automation_rule(project, rule_name, trigger_event, action_type,
 @frappe.whitelist()
 def get_milestones(project=None):
 	"""List milestones for a project (or all accessible projects)."""
-	if project:
-		_check_permission(project, "BP Viewer")
-	else:
-		_require_system_user()
 	filters = {}
 	if project:
+		_check_permission(project, "BP Viewer")
 		filters["project"] = project
+	else:
+		_require_system_user()
+		# Same accessible-projects pattern get_sla_breaches uses — without it
+		# a private/team project's milestones leak to any System User who
+		# omits `project`.
+		from batch_projects.permissions import get_accessible_projects
+		accessible = get_accessible_projects()  # None = admin (all)
+		if accessible is not None:
+			if not accessible:
+				return []
+			filters["project"] = ["in", list(accessible)]
 	rows = frappe.get_all(
 		"BP Milestone",
 		filters=filters,
@@ -4501,7 +4567,14 @@ def create_project(
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 def _fetch_task_links(issue_names: list) -> dict:
-    """Task→task relations per task (mirror columns read linked status live)."""
+    """Task→task relations per task (mirror columns read linked status live).
+
+    Filtered to links whose target task the caller can actually see — a link
+    row otherwise discloses the key/title/status of a task (possibly in a
+    private/team project) the caller can't open directly. Reuses task_reads'
+    single-task visibility helper, the same check the get_task detail view
+    already applies to its own `links` — board/list/backlog reads went
+    through this get_all with no equivalent filter."""
     if not issue_names:
         return {}
     rows = frappe.get_all(
@@ -4510,14 +4583,24 @@ def _fetch_task_links(issue_names: list) -> dict:
         fields=["parent", "link_type", "linked_task", "linked_task_key",
                 "linked_task_title", "linked_task_status", "linked_task_project"],
     )
+    from batch_projects.task_reads import _visible_link_names
+    visible = _visible_link_names(rows)
     out = {}
     for r in rows:
+        if r.get("linked_task") not in visible:
+            continue
         out.setdefault(r.pop("parent"), []).append(r)
     return out
 
 
 def _fetch_task_refs(issue_names: list) -> dict:
-    """ERPNext document references per task (the Connected column)."""
+    """ERPNext document references per task (the Connected column).
+
+    Filtered to references the caller can actually read — having access to
+    the BP Task is not permission to discover the referenced ERP document's
+    existence through its identifier. Same check task_reads' get_task detail
+    view already applies to its own `references`; board/list/backlog reads
+    went through this get_all with no equivalent filter."""
     if not issue_names:
         return {}
     rows = frappe.get_all(
@@ -4525,8 +4608,11 @@ def _fetch_task_refs(issue_names: list) -> dict:
         filters={"parent": ["in", issue_names]},
         fields=["name", "parent", "ref_doctype", "ref_name", "ref_label"],
     )
+    from batch_projects.task_reads import _can_read_reference
     out = {}
     for r in rows:
+        if not _can_read_reference(r):
+            continue
         out.setdefault(r.pop("parent"), []).append(r)
     return out
 
@@ -4605,13 +4691,21 @@ def _project_health_label(health_override, total, done, overdue):
 @frappe.whitelist()
 def get_risks(project=None):
 	"""List risks for a project (or all open risks)."""
-	if project:
-		_check_permission(project, "BP Viewer")
-	else:
-		_require_system_user()
 	filters = {"status": "Open"}
 	if project:
+		_check_permission(project, "BP Viewer")
 		filters["project"] = project
+	else:
+		_require_system_user()
+		# Same accessible-projects pattern get_sla_breaches uses — without it
+		# a private/team project's risks leak to any System User who omits
+		# `project`.
+		from batch_projects.permissions import get_accessible_projects
+		accessible = get_accessible_projects()  # None = admin (all)
+		if accessible is not None:
+			if not accessible:
+				return []
+			filters["project"] = ["in", list(accessible)]
 	rows = frappe.get_all("BP Risk",
 		filters=filters,
 		fields=["name", "title", "project", "severity", "status", "owner_user", "description"],
@@ -6230,35 +6324,51 @@ def get_workload(weeks=4, team=None):
         )
     }
 
-    # Open (non-done) tasks assigned to these users with due dates in window
-    try:
-        assignments = frappe.db.sql(
-            """
-            SELECT
-                ta.user,
-                t.name           AS task_name,
-                t.title,
-                t.due_date,
-                t.estimated_hours,
-                t.project,
-                p.project_name   AS project_title,
-                p.project_color
-            FROM `tabBP Task Assignee` ta
-            JOIN `tabBP Task` t
-                ON t.name = ta.parent
-                AND t.docstatus < 2
-                AND t.is_deleted = 0
-                AND t.status NOT IN ('Done', 'Cancelled', 'Closed')
-            LEFT JOIN `tabBP Project` p
-                ON p.name = t.project
-            WHERE ta.user IN %(users)s
-            ORDER BY t.due_date ASC
-            """,
-            {"users": member_users},
-            as_dict=True,
-        )
-    except Exception:
+    # Open (non-done) tasks assigned to these users with due dates in window.
+    # Accessible-projects filter — without it, any authenticated System User
+    # (the `team` branch only requires Viewer-level team access, which
+    # doesn't imply access to every project a team member happens to be
+    # individually assigned tasks in) could read cross-project assignment
+    # data including private/team projects they can't otherwise open.
+    from batch_projects.permissions import get_accessible_projects
+    accessible = get_accessible_projects()  # None = admin (all projects)
+    if accessible is not None and not accessible:
         assignments = []
+    else:
+        params = {"users": member_users}
+        project_clause = ""
+        if accessible is not None:
+            project_clause = "AND t.project IN %(projects)s"
+            params["projects"] = list(accessible)
+        try:
+            assignments = frappe.db.sql(
+                f"""
+                SELECT
+                    ta.user,
+                    t.name           AS task_name,
+                    t.title,
+                    t.due_date,
+                    t.estimated_hours,
+                    t.project,
+                    p.project_name   AS project_title,
+                    p.project_color
+                FROM `tabBP Task Assignee` ta
+                JOIN `tabBP Task` t
+                    ON t.name = ta.parent
+                    AND t.docstatus < 2
+                    AND t.is_deleted = 0
+                    AND t.status NOT IN ('Done', 'Cancelled', 'Closed')
+                LEFT JOIN `tabBP Project` p
+                    ON p.name = t.project
+                WHERE ta.user IN %(users)s
+                {project_clause}
+                ORDER BY t.due_date ASC
+                """,
+                params,
+                as_dict=True,
+            )
+        except Exception:
+            assignments = []
 
     # Bucket tasks: overdue → week 0, no due date → week 0,
     # within window → matching week, beyond window → last week
@@ -6907,7 +7017,7 @@ def get_dashboard():
     if issue_names:
         my_issues = frappe.get_all(
             "BP Task",
-            filters={"name": ["in", issue_names]},
+            filters={"name": ["in", issue_names], "is_deleted": 0},
             fields=["name", "task_key", "title", "status", "priority",
                     "project", "due_date", "epic", "story_points", "task_type",
                     "estimated_hours", "modified"],
@@ -7189,12 +7299,26 @@ def _comment_matching_task_names(query, project=None, projects_in=None, cap=200)
 
 @frappe.whitelist()
 def search_tasks(query, project=None, exclude=None, limit=10, offset=0):
+    """Project-scoped task search, also used as a global "search everywhere"
+    entry point by the frontend (SearchPopup, CreateTask's parent-issue
+    picker) when no project is open yet — see currentProject in
+    frontend/src/stores/project.js, which starts null. That no-project call
+    used to build an org-wide, completely unscoped `filters`; it now falls
+    back to the same accessible-projects scoping search_tasks_global()
+    applies, instead of requiring a project and breaking that feature."""
     _require_system_user()
+    accessible = None
     if project:
         _check_permission(project, "BP Viewer")
-    filters = {"is_deleted": 0}
-    if project:
-        filters["project"] = project
+        filters = {"is_deleted": 0, "project": project}
+    else:
+        from batch_projects.permissions import get_accessible_projects
+        accessible = get_accessible_projects()  # None = admin (all projects)
+        filters = {"is_deleted": 0}
+        if accessible is not None:
+            if not accessible:
+                return []
+            filters["project"] = ["in", list(accessible)]
     if exclude:
         filters["name"] = ["!=", exclude]
 
@@ -7203,7 +7327,7 @@ def search_tasks(query, project=None, exclude=None, limit=10, offset=0):
         ["task_key",    "like", f"%{query}%"],
         ["description", "like", f"%{query}%"],
     ]
-    comment_tasks = _comment_matching_task_names(query, project=project)
+    comment_tasks = _comment_matching_task_names(query, project=project, projects_in=accessible)
     if comment_tasks:
         or_filters.append(["name", "in", comment_tasks])
 
@@ -7477,7 +7601,9 @@ def update_sprint(sprint, sprint_name=None, goal=None, start_date=None, end_date
 def watch_task(task):
     """Current user starts watching a task."""
     from batch_projects.events import add_watcher
+    from batch_projects.task_validation import require_live_task
     _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
+    require_live_task(task)
     add_watcher(task, frappe.session.user, reason="manual")
     return {"watching": True}
 
@@ -7487,7 +7613,9 @@ def watch_task(task):
 @frappe.whitelist()
 def unwatch_task(task):
     """Current user stops watching a task."""
+    from batch_projects.task_validation import require_live_task
     _check_permission(frappe.db.get_value("BP Task", task, "project"), "BP Viewer")
+    require_live_task(task)
     for w in frappe.get_all(
         "BP Task Watcher", filters={"task": task, "user": frappe.session.user}, pluck="name"
     ):
@@ -7617,47 +7745,62 @@ def update_project_members(project, members):
             role = "Member"
         clean.append({"user": m["user"], "role": role})
 
-    # Enforce seat cap for new members not already in this project.
-    # Existing members keep their seat; users already seated elsewhere
-    # via another project are also fine (assert_seat_available handles
-    # is_seated internally). Same pattern as board.py:3239-3244 and
-    # invitations.py:298-303.
-    current = frappe.get_all("BP Project Member",
-        filters={"parent": project},
-        fields=["user", "role"])
-    current_users = {m["user"] for m in current}
-    old_roles = {m["user"]: m["role"] for m in current}
-    from batch_projects.entitlements import assert_seats_available, is_seated
-    new_users = {m["user"] for m in clean if not is_seated(m["user"])}
-    assert_seats_available(len(new_users))
-
-    from batch_projects import access
-    for u in {m["user"] for m in clean} - current_users:
-        access.ensure_member_role(u)
-
-    frappe.db.sql(
-        "DELETE FROM `tabBP Project Member` WHERE parent=%s",
-        project
-    )
-    for i, m in enumerate(clean):
-        frappe.db.sql(
-            """INSERT INTO `tabBP Project Member`
-               (name, parent, parenttype, parentfield, idx, user, role,
-                owner, creation, modified, modified_by)
-               VALUES (%s, %s, 'BP Project', 'members', %s, %s, %s,
-                       %s, NOW(), NOW(), %s)""",
-            (
-                frappe.generate_hash(length=10),
-                project, i + 1,
-                m["user"], m["role"],
-                frappe.session.user, frappe.session.user,
-            )
+    # Atomic seat decision: one advisory lock serializes the count+assert+
+    # write across concurrent membership mutations, so two requests racing
+    # for the final seat cannot both pass the check.
+    import hashlib
+    digest = hashlib.sha256(f"bp_seat:{project}".encode()).hexdigest()
+    lock_name = f"bp_seat:{digest[:48]}"  # 56 chars, under MySQL's 64-char limit
+    acquired = frappe.db.sql("SELECT GET_LOCK(%s, 8)", (lock_name,))[0][0]
+    if not acquired:
+        frappe.throw(
+            "Could not acquire seat lock for this project. Retry.",
+            frappe.ValidationError,
         )
-    frappe.db.sql(
-        "UPDATE `tabBP Project` SET modified=NOW(), modified_by=%s WHERE name=%s",
-        (frappe.session.user, project)
-    )
-    frappe.db.commit()
+
+    try:
+        # Enforce seat cap for new members not already in this project.
+        # Existing members keep their seat; users already seated elsewhere
+        # via another project are also fine (assert_seat_available handles
+        # is_seated internally).
+        current = frappe.get_all("BP Project Member",
+            filters={"parent": project},
+            fields=["user", "role"])
+        current_users = {m["user"] for m in current}
+        old_roles = {m["user"]: m["role"] for m in current}
+        from batch_projects.entitlements import assert_seats_available, is_seated
+        new_users = {m["user"] for m in clean if not is_seated(m["user"])}
+        assert_seats_available(len(new_users))
+
+        from batch_projects import access
+        for u in {m["user"] for m in clean} - current_users:
+            access.ensure_member_role(u)
+
+        frappe.db.sql(
+            "DELETE FROM `tabBP Project Member` WHERE parent=%s",
+            project
+        )
+        for i, m in enumerate(clean):
+            frappe.db.sql(
+                """INSERT INTO `tabBP Project Member`
+                   (name, parent, parenttype, parentfield, idx, user, role,
+                    owner, creation, modified, modified_by)
+                   VALUES (%s, %s, 'BP Project', 'members', %s, %s, %s,
+                           %s, NOW(), NOW(), %s)""",
+                (
+                    frappe.generate_hash(length=10),
+                    project, i + 1,
+                    m["user"], m["role"],
+                    frappe.session.user, frappe.session.user,
+                )
+            )
+        frappe.db.sql(
+            "UPDATE `tabBP Project` SET modified=NOW(), modified_by=%s WHERE name=%s",
+            (frappe.session.user, project)
+        )
+        frappe.db.commit()
+    finally:
+        frappe.db.sql("SELECT RELEASE_LOCK(%s)", (lock_name,))
 
     # ReBAC sync: this is a whole-list replace, so diff old vs
     # new roles rather than emitting for everyone — emit() fires an event
@@ -7859,8 +8002,11 @@ def get_widget_data(config):
 
     filters, proj_name, proj_names = _resolve_scope(scope)
 
+    # _task_filters adds the is_deleted=0 boundary every other task
+    # collection applies — without it a trashed task still counted toward
+    # dashboard widget metrics after the scope check above.
     tasks = frappe.get_all(
-        "BP Task", filters=filters,
+        "BP Task", filters=_task_filters(filters),
         fields=["name", "status", "priority", "task_type", "project", "epic",
                 "story_points", "estimated_hours", "actual_hours"],
     )
@@ -7981,8 +8127,9 @@ def query_bql_group_by(scope, filters_json, group_by="status", metric="count"):
     # Delegate to get_widget_data logic but with pre-filtered scope
     config = {"scope": proj_name or scope, "group_by": group_by, "metric": metric}
     # Temporarily override get_all to use our filters by calling core logic directly
+    # Same live-task boundary as get_widget_data above.
     tasks = frappe.get_all(
-        "BP Task", filters=db_filters,
+        "BP Task", filters=_task_filters(db_filters),
         fields=["name", "status", "priority", "task_type", "project", "epic",
                 "story_points", "estimated_hours", "actual_hours"],
     )
@@ -8110,7 +8257,7 @@ def get_sprint_report(project, sprint_name):
 
     tasks = frappe.get_all(
         "BP Task",
-        filters={"project": project, "sprint": sprint_name},
+        filters={"project": project, "sprint": sprint_name, "is_deleted": 0},
         fields=["name", "title", "task_key", "status", "priority", "story_points",
                 "started_on", "completed_on", "creation", "docstatus"],
         order_by="creation asc",
@@ -8221,6 +8368,14 @@ def get_sprint_report(project, sprint_name):
 def get_team_velocity(team, last_n_sprints=5):
     """Sprint velocity data for a team — completed points per sprint."""
     _check_team_permission(team, "Viewer")
+
+    # Team browsing is not a project-data grant: constrain the task reads to
+    # the caller's accessible projects (None = unrestricted/admin).
+    from batch_projects.permissions import get_accessible_projects
+    accessible = get_accessible_projects()
+    if accessible is not None and not accessible:
+        return []
+
     sprints = frappe.get_all(
         "BP Sprint",
         filters={"team": team, "status": "Completed"},
@@ -8231,9 +8386,12 @@ def get_team_velocity(team, last_n_sprints=5):
 
     result = []
     for sprint in sprints:
+        filters = {"sprint": sprint["name"], "is_deleted": 0}
+        if accessible is not None:
+            filters["project"] = ["in", list(accessible)]
         issues = frappe.get_all(
             "BP Task",
-            filters={"sprint": sprint["name"]},
+            filters=filters,
             fields=["story_points", "status", "project"],
         )
         total_points    = sum((i["story_points"] or 0) for i in issues)
