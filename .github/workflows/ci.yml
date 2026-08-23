@@ -26,6 +26,118 @@ jobs:
       - name: Compile-check every module (syntax/import errors only)
         run: python -m compileall -q batch_projects
 
+  frappe-tests:
+    name: Frappe test suite
+    runs-on: ubuntu-latest
+    # bench init + erpnext clone + site creation is inherently slow; this is a
+    # whole-bench build, not a lint job. Do not trim this to the 10-20 minutes
+    # the static jobs above use.
+    timeout-minutes: 45
+    env:
+      BENCH_PATH: /home/runner/frappe-bench
+      SITE_NAME: test_site
+      DB_ROOT_PASSWORD: root
+      ADMIN_PASSWORD: admin
+      # Both declared frappe-dependencies in pyproject.toml are pinned to the
+      # v15 line; nothing else (hrms, payments, ...) is a dependency of this app.
+      FRAPPE_BRANCH: version-15
+      ERPNEXT_BRANCH: version-15
+
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --password=root"
+          --health-interval=5s --health-timeout=2s --health-retries=20
+      redis-cache:
+        image: redis:7-alpine
+        ports:
+          - 13000:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=2s --health-retries=20
+      redis-queue:
+        image: redis:7-alpine
+        ports:
+          - 11000:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=2s --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-frappe-${{ env.FRAPPE_BRANCH }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y mariadb-client libmariadb-dev
+
+      - name: Init bench
+        run: |
+          pip install frappe-bench
+          bench init \
+            --frappe-branch "$FRAPPE_BRANCH" \
+            --skip-redis-config-generation \
+            --skip-assets \
+            --python "$(which python)" \
+            "$BENCH_PATH"
+
+      - name: Point bench at the service containers
+        working-directory: ${{ env.BENCH_PATH }}
+        run: |
+          bench set-config -g db_host 127.0.0.1
+          bench set-config -g db_port 3306 --parse
+          bench set-config -g redis_cache "redis://127.0.0.1:13000"
+          bench set-config -g redis_queue "redis://127.0.0.1:11000"
+          bench set-config -g redis_socketio "redis://127.0.0.1:11000"
+          mysql --host 127.0.0.1 --port 3306 -u root -p"$DB_ROOT_PASSWORD" \
+            -e "SET GLOBAL character_set_server = 'utf8mb4'"
+          mysql --host 127.0.0.1 --port 3306 -u root -p"$DB_ROOT_PASSWORD" \
+            -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
+
+      - name: Install apps onto a fresh site
+        working-directory: ${{ env.BENCH_PATH }}
+        env:
+          CI: "Yes"
+        run: |
+          bench get-app erpnext --branch "$ERPNEXT_BRANCH" --skip-assets
+          bench get-app batch_projects "$GITHUB_WORKSPACE" --skip-assets
+          bench new-site \
+            --db-root-password "$DB_ROOT_PASSWORD" \
+            --admin-password "$ADMIN_PASSWORD" \
+            --mariadb-user-host-login-scope=% \
+            "$SITE_NAME"
+          bench --site "$SITE_NAME" install-app erpnext
+          bench --site "$SITE_NAME" install-app batch_projects
+
+      - name: Run the batch_projects test suite
+        working-directory: ${{ env.BENCH_PATH }}
+        env:
+          CI: "Yes"
+        run: |
+          bench --site "$SITE_NAME" set-config allow_tests true
+          bench --site "$SITE_NAME" run-tests --app batch_projects
+
   frontend-dist-drift:
     name: Frontend dist matches source
     runs-on: ubuntu-latest
