@@ -101,6 +101,52 @@ class TestStopCapsDurationAtDeletion(FrappeTestCase):
         append_log.assert_called_once()
         self.assertAlmostEqual(append_log.call_args.args[4], 1.0, places=1)
 
+    def test_deleted_task_with_missing_deleted_on_raises_and_preserves_the_row(self):
+        """The unsafe-inflation gap this fail-closed correction exists to
+        close: falling back to now() when deleted_on is missing (a legacy
+        row predating that field, or corrupted data) would log however long
+        the timer had silently kept running as real, billable time."""
+        active_timer = frappe._dict(user="u@example.com", task="TASK-1", started_at=now_datetime() - timedelta(hours=5))
+        with (
+            patch.object(frappe, "get_doc", return_value=active_timer),
+            patch.object(frappe, "delete_doc") as delete_doc,
+            patch.object(
+                frappe.db, "get_value",
+                return_value=frappe._dict(is_deleted=1, deleted_on=None),
+            ),
+            patch.object(timers, "_append_time_log") as append_log,
+            self.assertRaises(frappe.ValidationError),
+        ):
+            timers._stop("AT-1")
+
+        append_log.assert_not_called()
+        # The active-timer row must survive an unresolved failure — it is
+        # the only remaining evidence for an admin to repair (backfill
+        # deleted_on) rather than silently discard.
+        delete_doc.assert_not_called()
+
+    def test_deletion_before_timer_start_produces_no_positive_time(self):
+        """A deleted_on that predates the timer's own started_at (task
+        deleted, then somehow a timer against it appears to have "started"
+        earlier — clock skew, backdated data) must never produce a
+        negative-then-inflated span; it must simply log nothing."""
+        started_at = now_datetime()
+        deleted_on = started_at - timedelta(hours=1)
+        active_timer = frappe._dict(user="u@example.com", task="TASK-1", started_at=started_at)
+        with (
+            patch.object(frappe, "get_doc", return_value=active_timer),
+            patch.object(frappe, "delete_doc"),
+            patch.object(
+                frappe.db, "get_value",
+                return_value=frappe._dict(is_deleted=1, deleted_on=deleted_on),
+            ),
+            patch.object(timers, "_append_time_log") as append_log,
+        ):
+            result = timers._stop("AT-1")
+
+        self.assertIsNone(result)
+        append_log.assert_not_called()
+
 
 class TestGetActiveTimerSelfHealsTrashedTask(FrappeTestCase):
     def test_lookup_resolves_and_clears_a_timer_on_a_trashed_task(self):

@@ -268,31 +268,60 @@ def _append_time_log(task, user, from_time, to_time, hours, description=None):
 
 
 def _stop(active_timer_name):
-    """Stop one BP Active Timer row: delete the state row, resolve the
-    elapsed time into a Timesheet Detail row. Returns a summary dict, or
-    None if the elapsed time rounds to zero (row deleted, nothing logged).
+    """Stop one BP Active Timer row: resolve the elapsed time into a
+    Timesheet Detail row, then delete the state row. Returns a summary
+    dict, or None if the elapsed time rounds to zero (row deleted, nothing
+    logged).
 
     A legacy timer whose task was trashed while it kept running is capped
     at the task's deleted_on, not now() — the task stopped being live work
     the moment it was deleted, so time that kept ticking after that point
     was never real work against it. Time genuinely worked before deletion
     is still logged, against the (now-trashed) task; get_doc still loads a
-    soft-deleted row, only list/permission-query views hide it."""
+    soft-deleted row, only list/permission-query views hide it.
+
+    A deleted task with NO deleted_on (a legacy row predating that field,
+    or corrupted by direct DB manipulation) has no defensible cutoff at
+    all — falling back to now() would silently inflate/bill however long
+    the timer had been forgotten, exactly the unsafe behavior this
+    function exists to prevent. Raise instead and leave the active-timer
+    row in place for an admin to repair (backfill deleted_on, or resolve
+    the timer directly): the row is NOT deleted until every fail-closed
+    check above has passed, so the evidence needed for that repair is
+    never destroyed by the attempt to stop it.
+
+    Policy: new timing/logging against a deleted task is blocked
+    (start_timer/log_time). Existing draft time entries remain viewable
+    and correctable by an authorized user via list_time_entries/
+    update_time_entry/delete_time_entry — trashing a task does not itself
+    lock already-logged draft time, only submitted ERPNext time is
+    immutable through this UI, by ERPNext's own docstatus rules."""
     row = frappe.get_doc("BP Active Timer", active_timer_name)
     started_at = get_datetime(row.started_at)
     user = row.user
     task_name = row.task
-    frappe.delete_doc("BP Active Timer", active_timer_name, ignore_permissions=True)
 
     task_row = frappe.db.get_value(
         "BP Task", task_name, ["is_deleted", "deleted_on"], as_dict=True
     )
     if not task_row:
+        frappe.delete_doc("BP Active Timer", active_timer_name, ignore_permissions=True)
         return None
 
-    to_time = now_datetime()
-    if task_row.is_deleted and task_row.deleted_on:
-        to_time = min(to_time, get_datetime(task_row.deleted_on))
+    if task_row.is_deleted:
+        if not task_row.deleted_on:
+            frappe.throw(
+                "This deleted task has no deletion timestamp. Repair the "
+                "task before stopping its timer.",
+                frappe.ValidationError,
+                title="Timer requires repair",
+            )
+        to_time = min(now_datetime(), get_datetime(task_row.deleted_on))
+    else:
+        to_time = now_datetime()
+
+    # Delete only after every fail-closed validation above has passed.
+    frappe.delete_doc("BP Active Timer", active_timer_name, ignore_permissions=True)
 
     elapsed_hours = round(time_diff_in_hours(to_time, started_at), 4)
     if elapsed_hours <= 0:
