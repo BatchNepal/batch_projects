@@ -159,6 +159,60 @@ def _normalize_workflow_states(raw_states):
 
 _VALID_TRANSITION_MIN_ROLES = ("Manager", "Admin")
 
+# ─── PROJECT SCHEMA MUTATION SAFETY ─────────────────────────────────────────
+# Workflow states, task types and labels are referenced by durable BP Task
+# rows (status/task_type/labels) — they are schemas, not free-form JSON
+# settings, and update_project_workflow/_issue_types/_labels used to replace
+# them wholesale with no check for whether a removed/renamed entry still had
+# live tasks pointing at it.
+
+def _active_task_field_values(project, field) -> set[str]:
+    """Distinct non-empty values of `field` currently in use by live tasks."""
+    rows = frappe.get_all(
+        "BP Task", filters=_task_filters({"project": project}), pluck=field
+    )
+    return {str(v) for v in rows if v not in (None, "")}
+
+
+def _active_task_labels(project) -> set[str]:
+    used = set()
+    for row in frappe.get_all(
+        "BP Task", filters=_task_filters({"project": project}), fields=["labels"]
+    ):
+        raw = row.get("labels")
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            continue
+        if isinstance(parsed, list):
+            used.update(str(v) for v in parsed if v not in (None, ""))
+    return used
+
+
+def _assert_schema_names_survive(removed: set, in_use: set, label: str) -> None:
+    blocked = sorted(removed & in_use)
+    if blocked:
+        frappe.throw(
+            f"Cannot remove or rename {label} {', '.join(blocked)} while active "
+            "tasks still use it. Move those tasks to a replacement value first, "
+            "then retry.",
+            frappe.ValidationError,
+            title=f"{label.title()} still in use",
+        )
+
+
+def _assert_no_duplicate_names(names: list, label: str) -> None:
+    seen = set()
+    for name in names:
+        if name in seen:
+            frappe.throw(
+                f"Duplicate {label} name: {name}.", frappe.ValidationError,
+                title=f"Duplicate {label}",
+            )
+        seen.add(name)
+
 
 def _normalize_allowed_to(allowed, valid_names):
     """Sanitize one state's `allowed_to` against the sibling states actually
@@ -813,9 +867,42 @@ def update_project_workflow(project, workflow_states):
         s.setdefault("category", "unstarted")
         if s["category"] not in ("unstarted", "started", "completed", "cancelled"):
             s["category"] = "unstarted"
+    _assert_no_duplicate_names([s["name"] for s in states], "workflow state")
+
+    existing_raw = _deep_parse_json(
+        frappe.db.get_value("BP Project", project, "workflow_states") or "[]"
+    )
+    existing = existing_raw if isinstance(existing_raw, list) else []
+    old_by_name = {
+        s.get("name"): str(s.get("category") or "unstarted").lower()
+        for s in existing if isinstance(s, dict) and s.get("name")
+    }
+    new_names = {s["name"] for s in states}
+    used_statuses = _active_task_field_values(project, "status")
+    _assert_schema_names_survive(set(old_by_name) - new_names, used_statuses, "workflow state")
+
+    # A lifecycle-category change is effectively a migration for every task
+    # currently in that state — timestamps/resolution derived from the old
+    # category (e.g. resolved_on set on entering "completed") don't retroactively
+    # apply. Block it while tasks are still there rather than silently stranding
+    # their derived data.
+    changed_category = {
+        name for name in old_by_name.keys() & new_names
+        if old_by_name[name] != next(s["category"] for s in states if s["name"] == name)
+    }
+    blocked_category = sorted(changed_category & used_statuses)
+    if blocked_category:
+        frappe.throw(
+            "Cannot change the lifecycle category of in-use workflow state(s): "
+            + ", ".join(blocked_category)
+            + ". Move those tasks to a different state first, then retry.",
+            frappe.ValidationError,
+            title="Workflow category still in use",
+        )
+
     # Sanitize `allowed_to` (transition restrictions) against the sibling
     # states in this same save — see _normalize_allowed_to.
-    valid_names = {s["name"] for s in states}
+    valid_names = new_names
     for s in states:
         cleaned = _normalize_allowed_to(s.get("allowed_to"), valid_names)
         if cleaned:
@@ -848,6 +935,18 @@ def update_project_issue_types(project, issue_types):
             clean.append(t)
     if not clean:
         frappe.throw("At least one issue type is required")
+    _assert_no_duplicate_names([t["name"] for t in clean], "task type")
+
+    existing_raw = _deep_parse_json(
+        frappe.db.get_value("BP Project", project, "issue_types") or "[]"
+    )
+    existing = existing_raw if isinstance(existing_raw, list) else []
+    old_names = {t.get("name") for t in existing if isinstance(t, dict) and t.get("name")}
+    new_names = {t["name"] for t in clean}
+    _assert_schema_names_survive(
+        old_names - new_names, _active_task_field_values(project, "task_type"), "task type"
+    )
+
     frappe.db.set_value("BP Project", project, {
         "issue_types": json.dumps(clean),
         "modified": frappe.utils.now(),
@@ -862,6 +961,15 @@ def update_project_labels(project, labels):
     labels_list = _deep_parse_json(labels)
     if not isinstance(labels_list, list):
         frappe.throw("labels must be a list")
+
+    existing_raw = _deep_parse_json(
+        frappe.db.get_value("BP Project", project, "labels") or "[]"
+    )
+    existing = existing_raw if isinstance(existing_raw, list) else []
+    old_labels = {str(v) for v in existing if v not in (None, "")}
+    new_labels = {str(v) for v in labels_list if v not in (None, "")}
+    _assert_schema_names_survive(old_labels - new_labels, _active_task_labels(project), "label")
+
     frappe.db.set_value("BP Project", project, {
         "labels": json.dumps(labels_list),
         "modified": frappe.utils.now(),
