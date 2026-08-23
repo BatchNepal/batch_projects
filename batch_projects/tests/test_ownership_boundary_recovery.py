@@ -99,6 +99,12 @@ def _add_project_member(project, user, role):
     doc.members = [r for r in (doc.members or []) if r.user != user]
     doc.append("members", {"user": user, "role": role})
     doc.save(ignore_permissions=True)
+    # access.get_effective_role / get_accessible_projects memoize on
+    # frappe.local, which survives across test methods in one runner
+    # process — clear both so an earlier test's grant can't leak into a
+    # later one through the memo instead of the DB.
+    frappe.local._bp_effective_role = None
+    frappe.local._bp_accessible_projects = None
     frappe.db.commit()
 
 
