@@ -91,8 +91,12 @@ def _make_project(key, project_name, visibility="workspace"):
 
 
 def _add_project_member(project, user, role):
+    """Idempotent: replaces any existing membership row for `user` — tests
+    running in alphabetical order must not leak a role granted by an earlier
+    test into a later one."""
     frappe.set_user("Administrator")
     doc = frappe.get_doc("BP Project", project)
+    doc.members = [r for r in (doc.members or []) if r.user != user]
     doc.append("members", {"user": user, "role": role})
     doc.save(ignore_permissions=True)
     frappe.db.commit()
@@ -204,6 +208,7 @@ class TestReportOwnershipBoundary(FrappeTestCase):
         self.assertFalse(frappe.db.exists("BP Report", self.private))
 
     def test_workspace_report_not_editable_by_plain_member(self):
+        _add_project_member(self.project, self.OTHER, "Member")
         frappe.set_user(self.OTHER)
         with self.assertRaises(frappe.PermissionError):
             board.save_report(report=self.workspace, report_name="hijacked")
@@ -278,6 +283,7 @@ class TestDashboardOwnershipBoundary(FrappeTestCase):
             dashboards.save_dashboard(dashboard=self.private, dashboard_name="stolen")
 
     def test_workspace_dashboard_update_denied_for_plain_member(self):
+        _add_project_member(self.project, self.OTHER, "Member")
         frappe.set_user(self.OTHER)
         with self.assertRaises(frappe.PermissionError):
             dashboards.save_dashboard(
@@ -338,6 +344,7 @@ class TestPersonalRowOwnershipBoundary(FrappeTestCase):
 
     def setUp(self):
         frappe.set_user("Administrator")
+        self.project = _make_project("RBPER", "RBR Ownership Personal Project")
         _ensure_user(self.OWNER)
         _ensure_user(self.OTHER)
         self.pref = (
@@ -345,7 +352,7 @@ class TestPersonalRowOwnershipBoundary(FrappeTestCase):
                 {
                     "doctype": "BP View Preference",
                     "user": self.OWNER,
-                    "project": "rbr-orphan-project",
+                    "project": self.project,
                     "view": "list",
                     "prefs": "{}",
                 }
@@ -358,7 +365,7 @@ class TestPersonalRowOwnershipBoundary(FrappeTestCase):
                 {
                     "doctype": "BP Notification Mute",
                     "user": self.OWNER,
-                    "project": "rbr-orphan-project",
+                    "project": self.project,
                 }
             )
             .insert(ignore_permissions=True)
@@ -383,6 +390,7 @@ class TestPersonalRowOwnershipBoundary(FrappeTestCase):
                 pass
         _delete_user(self.OWNER)
         _delete_user(self.OTHER)
+        _delete_project("RBPER")
         frappe.db.commit()
 
     def test_preference_has_permission_owner_only(self):
@@ -416,7 +424,7 @@ class TestPersonalRowOwnershipBoundary(FrappeTestCase):
             {
                 "doctype": "BP View Preference",
                 "user": self.OWNER,
-                "project": "rbr-orphan-project",
+                "project": self.project,
                 "view": "list",
                 "prefs": "{}",
             }
@@ -429,8 +437,8 @@ class TestPersonalRowOwnershipBoundary(FrappeTestCase):
 
 
 class TestIntakeFormProjectMoveBoundary(FrappeTestCase):
-    KEY_A = "RBOWNFA"
-    KEY_B = "RBOWNFB"
+    KEY_A = "RBIFA"
+    KEY_B = "RBIFB"
     MANAGER = "rbr-form-manager@example.com"
 
     def setUp(self):
