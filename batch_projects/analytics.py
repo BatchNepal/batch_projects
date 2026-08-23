@@ -50,7 +50,7 @@ def compute_burndown(sprint: str) -> dict:
     today_dt = getdate(today())
 
     # Fetch all tasks that were ever in this sprint, with their history
-    tasks = frappe.get_all("BP Task", filters={"sprint": sprint},
+    tasks = frappe.get_all("BP Task", filters={"sprint": sprint, "is_deleted": 0},
                            fields=["name", "title", "story_points", "status",
                                    "started_on", "completed_on", "creation"])
 
@@ -154,7 +154,7 @@ def compute_velocity(project: str, last_n: int = 8, use_effort: bool = True) -> 
 
     sprint_data = []
     for s in reversed(sprints):  # chronological
-        tasks = frappe.get_all("BP Task", filters={"sprint": s.name},
+        tasks = frappe.get_all("BP Task", filters={"sprint": s.name, "is_deleted": 0},
                                fields=["name", "story_points", "status"])
         done_statuses = _get_done_statuses(project)
         completed_effort = sum(t.get("story_points") or 0 for t in tasks
@@ -221,7 +221,7 @@ def compute_burnup(sprint: str) -> dict:
     start = getdate(sprint_doc.start_date)
     end = getdate(sprint_doc.end_date)
 
-    tasks = frappe.get_all("BP Task", filters={"sprint": sprint},
+    tasks = frappe.get_all("BP Task", filters={"sprint": sprint, "is_deleted": 0},
                            fields=["name", "story_points", "status",
                                    "completed_on", "creation"])
     done_statuses = _get_done_statuses(sprint_doc.project) if sprint_doc.project else set()
@@ -276,6 +276,7 @@ def compute_cycle_time(project: str, days: int = 90) -> dict:
             "project": project,
             "completed_on": [">=", str(cutoff)],
             "started_on": ["is", "set"],
+            "is_deleted": 0,
         },
         fields=["name", "title", "status", "priority", "task_type",
                 "creation", "started_on", "completed_on"])
@@ -365,7 +366,7 @@ def compute_sprint_health(sprint: str) -> dict:
     # Active tasks per status
     status_counts = {}
     if project:
-        tasks = frappe.get_all("BP Task", filters={"sprint": sprint},
+        tasks = frappe.get_all("BP Task", filters={"sprint": sprint, "is_deleted": 0},
                                fields=["status", "priority", "task_type"])
         for t in tasks:
             s = t.get("status") or "Unknown"

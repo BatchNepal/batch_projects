@@ -871,7 +871,11 @@ export const useProjectStore = defineStore("project", () => {
       return;
     }
 
-    if (event === "comment.added") {
+    if (
+      event === "comment.added" ||
+      event === "comment.edited" ||
+      event === "comment.deleted"
+    ) {
       if (selectedTask.value?.name === issueName) {
         api
           .getTask(issueName)

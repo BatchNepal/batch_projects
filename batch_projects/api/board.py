@@ -4,7 +4,8 @@ import re
 
 from batch_projects.events import (
     emit,
-    TASK_CREATED, TASK_UPDATED, TASK_STATUS_CHANGED, COMMENT_ADDED, PROJECT_CREATED,
+    TASK_CREATED, TASK_UPDATED, TASK_STATUS_CHANGED, COMMENT_ADDED, COMMENT_EDITED,
+    COMMENT_DELETED, PROJECT_CREATED,
     PROJECT_ROLE_CHANGED,
     SPRINT_STARTED, SPRINT_COMPLETED
 )
@@ -2541,6 +2542,19 @@ def edit_comment(activity, comment_text):
     doc.save(ignore_permissions=True)
     frappe.db.commit()
 
+    # Realtime signal for every edit — an open task detail elsewhere must
+    # refetch to see the new text, whether or not this particular edit added
+    # a mention. Separate from the mentions_only emit below: that one exists
+    # purely to route notifications to the newly-mentioned users, not to
+    # signal the edit itself, which used to have no broadcast at all.
+    emit(COMMENT_EDITED, {
+        "project": task.project,
+        "task": doc.task,
+        "task_key": task.task_key,
+        "comment_text": comment_text,
+        "activity": doc.name,
+    })
+
     if new_mentions:
         emit(COMMENT_ADDED, {
             "project": task.project,
@@ -2570,8 +2584,16 @@ def delete_comment(activity):
     if doc.user != user:
         _check_permission(task.project, "BP Manager")
 
+    activity_name = doc.name
     frappe.delete_doc("BP Activity", activity, ignore_permissions=True, force=True)
     frappe.db.commit()
+
+    emit(COMMENT_DELETED, {
+        "project": task.project,
+        "task": doc.task,
+        "task_key": task.task_key,
+        "activity": activity_name,
+    })
 
     return {"ok": True}
 
