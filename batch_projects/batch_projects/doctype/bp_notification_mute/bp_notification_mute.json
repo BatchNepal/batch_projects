@@ -1,54 +1,68 @@
 {
-  "name": "BP Notification Mute",
-  "module": "Batch Projects",
-  "doctype": "DocType",
-  "engine": "InnoDB",
-  "naming_rule": "Random",
-  "autoname": "hash",
-  "istable": 0,
-  "editable_grid": 0,
-  "is_submittable": 0,
-  "creation": "2026-06-04 00:00:00",
-  "modified": "2026-06-04 00:00:00",
-  "owner": "Administrator",
-  "modified_by": "Administrator",
-  "sort_field": "creation",
-  "sort_order": "DESC",
-  "track_changes": 0,
-  "fields": [
-    {
-      "fieldname": "user",
-      "fieldtype": "Link",
-      "label": "User",
-      "options": "User",
-      "reqd": 1,
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "task",
-      "fieldtype": "Link",
-      "label": "Task",
-      "options": "BP Task",
-      "in_standard_filter": 1
-    },
-    {
-      "fieldname": "project",
-      "fieldtype": "Link",
-      "label": "Project",
-      "options": "BP Project",
-      "in_standard_filter": 1
-    }
-  ],
-  "permissions": [
-    {
-      "role": "System Manager",
-      "read": 1,
-      "write": 1,
-      "create": 1,
-      "delete": 1
-    }
-  ],
-  "links": [],
-  "actions": [],
-  "custom": 0
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-06-04 00:00:00",
+ "custom": 0,
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "User",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "task",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Task",
+   "options": "BP Task"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "BP Project"
+  }
+ ],
+ "is_submittable": 0,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-06-04 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Batch Projects",
+ "name": "BP Notification Mute",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "set_user_permissions": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "delete": 1,
+   "if_owner": 1,
+   "read": 1,
+   "role": "All",
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "track_changes": 0
 }

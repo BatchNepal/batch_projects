@@ -34,9 +34,16 @@ class BPIntakeForm(Document):
             return
         if self.task_type:
             try:
-                valid_types = proj.get_issue_types()
+                raw_types = proj.get_issue_types() or []
             except Exception:
-                valid_types = []
+                raw_types = []
+            valid_types = []
+            for item in raw_types:
+                if isinstance(item, dict):
+                    if item.get("name"):
+                        valid_types.append(item["name"])
+                elif item:
+                    valid_types.append(item)
             if valid_types and self.task_type not in valid_types:
                 frappe.throw(
                     f"Task type '{self.task_type}' is not configured for this project.",

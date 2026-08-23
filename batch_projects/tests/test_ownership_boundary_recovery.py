@@ -65,6 +65,12 @@ def _ensure_user(email):
     from batch_projects import access
 
     access.ensure_member_role(email)
+    # Also hold ERPNext's stock 'Projects User' role, matching real production
+    # users, so the DocPerm role matrix passes and the visibility/ownership
+    # hooks under test are what actually decide access.
+    user = frappe.get_doc("User", email)
+    if "Projects User" not in [r.role for r in user.roles]:
+        user.add_roles("Projects User")
     return email
 
 
@@ -231,7 +237,7 @@ class TestReportOwnershipBoundary(FrappeTestCase):
     def test_admin_can_read_any_private_report(self):
         frappe.set_user("Administrator")
         out = board.get_saved_report(self.private)
-        self.assertEqual(out["name"], self.private)
+        self.assertEqual(out["id"], self.private)
 
     def test_has_permission_private_is_owner_only(self):
         doc = frappe.get_doc("BP Report", self.private)
