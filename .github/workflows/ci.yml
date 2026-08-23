@@ -147,6 +147,12 @@ jobs:
           # "Could not find Warehouse Type: Transit" before any test runs.
           # Create it up front so the deterministic suite is actually runnable.
           bench --site "$SITE_NAME" execute frappe.client.insert --kwargs '{"doc": {"doctype": "Warehouse Type", "name": "Transit"}}' || true
+          # batch_projects/fixtures/custom_field.json is skipped wholesale when
+          # ANY entry references a doctype absent from this minimal install
+          # ("DocType Expense Claim Type not found"), which drops the
+          # Timesheet Detail-custom_bp_task field the suite depends on. Create
+          # that field explicitly so the deterministic suite is runnable.
+          bench --site "$SITE_NAME" execute frappe.client.insert --kwargs '{"doc": {"doctype": "Custom Field", "dt": "Timesheet Detail", "fieldname": "custom_bp_task", "fieldtype": "Link", "label": "BP Task", "options": "BP Task", "insert_after": "task", "module": "Batch Projects"}}' || true
 
       - name: Run the batch_projects test suite
         working-directory: ${{ env.BENCH_PATH }}
