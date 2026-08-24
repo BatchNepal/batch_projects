@@ -819,7 +819,7 @@ def _dedup_key(recipient, notification_type, task, project, actor, message) -> s
         str(recipient or ""), str(notification_type or ""), str(task or ""),
         str(project or ""), str(actor or ""), str(message or ""),
     ])
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def _dedup_seen(dedup_key: str) -> bool:
