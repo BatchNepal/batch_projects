@@ -388,6 +388,10 @@ class TestCreateNotificationAlreadyRevalidatesBeforeDispatch(FrappeTestCase):
             patch.object(events, "_send_notification_email") as send_email,
             patch.object(events, "_is_muted", return_value=False),
             patch.object(events, "_get_pref", return_value=None),
+            # The idempotency guard queries the DB via frappe.db.exists, which
+            # internally uses the get_value patch above — pin it to "not seen"
+            # so this test exercises the visibility gate, not the dedup gate.
+            patch.object(events, "_dedup_seen", return_value=False),
         ):
             events._create_notification("outsider@example.com", "Due Soon", "TASK-1", "PROJ-A", None, "msg")
 
