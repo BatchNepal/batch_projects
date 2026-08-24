@@ -95,6 +95,13 @@
       "fieldtype": "Datetime",
       "label": "Read At",
       "reqd": 0
+    },
+    {
+      "fieldname": "dedup_key",
+      "fieldtype": "Data",
+      "label": "Dedup Key",
+      "reqd": 0,
+      "search_index": 1
     }
   ],
   "permissions": [

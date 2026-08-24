@@ -646,6 +646,12 @@ def _create_rule_notification(recipient, rule, task_name, project, actor, messag
     task_key = frappe.db.get_value("BP Task", task_name, "task_key") if task_name else None
     task_title = frappe.db.get_value("BP Task", task_name, "title") if task_name else None
 
+    # Idempotency: a rule that matches the same event twice (or an event that
+    # fires twice) must not fan out duplicate in-app/desktop/email deliveries.
+    dedup_key = _dedup_key(recipient, notification_type, task_name, project, actor, message)
+    if _dedup_seen(dedup_key):
+        return
+
     if "in_app" in channels:
         frappe.get_doc({
             "doctype": "BP Notification",
@@ -659,6 +665,7 @@ def _create_rule_notification(recipient, rule, task_name, project, actor, messag
             "actor_name": actor_name,
             "message": message,
             "is_read": 0,
+            "dedup_key": dedup_key,
         }).insert(ignore_permissions=True)
 
     if "desktop" in channels:
@@ -695,11 +702,22 @@ def _create_notification(recipient, notification_type, task, project, actor, mes
     Task Deleted (the row is gone by send time) and Finance (erp.* events
     carry an invoice/sales order, never a task). Explicit values win; the
     lookup is only used when they are omitted.
+
+    Delivery is idempotent: the same (recipient, type, task, project, actor,
+    message) delivered twice within the dedup window collapses to one — a
+    double-fired event (retry, double-save, automation + built-in both
+    matching) must not create duplicate in-app records or duplicate emails.
     """
     if recipient == actor:
         return
     # Per-user mute: silence this issue/project entirely (both channels)
     if _is_muted(recipient, task, project):
+        return
+
+    # Idempotency: skip every channel if this exact notification was already
+    # delivered within the dedup window.
+    dedup_key = _dedup_key(recipient, notification_type, task, project, actor, message)
+    if _dedup_seen(dedup_key):
         return
 
     pref = _get_pref(recipient)
@@ -724,6 +742,7 @@ def _create_notification(recipient, notification_type, task, project, actor, mes
             "actor_name": actor_name,
             "message": message,
             "is_read": 0,
+            "dedup_key": dedup_key,
         }).insert(ignore_permissions=True)
         notif_name = notif_doc.name
 
@@ -778,6 +797,53 @@ def _create_notification(recipient, notification_type, task, project, actor, mes
 
 
 # ─── PREFERENCES & MUTE ──────────────────────────────────────────────────────
+
+# Idempotency window: the same notification delivered twice within this many
+# seconds collapses to one. Long enough to absorb a double-fired event
+# (retry, double-save, automation + built-in both matching), short enough
+# that a genuinely new occurrence of the same type on the same task (e.g. a
+# second identical status change a minute later) still notifies.
+_DEDUP_WINDOW_SECONDS = 60
+
+
+def _dedup_key(recipient, notification_type, task, project, actor, message) -> str:
+    """Content-addressed identity for one notification delivery.
+
+    recipient is part of the key so each recipient's delivery is deduplicated
+    independently; message is part of the key so two distinct comments on the
+    same task are NOT collapsed (their preview text differs).
+    """
+    import hashlib
+
+    raw = "|".join([
+        str(recipient or ""), str(notification_type or ""), str(task or ""),
+        str(project or ""), str(actor or ""), str(message or ""),
+    ])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _dedup_seen(dedup_key: str) -> bool:
+    """True if this exact notification was already delivered in the window.
+
+    Checks the durable BP Notification record first (covers the normal in-app
+    path), then a Redis marker (covers recipients who disabled the in-app
+    channel but still receive email/push — no DB row exists for them to
+    dedupe against). The marker is set on first delivery so a duplicate event
+    is caught regardless of channel preferences.
+    """
+    if not dedup_key:
+        return False
+    cutoff = frappe.utils.add_to_date(None, seconds=-_DEDUP_WINDOW_SECONDS)
+    if frappe.db.exists(
+        "BP Notification", {"dedup_key": dedup_key, "creation": [">=", cutoff]}
+    ):
+        return True
+    marker = f"bp:notif_dedup:{dedup_key}"
+    if frappe.cache().get_value(marker):
+        return True
+    frappe.cache().set_value(marker, 1, expires_in_sec=_DEDUP_WINDOW_SECONDS)
+    return False
+
 
 # notification_type → the email preference field that gates it
 _EMAIL_PREF_FIELD = {
