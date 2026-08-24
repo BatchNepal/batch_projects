@@ -26,8 +26,8 @@ class TestActivityMentionInvariant(FrappeTestCase):
             "doctype": "BP Activity",
             "task": "TASK-1",
             "action_type": "Comment",
-            "comment_text": f"heads up {_mention('Outsider', 'outsider@example.com')}",
-            "user": "author@example.com",
+            "comment_text": f"heads up {_mention('Outsider', 'test5+info@batchnepal.com')}",
+            "user": "test13+info@batchnepal.com",
         })
 
         with (
@@ -40,15 +40,15 @@ class TestActivityMentionInvariant(FrappeTestCase):
         ):
             activity.validate()
 
-        can_view.assert_called_once_with("PROJ-A", "TASK-1", "outsider@example.com", ())
+        can_view.assert_called_once_with("PROJ-A", "TASK-1", "test5+info@batchnepal.com", ())
 
     def test_comment_mentioning_authorized_user_is_allowed(self):
         activity = frappe.get_doc({
             "doctype": "BP Activity",
             "task": "TASK-1",
             "action_type": "Comment",
-            "comment_text": f"cc {_mention('Viewer', 'viewer@example.com')}",
-            "user": "author@example.com",
+            "comment_text": f"cc {_mention('Viewer', 'test14+info@batchnepal.com')}",
+            "user": "test13+info@batchnepal.com",
         })
 
         with (
@@ -60,15 +60,15 @@ class TestActivityMentionInvariant(FrappeTestCase):
         ):
             activity.validate()
 
-        can_view.assert_called_once_with("PROJ-A", "TASK-1", "viewer@example.com", ())
+        can_view.assert_called_once_with("PROJ-A", "TASK-1", "test14+info@batchnepal.com", ())
 
     def test_non_comment_activity_skips_mention_check_entirely(self):
         activity = frappe.get_doc({
             "doctype": "BP Activity",
             "task": "TASK-1",
             "action_type": "Assignment",
-            "new_value": f"assigned to {_mention('Someone', 'someone@example.com')}",
-            "user": "author@example.com",
+            "new_value": f"assigned to {_mention('Someone', 'test64+info@batchnepal.com')}",
+            "user": "test13+info@batchnepal.com",
         })
 
         with patch.object(frappe.db, "get_value") as get_value:
@@ -82,7 +82,7 @@ class TestActivityMentionInvariant(FrappeTestCase):
             "task": "GONE-1",
             "action_type": "Comment",
             "comment_text": "no mentions here",
-            "user": "author@example.com",
+            "user": "test13+info@batchnepal.com",
         })
 
         with (

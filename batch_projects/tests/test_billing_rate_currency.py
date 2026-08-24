@@ -335,7 +335,7 @@ class TestBillingRateCurrency(unittest.TestCase):
             ) as get_doc,
         ):
             result = timers._get_or_create_draft_timesheet(
-                "user@example.com",
+                "test67+info@batchnepal.com",
                 "EMP-TEST",
                 "TEST-COMPANY",
                 "ERP-PROJECT",

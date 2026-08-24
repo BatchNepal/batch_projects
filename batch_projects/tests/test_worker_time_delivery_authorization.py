@@ -48,11 +48,11 @@ class TestDesktopPushWorkerRecheck(FrappeTestCase):
             patch("erpdesktop_agent.dispatch.fanout.push_notification", create=True) as push_notification,
         ):
             push._deliver(
-                recipient="outsider@example.com", ntype="Comment", actor="author@example.com",
+                recipient="test5+info@batchnepal.com", ntype="Comment", actor="test13+info@batchnepal.com",
                 title="t", body="b", task="TASK-1", task_key="BP-1", project="PROJ-A", deep_link=None,
             )
 
-        can_deliver.assert_called_once_with("outsider@example.com", "TASK-1", "PROJ-A")
+        can_deliver.assert_called_once_with("test5+info@batchnepal.com", "TASK-1", "PROJ-A")
         push_notification.assert_not_called()
 
     def test_delivery_proceeds_when_recipient_still_authorized(self):
@@ -61,7 +61,7 @@ class TestDesktopPushWorkerRecheck(FrappeTestCase):
             patch("erpdesktop_agent.dispatch.fanout.push_notification", create=True) as push_notification,
         ):
             push._deliver(
-                recipient="viewer@example.com", ntype="Comment", actor="author@example.com",
+                recipient="test14+info@batchnepal.com", ntype="Comment", actor="test13+info@batchnepal.com",
                 title="t", body="b", task="TASK-1", task_key="BP-1", project="PROJ-A", deep_link=None,
             )
 
@@ -73,11 +73,11 @@ class TestDesktopPushWorkerRecheck(FrappeTestCase):
             patch("erpdesktop_agent.dispatch.fanout.push_notification", create=True) as push_notification,
         ):
             push._deliver(
-                recipient="outsider@example.com", ntype="Sprint", actor="author@example.com",
+                recipient="test5+info@batchnepal.com", ntype="Sprint", actor="test13+info@batchnepal.com",
                 title="t", body="b", task=None, task_key=None, project="PROJ-A", deep_link=None,
             )
 
-        can_deliver.assert_called_once_with("outsider@example.com", "PROJ-A")
+        can_deliver.assert_called_once_with("test5+info@batchnepal.com", "PROJ-A")
         push_notification.assert_not_called()
 
     def test_missing_erpdesktop_agent_is_still_a_silent_noop(self):
@@ -85,7 +85,7 @@ class TestDesktopPushWorkerRecheck(FrappeTestCase):
         installed" no-op into an exception."""
         with patch("batch_projects.notification_delivery.can_receive_task_delivery", return_value=True):
             push._deliver(
-                recipient="viewer@example.com", ntype="Comment", actor="author@example.com",
+                recipient="test14+info@batchnepal.com", ntype="Comment", actor="test13+info@batchnepal.com",
                 title="t", body="b", task="TASK-1", task_key="BP-1", project="PROJ-A", deep_link=None,
             )  # must not raise even though erpdesktop_agent isn't installed here
 
@@ -130,7 +130,7 @@ class TestBPEmailQueueSendBoundary(FrappeTestCase):
         self.assertEqual(result, "sent")
 
     def test_allowed_pending_recipient_remains_and_parent_send_is_called(self):
-        doc = _bp_task_queue([("stays@example.com", "")])
+        doc = _bp_task_queue([("test17+info@batchnepal.com", "")])
         with (
             patch("batch_projects.secure_email_queue.can_receive_task_delivery", return_value=True),
             patch.object(EmailQueueBase, "send", return_value="sent") as parent_send,
@@ -139,10 +139,10 @@ class TestBPEmailQueueSendBoundary(FrappeTestCase):
             doc.send()
         parent_send.assert_called_once()
         delete.assert_not_called()
-        self.assertEqual([r.recipient for r in doc.recipients], ["stays@example.com"])
+        self.assertEqual([r.recipient for r in doc.recipients], ["test17+info@batchnepal.com"])
 
     def test_denied_pending_recipient_is_deleted_before_parent_transport(self):
-        doc = _bp_task_queue([("revoked@example.com", "")])
+        doc = _bp_task_queue([("test18+info@batchnepal.com", "")])
         with (
             patch("batch_projects.secure_email_queue.can_receive_task_delivery", return_value=False),
             patch.object(EmailQueueBase, "send") as parent_send,
@@ -157,13 +157,13 @@ class TestBPEmailQueueSendBoundary(FrappeTestCase):
 
     def test_mixed_sent_allowed_denied_rows(self):
         doc = _bp_task_queue([
-            ("already-sent@example.com", "Sent"),
-            ("stays@example.com", ""),
-            ("revoked@example.com", ""),
+            ("test16+info@batchnepal.com", "Sent"),
+            ("test17+info@batchnepal.com", ""),
+            ("test18+info@batchnepal.com", ""),
         ])
 
         def fake_can_receive(recipient, task):
-            return recipient == "stays@example.com"
+            return recipient == "test17+info@batchnepal.com"
 
         with (
             patch("batch_projects.secure_email_queue.can_receive_task_delivery", side_effect=fake_can_receive),
@@ -175,10 +175,10 @@ class TestBPEmailQueueSendBoundary(FrappeTestCase):
         parent_send.assert_called_once()
         delete.assert_called_once()
         remaining = {r.recipient for r in doc.recipients}
-        self.assertEqual(remaining, {"already-sent@example.com", "stays@example.com"})
+        self.assertEqual(remaining, {"test16+info@batchnepal.com", "test17+info@batchnepal.com"})
 
     def test_all_pending_denied_marks_sent_and_skips_transport(self):
-        doc = _bp_task_queue([("revoked-1@example.com", ""), ("revoked-2@example.com", "")])
+        doc = _bp_task_queue([("test19+info@batchnepal.com", ""), ("test20+info@batchnepal.com", "")])
         with (
             patch("batch_projects.secure_email_queue.can_receive_task_delivery", return_value=False),
             patch.object(EmailQueueBase, "send") as parent_send,
@@ -191,7 +191,7 @@ class TestBPEmailQueueSendBoundary(FrappeTestCase):
         self.assertIsNone(result)
 
     def test_authorization_exception_fails_closed_and_is_logged(self):
-        doc = _bp_task_queue([("maybe@example.com", "")])
+        doc = _bp_task_queue([("test21+info@batchnepal.com", "")])
         with (
             patch("batch_projects.secure_email_queue.can_receive_task_delivery", side_effect=RuntimeError("boom")),
             patch.object(EmailQueueBase, "send") as parent_send,
@@ -208,17 +208,17 @@ class TestBPEmailQueueSendBoundary(FrappeTestCase):
 
 class TestBPEmailQueueValidateBoundary(FrappeTestCase):
     def test_validate_drops_currently_unauthorized_pending_recipients(self):
-        doc = _bp_task_queue([("stays@example.com", ""), ("never-had-access@example.com", "")])
+        doc = _bp_task_queue([("test17+info@batchnepal.com", ""), ("test22+info@batchnepal.com", "")])
 
         def fake_can_receive(recipient, task):
-            return recipient == "stays@example.com"
+            return recipient == "test17+info@batchnepal.com"
 
         with patch("batch_projects.secure_email_queue.can_receive_task_delivery", side_effect=fake_can_receive):
             doc.validate()
-        self.assertEqual([r.recipient for r in doc.recipients], ["stays@example.com"])
+        self.assertEqual([r.recipient for r in doc.recipients], ["test17+info@batchnepal.com"])
 
     def test_validate_throws_when_no_recipient_is_authorized(self):
-        doc = _bp_task_queue([("nobody@example.com", "")])
+        doc = _bp_task_queue([("test23+info@batchnepal.com", "")])
         with (
             patch("batch_projects.secure_email_queue.can_receive_task_delivery", return_value=False),
             self.assertRaises(frappe.PermissionError),

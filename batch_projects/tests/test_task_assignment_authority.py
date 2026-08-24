@@ -30,7 +30,7 @@ class TestAssignmentAuthority(FrappeTestCase):
         # actor: Manager? false; actor: Member? true; target: Viewer? true
         has_at_least.side_effect = [False, True, True]
         inv._validate_assignment_authority(
-            _Task(), None, ["viewer@example.com"], []
+            _Task(), None, ["test14+info@batchnepal.com"], []
         )
 
     @patch("batch_projects.access.has_at_least")
@@ -40,7 +40,7 @@ class TestAssignmentAuthority(FrappeTestCase):
         has_at_least.side_effect = [False, True, False]
         with self.assertRaises(frappe.PermissionError):
             inv._validate_assignment_authority(
-                _Task(), None, ["outside@example.com"], []
+                _Task(), None, ["test26+info@batchnepal.com"], []
             )
 
     @patch("batch_projects.access.has_at_least")
@@ -48,7 +48,7 @@ class TestAssignmentAuthority(FrappeTestCase):
     def test_manager_may_assign_outsider(self, _is_admin, has_at_least):
         has_at_least.return_value = True
         inv._validate_assignment_authority(
-            _Task(), None, ["outside@example.com"], []
+            _Task(), None, ["test26+info@batchnepal.com"], []
         )
         has_at_least.assert_called_once_with("P-A", "Manager", frappe.session.user)
 
@@ -58,7 +58,7 @@ class TestAssignmentAuthority(FrappeTestCase):
         has_at_least.side_effect = [False, False]
         with self.assertRaises(frappe.PermissionError):
             inv._validate_assignment_authority(
-                _Task(), _OldTask(), ["me@example.com", "other@example.com"], ["me@example.com"]
+                _Task(), _OldTask(), ["test24+info@batchnepal.com", "test25+info@batchnepal.com"], ["test24+info@batchnepal.com"]
             )
 
 

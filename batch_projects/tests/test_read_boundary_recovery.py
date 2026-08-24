@@ -33,7 +33,8 @@ from batch_projects.api import custom_fields as cf
 
 def _ensure_user(email):
     """Throwaway System User fixture for Link-field validity only — never a
-    real signup, never a real email (send_welcome_email=0, @example.com is
+    real signup, never a real email (send_welcome_email=0, plus-addressed
+    testN+info@batchnepal.com addresses are used — SES bounce protection).
     IANA-reserved), matching this test suite's existing convention
     (test_membership_invariants.py).
 
@@ -120,13 +121,13 @@ class TestCachePerUserGeneration(FrappeTestCase):
         cache.invalidate_project(self.PROJECT)
 
     def test_different_users_do_not_share_a_cached_entry(self):
-        cache.set(cache.VIEW_BOARD, self.PROJECT, {"secret": "admin-view"}, user="rbr-admin@example.com")
+        cache.set(cache.VIEW_BOARD, self.PROJECT, {"secret": "admin-view"}, user="test49+info@batchnepal.com")
         self.assertEqual(
-            cache.get(cache.VIEW_BOARD, self.PROJECT, user="rbr-admin@example.com"),
+            cache.get(cache.VIEW_BOARD, self.PROJECT, user="test49+info@batchnepal.com"),
             {"secret": "admin-view"},
         )
         # A different user must get a cache MISS, never the first user's data.
-        self.assertIsNone(cache.get(cache.VIEW_BOARD, self.PROJECT, user="rbr-viewer@example.com"))
+        self.assertIsNone(cache.get(cache.VIEW_BOARD, self.PROJECT, user="test60+info@batchnepal.com"))
 
     def test_get_and_set_default_to_the_current_session_user(self):
         frappe.set_user("Administrator")
@@ -134,11 +135,11 @@ class TestCachePerUserGeneration(FrappeTestCase):
         self.assertEqual(cache.get(cache.VIEW_BOARD, self.PROJECT), {"v": 1})
 
     def test_invalidate_project_orphans_every_previously_cached_entry(self):
-        cache.set(cache.VIEW_BOARD, self.PROJECT, {"v": 1}, user="rbr-admin@example.com")
-        cache.set(cache.VIEW_BACKLOG, self.PROJECT, {"v": 2}, user="rbr-viewer@example.com")
+        cache.set(cache.VIEW_BOARD, self.PROJECT, {"v": 1}, user="test49+info@batchnepal.com")
+        cache.set(cache.VIEW_BACKLOG, self.PROJECT, {"v": 2}, user="test60+info@batchnepal.com")
         cache.invalidate_project(self.PROJECT)
-        self.assertIsNone(cache.get(cache.VIEW_BOARD, self.PROJECT, user="rbr-admin@example.com"))
-        self.assertIsNone(cache.get(cache.VIEW_BACKLOG, self.PROJECT, user="rbr-viewer@example.com"))
+        self.assertIsNone(cache.get(cache.VIEW_BOARD, self.PROJECT, user="test49+info@batchnepal.com"))
+        self.assertIsNone(cache.get(cache.VIEW_BACKLOG, self.PROJECT, user="test60+info@batchnepal.com"))
 
 
 class TestBoardBacklogCacheUserIsolation(FrappeTestCase):
@@ -150,7 +151,7 @@ class TestBoardBacklogCacheUserIsolation(FrappeTestCase):
     Admin's cached payload verbatim."""
 
     KEY = "RBRBCU"
-    VIEWER = "rbr-cache-viewer@example.com"
+    VIEWER = "test50+info@batchnepal.com"
 
     def setUp(self):
         frappe.set_user("Administrator")
@@ -343,7 +344,7 @@ class TestResolveScopeFailsClosed(FrappeTestCase):
 class TestGetWorkloadAccessibleProjectsFilter(FrappeTestCase):
     KEY_A = "RBRWLA"
     KEY_B = "RBRWLB"
-    CALLER = "rbr-wl-caller@example.com"
+    CALLER = "test61+info@batchnepal.com"
     TEAM_NAME = "RBR Workload Filter Test Team"
 
     def setUp(self):
@@ -406,7 +407,7 @@ class TestGetWorkloadAccessibleProjectsFilter(FrappeTestCase):
 class TestSearchTasksAccessibleProjectsFilter(FrappeTestCase):
     KEY_A = "RBRSRA"
     KEY_B = "RBRSRB"
-    CALLER = "rbr-search-caller@example.com"
+    CALLER = "test59+info@batchnepal.com"
     QUERY = "RbrSearchUniqueMarkerXyz"
 
     def setUp(self):
@@ -451,7 +452,7 @@ class TestSearchTasksAccessibleProjectsFilter(FrappeTestCase):
 class TestMilestonesAndRisksAccessibleProjectsFilter(FrappeTestCase):
     KEY_A = "RBRMRA"
     KEY_B = "RBRMRB"
-    CALLER = "rbr-mr-caller@example.com"
+    CALLER = "test52+info@batchnepal.com"
 
     def setUp(self):
         frappe.set_user("Administrator")

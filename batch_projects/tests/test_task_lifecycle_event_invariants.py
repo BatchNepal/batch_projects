@@ -41,7 +41,7 @@ class TestLifecycleDispatch(FrappeTestCase):
             "task": "TASK-1",
             "task_key": "PRJ-1",
             "title": "Task",
-            "users": ["alice@example.com"],
+            "users": ["test31+info@batchnepal.com"],
         }
 
         task_lifecycle._dispatch_after_commit(task_lifecycle.TASK_TRASHED, payload)
@@ -55,7 +55,7 @@ class TestLifecycleDispatch(FrappeTestCase):
         rebac.assert_called_once()
         sent = rebac.call_args.args[0]
         self.assertEqual(sent["event"], "task.trashed")
-        self.assertEqual(sent["users"], ["alice@example.com"])
+        self.assertEqual(sent["users"], ["test31+info@batchnepal.com"])
 
 
 if __name__ == "__main__":

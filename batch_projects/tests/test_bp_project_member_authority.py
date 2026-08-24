@@ -29,9 +29,9 @@ class TestBPProjectMemberMutationAuthority(FrappeTestCase):
 
     # ── no-op when the member list didn't change ──────────────────────
     def test_unchanged_members_on_existing_project_skips_check(self):
-        doc = self._doc(_members(("a@example.com", "Member")), is_new=False)
+        doc = self._doc(_members(("test4+info@batchnepal.com", "Member")), is_new=False)
         with (
-            patch.object(frappe, "get_all", return_value=_members(("a@example.com", "Member"))),
+            patch.object(frappe, "get_all", return_value=_members(("test4+info@batchnepal.com", "Member"))),
             patch.object(access, "require") as require,
         ):
             doc._validate_members_mutation_authority()
@@ -49,7 +49,7 @@ class TestBPProjectMemberMutationAuthority(FrappeTestCase):
         doc._validate_members_mutation_authority()  # must not raise
 
     def test_new_project_other_user_rejected(self):
-        doc = self._doc(_members(("someone-else@example.com", "Admin")), is_new=True)
+        doc = self._doc(_members(("test63+info@batchnepal.com", "Admin")), is_new=True)
         with (
             patch.object(access, "is_instance_admin", return_value=False),
             self.assertRaises(frappe.PermissionError),
@@ -65,7 +65,7 @@ class TestBPProjectMemberMutationAuthority(FrappeTestCase):
             doc._validate_members_mutation_authority()
 
     def test_new_project_instance_admin_bypasses_shape_check(self):
-        doc = self._doc(_members(("anyone@example.com", "Admin")), is_new=True)
+        doc = self._doc(_members(("test32+info@batchnepal.com", "Admin")), is_new=True)
         # Seat accounting is a separate licensing concern from the shape/
         # authority check this test covers — the parent validator now runs
         # incremental seat validation on member additions (P1-6), so stub it.
@@ -77,27 +77,27 @@ class TestBPProjectMemberMutationAuthority(FrappeTestCase):
 
     # ── existing project: any member-table change requires Admin ────────
     def test_existing_project_member_change_requires_admin_authority(self):
-        doc = self._doc(_members(("a@example.com", "Admin")), is_new=False)
+        doc = self._doc(_members(("test4+info@batchnepal.com", "Admin")), is_new=False)
         with (
-            patch.object(frappe, "get_all", return_value=_members(("a@example.com", "Member"))),
+            patch.object(frappe, "get_all", return_value=_members(("test4+info@batchnepal.com", "Member"))),
             patch.object(access, "require") as require,
         ):
             doc._validate_members_mutation_authority()
         require.assert_called_once_with(doc.name, "Admin")
 
     def test_existing_project_member_change_propagates_denial(self):
-        doc = self._doc(_members(("a@example.com", "Admin")), is_new=False)
+        doc = self._doc(_members(("test4+info@batchnepal.com", "Admin")), is_new=False)
         with (
-            patch.object(frappe, "get_all", return_value=_members(("a@example.com", "Member"))),
+            patch.object(frappe, "get_all", return_value=_members(("test4+info@batchnepal.com", "Member"))),
             patch.object(access, "require", side_effect=frappe.PermissionError("no")),
         ):
             with self.assertRaises(frappe.PermissionError):
                 doc._validate_members_mutation_authority()
 
     def test_existing_project_member_change_allowed_when_authorized(self):
-        doc = self._doc(_members(("a@example.com", "Admin")), is_new=False)
+        doc = self._doc(_members(("test4+info@batchnepal.com", "Admin")), is_new=False)
         with (
-            patch.object(frappe, "get_all", return_value=_members(("a@example.com", "Member"))),
+            patch.object(frappe, "get_all", return_value=_members(("test4+info@batchnepal.com", "Member"))),
             patch.object(access, "require", return_value=None),
         ):
             doc._validate_members_mutation_authority()  # must not raise

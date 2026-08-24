@@ -124,7 +124,7 @@ class TestDailyDigestRevalidates(FrappeTestCase):
         tasks = [_digest_task("TASK-1")]
         with (
             patch.object(events, "_has_outgoing_email", return_value=True),
-            patch.object(frappe.db, "sql_list", return_value=["alice@example.com"]),
+            patch.object(frappe.db, "sql_list", return_value=["test31+info@batchnepal.com"]),
             patch("batch_projects.notification_delivery.resolve_system_user", side_effect=lambda u: u),
             patch.object(frappe.db, "get_value", return_value=None),
             patch.object(frappe, "get_all", return_value=tasks),
@@ -145,7 +145,7 @@ class TestDailyDigestRevalidates(FrappeTestCase):
         tasks = [_digest_task("TASK-1")]
         with (
             patch.object(events, "_has_outgoing_email", return_value=True),
-            patch.object(frappe.db, "sql_list", return_value=["alice@example.com"]),
+            patch.object(frappe.db, "sql_list", return_value=["test31+info@batchnepal.com"]),
             patch("batch_projects.notification_delivery.resolve_system_user", side_effect=lambda u: u),
             patch.object(frappe.db, "get_value", return_value=None),
             patch.object(frappe, "get_all", return_value=tasks),
@@ -159,7 +159,7 @@ class TestDailyDigestRevalidates(FrappeTestCase):
         tasks = [_digest_task("TASK-1")]
         with (
             patch.object(events, "_has_outgoing_email", return_value=True),
-            patch.object(frappe.db, "sql_list", return_value=["alice@example.com"]),
+            patch.object(frappe.db, "sql_list", return_value=["test31+info@batchnepal.com"]),
             patch("batch_projects.notification_delivery.resolve_system_user", side_effect=lambda u: u),
             patch.object(frappe.db, "get_value", return_value=None),
             patch.object(frappe.db, "count") as raw_count,
@@ -170,7 +170,7 @@ class TestDailyDigestRevalidates(FrappeTestCase):
             patch.object(frappe, "sendmail"),
         ):
             events.send_daily_digest()
-        unread_mock.assert_called_once_with("alice@example.com")
+        unread_mock.assert_called_once_with("test31+info@batchnepal.com")
         raw_count.assert_not_called()
         self.assertEqual(build_html.call_args.args[3], 7)
 
@@ -182,7 +182,7 @@ class TestDailyDigestRevalidates(FrappeTestCase):
         # cached decision.
         with (
             patch.object(events, "_has_outgoing_email", return_value=True),
-            patch.object(frappe.db, "sql_list", return_value=["alice@example.com"]),
+            patch.object(frappe.db, "sql_list", return_value=["test31+info@batchnepal.com"]),
             patch("batch_projects.notification_delivery.resolve_system_user", side_effect=lambda u: u),
             patch.object(frappe.db, "get_value", return_value=None),
             patch.object(frappe, "get_all", return_value=tasks),
@@ -201,7 +201,7 @@ class TestDailyDigestRevalidates(FrappeTestCase):
         tasks = [_digest_task("TASK-1")]
         with (
             patch.object(events, "_has_outgoing_email", return_value=True),
-            patch.object(frappe.db, "sql_list", return_value=["alice@example.com"]),
+            patch.object(frappe.db, "sql_list", return_value=["test31+info@batchnepal.com"]),
             patch("batch_projects.notification_delivery.resolve_system_user", side_effect=lambda u: u),
             patch.object(frappe.db, "get_value", return_value=None),
             patch.object(frappe, "get_all", return_value=tasks),
@@ -217,7 +217,7 @@ class TestDailyDigestRevalidates(FrappeTestCase):
 
 class TestWeeklySummaryRevalidates(FrappeTestCase):
     def test_skips_a_manager_who_loses_project_access_after_candidate_query(self):
-        project_row = frappe._dict(name="PROJ-A", project_name="Proj A", key="PA", lead="lead@example.com")
+        project_row = frappe._dict(name="PROJ-A", project_name="Proj A", key="PA", lead="test45+info@batchnepal.com")
         with (
             patch.object(events, "_has_outgoing_email", return_value=True),
             patch.object(frappe, "get_all") as get_all,
@@ -235,11 +235,11 @@ class TestWeeklySummaryRevalidates(FrappeTestCase):
                 return []
             get_all.side_effect = side_effect
             events.send_weekly_project_summary()
-        can_deliver.assert_called_once_with("lead@example.com", "PROJ-A", "Viewer")
+        can_deliver.assert_called_once_with("test45+info@batchnepal.com", "PROJ-A", "Viewer")
         send_email.assert_not_called()
 
     def test_authorization_exception_fails_closed(self):
-        project_row = frappe._dict(name="PROJ-A", project_name="Proj A", key="PA", lead="lead@example.com")
+        project_row = frappe._dict(name="PROJ-A", project_name="Proj A", key="PA", lead="test45+info@batchnepal.com")
         with (
             patch.object(events, "_has_outgoing_email", return_value=True),
             patch.object(frappe, "get_all") as get_all,
@@ -389,7 +389,7 @@ class TestCreateNotificationAlreadyRevalidatesBeforeDispatch(FrappeTestCase):
             patch.object(events, "_is_muted", return_value=False),
             patch.object(events, "_get_pref", return_value=None),
         ):
-            events._create_notification("outsider@example.com", "Due Soon", "TASK-1", "PROJ-A", None, "msg")
+            events._create_notification("test5+info@batchnepal.com", "Due Soon", "TASK-1", "PROJ-A", None, "msg")
 
         visible.assert_called_once()
         push_dispatch.assert_not_called()

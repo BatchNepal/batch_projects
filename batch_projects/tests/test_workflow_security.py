@@ -158,7 +158,7 @@ class TestWorkflowAuthority(FrappeTestCase):
         nodes = json.dumps([
             _trigger_node(),
             {"id": "n2", "type": "action.send_email", "config": {
-                "to": ["a@example.com"], "subject": "Job {{ task.bridge_job_id }}", "message": "hi",
+                "to": ["test4+info@batchnepal.com"], "subject": "Job {{ task.bridge_job_id }}", "message": "hi",
             }},
         ])
         with self.assertRaises(frappe.PermissionError):
@@ -188,10 +188,10 @@ class TestWorkflowAuthority(FrappeTestCase):
     def test_notify_node_static_recipient_without_project_visibility_rejected(self):
         nodes = json.dumps([
             _trigger_node(),
-            {"id": "n2", "type": "action.notify", "config": {"message": "hi", "users": ["outsider@example.com"]}},
+            {"id": "n2", "type": "action.notify", "config": {"message": "hi", "users": ["test5+info@batchnepal.com"]}},
         ])
         with (
-            patch("batch_projects.automation_security.resolve_system_user", return_value="outsider@example.com"),
+            patch("batch_projects.automation_security.resolve_system_user", return_value="test5+info@batchnepal.com"),
             patch("batch_projects.automation_security.can_receive_project_delivery", return_value=False),
         ):
             with self.assertRaises(frappe.PermissionError):
@@ -200,10 +200,10 @@ class TestWorkflowAuthority(FrappeTestCase):
     def test_notify_node_static_recipient_with_project_visibility_allowed(self):
         nodes = json.dumps([
             _trigger_node(),
-            {"id": "n2", "type": "action.notify", "config": {"message": "hi", "users": ["member@example.com"]}},
+            {"id": "n2", "type": "action.notify", "config": {"message": "hi", "users": ["test6+info@batchnepal.com"]}},
         ])
         with (
-            patch("batch_projects.automation_security.resolve_system_user", return_value="member@example.com"),
+            patch("batch_projects.automation_security.resolve_system_user", return_value="test6+info@batchnepal.com"),
             patch("batch_projects.automation_security.can_receive_project_delivery", return_value=True),
         ):
             workflow_security.validate_workflow_authority(_workflow(nodes=nodes))
@@ -211,13 +211,13 @@ class TestWorkflowAuthority(FrappeTestCase):
     def test_assign_issue_invalid_assignee_rejected(self):
         nodes = json.dumps([
             _trigger_node(),
-            {"id": "n2", "type": "action.assign_issue", "config": {"assignees": ["nobody-at-all@example.com"]}},
+            {"id": "n2", "type": "action.assign_issue", "config": {"assignees": ["test7+info@batchnepal.com"]}},
         ])
         with self.assertRaises(frappe.ValidationError):
             workflow_security.validate_workflow_authority(_workflow(nodes=nodes))
 
     def test_assign_issue_valid_assignee_allowed(self):
-        user = _ensure_user("valid-assignee@example.com")
+        user = _ensure_user("test8+info@batchnepal.com")
         try:
             nodes = json.dumps([
                 _trigger_node(),
@@ -604,9 +604,9 @@ class TestWorkflowSaveIntegration(FrappeTestCase):
             workflow_states=json.dumps([{"name": "To Do", "color": "#6B7280", "category": "open"}]),
             issue_types=json.dumps([{"name": "Task", "color": "#0B6BCB", "icon": "CheckSquare"}]),
         )["name"]
-        self.admin_user = _ensure_user("workflow-project-admin@example.com")
+        self.admin_user = _ensure_user("test9+info@batchnepal.com")
         _add_member(self.project, self.admin_user, "Admin")
-        self.outsider = _ensure_user("workflow-outsider@example.com")
+        self.outsider = _ensure_user("test10+info@batchnepal.com")
         frappe.local._bp_effective_role = {}
 
     def tearDown(self):

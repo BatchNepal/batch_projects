@@ -14,7 +14,7 @@ from batch_projects import notification_delivery as delivery
 
 
 class TestNotificationDeliveryPolicy(FrappeTestCase):
-    @patch.object(delivery, "resolve_system_user", return_value="user@example.com")
+    @patch.object(delivery, "resolve_system_user", return_value="test67+info@batchnepal.com")
     @patch.object(delivery.frappe.db, "get_value")
     @patch("batch_projects.task_invariants._user_can_view_task", return_value=True)
     @patch("batch_projects.access.is_instance_admin", return_value=False)
@@ -27,12 +27,12 @@ class TestNotificationDeliveryPolicy(FrappeTestCase):
 
         self.assertTrue(
             delivery.can_receive_task_delivery(
-                "user@example.com", "TASK-1", "PROJ-1"
+                "test67+info@batchnepal.com", "TASK-1", "PROJ-1"
             )
         )
-        can_view.assert_called_once_with("PROJ-1", "TASK-1", "user@example.com")
+        can_view.assert_called_once_with("PROJ-1", "TASK-1", "test67+info@batchnepal.com")
 
-    @patch.object(delivery, "resolve_system_user", return_value="user@example.com")
+    @patch.object(delivery, "resolve_system_user", return_value="test67+info@batchnepal.com")
     @patch.object(delivery.frappe.db, "get_value")
     @patch("batch_projects.task_invariants._user_can_view_task")
     def test_stale_project_envelope_fails_closed(self, can_view, get_value, resolve_user):
@@ -42,12 +42,12 @@ class TestNotificationDeliveryPolicy(FrappeTestCase):
 
         self.assertFalse(
             delivery.can_receive_task_delivery(
-                "user@example.com", "TASK-1", "PROJ-OLD"
+                "test67+info@batchnepal.com", "TASK-1", "PROJ-OLD"
             )
         )
         can_view.assert_not_called()
 
-    @patch.object(delivery, "resolve_system_user", return_value="manager@example.com")
+    @patch.object(delivery, "resolve_system_user", return_value="test46+info@batchnepal.com")
     @patch.object(delivery.frappe.db, "get_value")
     @patch("batch_projects.access.has_at_least", return_value=True)
     @patch("batch_projects.access.is_instance_admin", return_value=False)
@@ -60,14 +60,14 @@ class TestNotificationDeliveryPolicy(FrappeTestCase):
 
         self.assertTrue(
             delivery.can_receive_task_delivery(
-                "manager@example.com", "TASK-1", "PROJ-1"
+                "test46+info@batchnepal.com", "TASK-1", "PROJ-1"
             )
         )
         has_at_least.assert_called_once_with(
-            "PROJ-1", "Manager", "manager@example.com"
+            "PROJ-1", "Manager", "test46+info@batchnepal.com"
         )
 
-    @patch.object(delivery, "resolve_system_user", return_value="member@example.com")
+    @patch.object(delivery, "resolve_system_user", return_value="test6+info@batchnepal.com")
     @patch.object(delivery.frappe.db, "get_value")
     @patch("batch_projects.access.has_at_least", return_value=False)
     @patch("batch_projects.access.is_instance_admin", return_value=False)
@@ -80,7 +80,7 @@ class TestNotificationDeliveryPolicy(FrappeTestCase):
 
         self.assertFalse(
             delivery.can_receive_task_delivery(
-                "member@example.com", "TASK-1", "PROJ-1"
+                "test6+info@batchnepal.com", "TASK-1", "PROJ-1"
             )
         )
 
@@ -93,18 +93,18 @@ class TestIsNotificationVisible(FrappeTestCase):
     @patch.object(delivery, "can_receive_task_delivery", return_value=False)
     def test_task_backed_row_defers_to_task_delivery_check(self, can_receive):
         row = frappe._dict(task="TASK-1", project="PROJ-1", notification_type="Comment")
-        self.assertFalse(delivery.is_notification_visible(row, "user@example.com"))
-        can_receive.assert_called_once_with("user@example.com", "TASK-1", "PROJ-1")
+        self.assertFalse(delivery.is_notification_visible(row, "test67+info@batchnepal.com"))
+        can_receive.assert_called_once_with("test67+info@batchnepal.com", "TASK-1", "PROJ-1")
 
     @patch.object(delivery, "can_receive_project_delivery", return_value=False)
     def test_deleted_tombstone_defers_to_project_delivery_check(self, can_receive):
         row = frappe._dict(task=None, project="PROJ-1", notification_type="Task Deleted")
-        self.assertFalse(delivery.is_notification_visible(row, "user@example.com"))
-        can_receive.assert_called_once_with("user@example.com", "PROJ-1", "Viewer")
+        self.assertFalse(delivery.is_notification_visible(row, "test67+info@batchnepal.com"))
+        can_receive.assert_called_once_with("test67+info@batchnepal.com", "PROJ-1", "Viewer")
 
     def test_taskless_non_tombstone_row_passes_through(self):
         row = frappe._dict(task=None, project="PROJ-1", notification_type="Role Changed")
-        self.assertTrue(delivery.is_notification_visible(row, "user@example.com"))
+        self.assertTrue(delivery.is_notification_visible(row, "test67+info@batchnepal.com"))
 
 
 if __name__ == "__main__":

@@ -51,22 +51,22 @@ class TestDefaultMaterialization(FrappeTestCase):
     @patch.object(task_defaults.task_invariants, "_assert_assignable_user")
     @patch.object(task_defaults.frappe.db, "get_value")
     def test_project_default_becomes_real_assignee_when_none_explicit(self, get_value, assignable):
-        get_value.return_value = "default@example.com"
+        get_value.return_value = "test36+info@batchnepal.com"
         assignable.return_value = frappe._dict(full_name="Default User")
         task = _Task()
 
         task_defaults.before_task_insert(task)
 
-        self.assertEqual([row.user for row in task.assignees], ["default@example.com"])
+        self.assertEqual([row.user for row in task.assignees], ["test36+info@batchnepal.com"])
         self.assertEqual(task.assignees[0].full_name, "Default User")
-        self.assertEqual(task.flags.bp_default_assignee_materialized, "default@example.com")
+        self.assertEqual(task.flags.bp_default_assignee_materialized, "test36+info@batchnepal.com")
 
     @patch.object(task_defaults.frappe.db, "get_value")
     def test_explicit_assignee_wins_over_project_default(self, get_value):
-        task = _Task([SimpleNamespace(user="explicit@example.com", full_name="Explicit")])
+        task = _Task([SimpleNamespace(user="test40+info@batchnepal.com", full_name="Explicit")])
         task_defaults.before_task_insert(task)
         get_value.assert_not_called()
-        self.assertEqual([row.user for row in task.assignees], ["explicit@example.com"])
+        self.assertEqual([row.user for row in task.assignees], ["test40+info@batchnepal.com"])
         self.assertFalse(task.flags.get("bp_default_assignee_materialized"))
 
     @patch.object(task_defaults.task_invariants, "_assert_new_mentions_authorized")
@@ -79,9 +79,9 @@ class TestDefaultMaterialization(FrappeTestCase):
     def test_materialized_edge_must_match_current_project_default(
         self, get_value, assignable, *_validators
     ):
-        task = _Task([SimpleNamespace(user="default@example.com", full_name="")])
-        task.flags.bp_default_assignee_materialized = "default@example.com"
-        get_value.return_value = "someone-else@example.com"
+        task = _Task([SimpleNamespace(user="test36+info@batchnepal.com", full_name="")])
+        task.flags.bp_default_assignee_materialized = "test36+info@batchnepal.com"
+        get_value.return_value = "test63+info@batchnepal.com"
 
         with self.assertRaises(frappe.ValidationError):
             task_defaults.validate_materialized_default(task)
@@ -97,9 +97,9 @@ class TestDefaultMaterialization(FrappeTestCase):
     def test_exact_materialized_edge_runs_all_non_authority_invariants(
         self, get_value, assignable, task_type, relations, links, approver, mentions
     ):
-        task = _Task([SimpleNamespace(user="default@example.com", full_name="")])
-        task.flags.bp_default_assignee_materialized = "default@example.com"
-        get_value.return_value = "default@example.com"
+        task = _Task([SimpleNamespace(user="test36+info@batchnepal.com", full_name="")])
+        task.flags.bp_default_assignee_materialized = "test36+info@batchnepal.com"
+        get_value.return_value = "test36+info@batchnepal.com"
         assignable.return_value = frappe._dict(full_name="Default User")
 
         self.assertTrue(task_defaults.validate_materialized_default(task))
@@ -123,12 +123,12 @@ class TestDefaultAssignmentLifecycle(FrappeTestCase):
     def test_default_assignment_dispatches_real_edge_without_second_notification(
         self, get_value, get_doc, add_watcher, enrich, invalidate, broadcast, automation, rebac
     ):
-        task = _Task([SimpleNamespace(user="default@example.com", full_name="Default User")])
-        task.flags.bp_default_assignee_materialized = "default@example.com"
+        task = _Task([SimpleNamespace(user="test36+info@batchnepal.com", full_name="Default User")])
+        task.flags.bp_default_assignee_materialized = "test36+info@batchnepal.com"
 
         def value_side_effect(doctype, *args, **kwargs):
             if doctype == "BP Project":
-                return "default@example.com"
+                return "test36+info@batchnepal.com"
             if doctype == "User":
                 return "Actor Name"
             return None
@@ -140,7 +140,7 @@ class TestDefaultAssignmentLifecycle(FrappeTestCase):
         task_defaults.after_task_insert(task)
 
         activity.insert.assert_called_once_with(ignore_permissions=True)
-        add_watcher.assert_called_once_with("TASK-1", "default@example.com", reason="assigned")
+        add_watcher.assert_called_once_with("TASK-1", "test36+info@batchnepal.com", reason="assigned")
         enrich.assert_called_once()
         invalidate.assert_called_once()
         broadcast.assert_called_once()
@@ -152,10 +152,10 @@ class TestDefaultAssignmentLifecycle(FrappeTestCase):
         event_name, payload = enrich.call_args.args
         self.assertEqual(event_name, "task.assigned")
         self.assertTrue(payload["default_assignment"])
-        self.assertEqual(payload["assignee"], "default@example.com")
+        self.assertEqual(payload["assignee"], "test36+info@batchnepal.com")
 
     @patch.object(task_defaults.task_invariants, "after_task_insert")
     def test_explicit_initial_assignees_keep_normal_event_path(self, normal_after_insert):
-        task = _Task([SimpleNamespace(user="explicit@example.com", full_name="Explicit")])
+        task = _Task([SimpleNamespace(user="test40+info@batchnepal.com", full_name="Explicit")])
         task_defaults.after_task_insert(task)
         normal_after_insert.assert_called_once_with(task, method=None)

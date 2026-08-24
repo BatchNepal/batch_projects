@@ -27,7 +27,7 @@ class TestTaskWatcherInvariant(FrappeTestCase):
             "name": "NEW-WATCH",
             "task": "TASK-1",
             "project": "PROJ-A",
-            "user": "outsider@example.com",
+            "user": "test5+info@batchnepal.com",
         })
 
         with (
@@ -40,7 +40,7 @@ class TestTaskWatcherInvariant(FrappeTestCase):
         ):
             watcher.validate()
 
-        can_view.assert_called_once_with("PROJ-A", "TASK-1", "outsider@example.com")
+        can_view.assert_called_once_with("PROJ-A", "TASK-1", "test5+info@batchnepal.com")
 
     def test_watcher_project_is_normalized_from_task(self):
         watcher = frappe.get_doc({
@@ -48,7 +48,7 @@ class TestTaskWatcherInvariant(FrappeTestCase):
             "name": "NEW-WATCH",
             "task": "TASK-1",
             "project": None,
-            "user": "viewer@example.com",
+            "user": "test14+info@batchnepal.com",
         })
 
         with (
@@ -62,7 +62,7 @@ class TestTaskWatcherInvariant(FrappeTestCase):
             watcher.validate()
 
         self.assertEqual(watcher.project, "PROJ-B")
-        can_view.assert_called_once_with("PROJ-B", "TASK-1", "viewer@example.com")
+        can_view.assert_called_once_with("PROJ-B", "TASK-1", "test14+info@batchnepal.com")
 
     def test_trashed_task_cannot_be_watched(self):
         watcher = frappe.get_doc({
@@ -70,7 +70,7 @@ class TestTaskWatcherInvariant(FrappeTestCase):
             "name": "NEW-WATCH",
             "task": "TASK-1",
             "project": "PROJ-A",
-            "user": "viewer@example.com",
+            "user": "test14+info@batchnepal.com",
         })
 
         with (
@@ -88,7 +88,7 @@ class TestNotificationRuleRecipientInvariant(FrappeTestCase):
         rule = frappe.get_doc({
             "doctype": "BP Notification Rule",
             "project": "PROJ-A",
-            "recipients_json": '[{"type":"user","value":"outsider@example.com"}]',
+            "recipients_json": '[{"type":"user","value":"test5+info@batchnepal.com"}]',
         })
 
         with (
@@ -101,13 +101,13 @@ class TestNotificationRuleRecipientInvariant(FrappeTestCase):
         ):
             rule.validate()
 
-        has_access.assert_called_once_with("PROJ-A", "Viewer", "outsider@example.com")
+        has_access.assert_called_once_with("PROJ-A", "Viewer", "test5+info@batchnepal.com")
 
     def test_global_rule_rejects_non_admin_static_user(self):
         rule = frappe.get_doc({
             "doctype": "BP Notification Rule",
             "project": None,
-            "recipients_json": '[{"type":"user","value":"person@example.com"}]',
+            "recipients_json": '[{"type":"user","value":"test48+info@batchnepal.com"}]',
         })
 
         with (
@@ -124,7 +124,7 @@ class TestNotificationRuleRecipientInvariant(FrappeTestCase):
         rule = frappe.get_doc({
             "doctype": "BP Notification Rule",
             "project": "PROJ-A",
-            "recipients_json": '[{"type":"user","value":"viewer@example.com"}]',
+            "recipients_json": '[{"type":"user","value":"test14+info@batchnepal.com"}]',
         })
 
         with (
@@ -136,7 +136,7 @@ class TestNotificationRuleRecipientInvariant(FrappeTestCase):
         ):
             rule.validate()
 
-        has_access.assert_called_once_with("PROJ-A", "Viewer", "viewer@example.com")
+        has_access.assert_called_once_with("PROJ-A", "Viewer", "test14+info@batchnepal.com")
 
 
 if __name__ == "__main__":

@@ -174,7 +174,7 @@ class TestSeatCapacityAndTeamREST(FrappeTestCase):
         frappe.db.commit()
 
     def _make_user(self, email=None):
-        email = email or f"p1test{random_string(4)}@example.com"
+        email = email or f"test76+info{random_string(4)}@batchnepal.com"
         doc = frappe.get_doc({
             "doctype": "User",
             "email": email,

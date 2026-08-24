@@ -46,9 +46,9 @@ class TestNotificationVisibility(FrappeTestCase):
             name="N-1", notification_type="Comment", task="TASK-1",
             project="PROJ-1", is_read=0,
         )
-        self.assertFalse(reads._is_visible(row, "old@example.com"))
+        self.assertFalse(reads._is_visible(row, "test47+info@batchnepal.com"))
         can_receive.assert_called_once_with(
-            "old@example.com", "TASK-1", "PROJ-1"
+            "test47+info@batchnepal.com", "TASK-1", "PROJ-1"
         )
 
     @patch("batch_projects.notification_delivery.can_receive_project_delivery", return_value=False)
@@ -57,9 +57,9 @@ class TestNotificationVisibility(FrappeTestCase):
             name="N-1", notification_type="Task Deleted", task=None,
             project="PROJ-1", is_read=0,
         )
-        self.assertFalse(reads._is_visible(row, "old@example.com"))
+        self.assertFalse(reads._is_visible(row, "test47+info@batchnepal.com"))
         can_receive.assert_called_once_with(
-            "old@example.com", "PROJ-1", "Viewer"
+            "test47+info@batchnepal.com", "PROJ-1", "Viewer"
         )
 
     @patch("batch_projects.notification_delivery.can_receive_task_delivery")
@@ -68,7 +68,7 @@ class TestNotificationVisibility(FrappeTestCase):
             name="N-1", notification_type="Role Changed", task=None,
             project="PROJ-1", is_read=0,
         )
-        self.assertTrue(reads._is_visible(row, "user@example.com"))
+        self.assertTrue(reads._is_visible(row, "test67+info@batchnepal.com"))
         can_receive.assert_not_called()
 
     @patch.object(reads, "_candidate_rows")
@@ -80,7 +80,7 @@ class TestNotificationVisibility(FrappeTestCase):
         ]
         is_visible.return_value = True
 
-        rows = reads._visible_rows("user@example.com")
+        rows = reads._visible_rows("test67+info@batchnepal.com")
 
         self.assertEqual([r.name for r in rows], ["N-2", "N-1"])
         is_visible.assert_called_once()
@@ -105,7 +105,7 @@ class TestNotificationPagination(FrappeTestCase):
             frappe._dict(name="N-1", message="third"),
         ]
 
-        frappe.set_user("user@example.com")
+        frappe.set_user("test67+info@batchnepal.com")
         try:
             result = reads.get_notifications(limit=2, offset=1)
         finally:
@@ -121,7 +121,7 @@ class TestNotificationPagination(FrappeTestCase):
     @patch.object(reads, "_visible_unread_count", return_value=4)
     @patch.object(reads.frappe.db, "table_exists", return_value=True)
     def test_badge_uses_only_currently_visible_unread(self, table_exists, count, require_user):
-        frappe.set_user("user@example.com")
+        frappe.set_user("test67+info@batchnepal.com")
         try:
             self.assertEqual(reads.get_notification_count(), {"unread_count": 4})
         finally:
@@ -140,14 +140,14 @@ class TestNotificationMutationBoundary(FrappeTestCase):
             project="PRIVATE", is_read=0,
         )
         with self.assertRaises(frappe.DoesNotExistError):
-            reads._visible_notification("N-SECRET", "old@example.com")
+            reads._visible_notification("N-SECRET", "test47+info@batchnepal.com")
 
 
 class TestGenericNotificationPermissions(FrappeTestCase):
     @patch.object(perms, "_is_admin", return_value=False)
     @patch.object(perms, "_scope", return_value=({"VISIBLE"}, {"TASK-DIRECT"}))
     def test_list_query_requires_recipient_and_live_authority(self, scope, is_admin):
-        sql = perms.query_conditions("user@example.com")
+        sql = perms.query_conditions("test67+info@batchnepal.com")
         self.assertIn("`tabBP Notification`.`recipient`", sql)
         self.assertIn("t.is_deleted = 0", sql)
         self.assertIn("TASK-DIRECT", sql)
@@ -161,10 +161,10 @@ class TestGenericNotificationPermissions(FrappeTestCase):
     )
     def test_single_doc_permission_is_revoked_with_task_access(self, can_receive, is_admin):
         doc = frappe._dict(
-            recipient="user@example.com", task="TASK-1", project="P",
+            recipient="test67+info@batchnepal.com", task="TASK-1", project="P",
             notification_type="Comment",
         )
         self.assertFalse(
-            perms.has_permission(doc, user="user@example.com", permission_type="read")
+            perms.has_permission(doc, user="test67+info@batchnepal.com", permission_type="read")
         )
-        can_receive.assert_called_once_with("user@example.com", "TASK-1", "P")
+        can_receive.assert_called_once_with("test67+info@batchnepal.com", "TASK-1", "P")

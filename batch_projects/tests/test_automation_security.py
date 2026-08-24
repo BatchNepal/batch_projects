@@ -48,8 +48,8 @@ def _rule(**overrides):
 
 def _ensure_user(email):
     """Throwaway System User fixture for Link-field validity only — never a
-    real signup, never a real email (send_welcome_email=0, @example.com is
-    IANA-reserved, matches this test suite's existing convention).
+    real signup, never a real email (send_welcome_email=0, plus-addressed
+    testN+info@batchnepal.com addresses are used — SES bounce protection).
 
     User.validate() overwrites user_type based on desk access (any role with
     desk_access=1), ignoring whatever is passed in explicitly — a roleless
@@ -406,7 +406,7 @@ class TestNotificationDeliveryRevalidation(FrappeTestCase):
             "task_type": "Task",
             "status": "To Do",
         }).insert(ignore_permissions=True).name
-        self.user = _ensure_user("removed-member@example.com")
+        self.user = _ensure_user("test11+info@batchnepal.com")
         _add_member(self.project, self.user, "Member")
         frappe.local._bp_effective_role = {}
 
@@ -480,12 +480,12 @@ class TestSendEmailWorkspaceAdminExternalRecipients(FrappeTestCase):
     def test_external_recipient_still_emailed_directly(self):
         with patch("frappe.sendmail") as sendmail:
             status, message = _send_email(
-                {"to": ["external-vendor@example.com"], "subject": "Update",
+                {"to": ["test12+info@batchnepal.com"], "subject": "Update",
                  "message": "Your invoice was updated."},
                 ctx={}, payload={},
             )
         self.assertEqual(status, "Success")
         sendmail.assert_called_once()
         self.assertEqual(
-            sendmail.call_args.kwargs["recipients"], ["external-vendor@example.com"]
+            sendmail.call_args.kwargs["recipients"], ["test12+info@batchnepal.com"]
         )
