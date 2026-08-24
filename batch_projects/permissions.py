@@ -509,15 +509,35 @@ def bp_task_has_permission(doc, user=None, permission_type=None):
     return False
 
 
+def _is_restricted_external_user(user: str) -> bool:
+    """BP Team-scoped notion of an external/restricted user.
+
+    Deliberately NOT access.is_guest(): that helper only recognizes the
+    custom BP Guest role, which misses plain Website Users (standard Guest
+    role only). For BP Team visibility, any of these count as restricted
+    external users who may only see teams they are a member of:
+      - the unauthenticated Guest user
+      - users holding the custom BP Guest role
+      - users whose Frappe user_type is Website User
+    """
+    if user == "Guest":
+        return True
+    from batch_projects import access
+
+    if access.is_guest(user):
+        return True
+    return frappe.db.get_value("User", user, "user_type") == "Website User"
+
+
 def bp_team_query_conditions(user=None):
     """BP Team list visibility: instance admins bypass; org System Users
-    (non-guest) may read any team; guests may read only teams where they are
-    a BP Team Member."""
+    (non-guest) may read any team; restricted external users (Guest, BP Guest
+    role, or Website User) may read only teams where they are a BP Team
+    Member."""
     user = user or frappe.session.user
     if _is_admin(user):
         return ""
-    from batch_projects import access
-    if access.is_guest(user):
+    if _is_restricted_external_user(user):
         return f"""
             `tabBP Team`.`name` IN (
                 SELECT parent FROM `tabBP Team Member` WHERE user = {frappe.db.escape(user)}
@@ -528,8 +548,9 @@ def bp_team_query_conditions(user=None):
 
 def bp_team_has_permission(doc, user=None, permission_type=None):
     """BP Team per-document gate: instance admins bypass; org System Users may
-    read any team; guests may read only teams where they are a BP Team Member;
-    write/delete require team membership with sufficient role."""
+    read any team; restricted external users (Guest, BP Guest role, or Website
+    User) may read only teams where they are a BP Team Member; write/delete
+    require team membership with sufficient role."""
     from batch_projects import access
     user = user or frappe.session.user
     if access.is_instance_admin(user):
@@ -537,7 +558,7 @@ def bp_team_has_permission(doc, user=None, permission_type=None):
     if doc.get("__islocal"):
         return frappe.db.get_value("User", user, "user_type") == "System User"
     if permission_type == "read":
-        if access.is_guest(user):
+        if _is_restricted_external_user(user):
             member_row = frappe.db.get_value(
                 "BP Team Member", {"parent": doc.name, "user": user}, "role"
             )
