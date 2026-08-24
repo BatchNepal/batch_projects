@@ -6,6 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Batch Projects</title>
     <link rel="icon" type="image/svg+xml" href="/assets/batch_projects/images/bp-logo-new.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/batch_projects/images/bp-logo-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/batch_projects/images/bp-logo-512.png" />
+    <link rel="apple-touch-icon" href="/assets/batch_projects/images/bp-logo-512.png" />
+    <meta name="theme-color" content="#f9fafb" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="BatchProjects" />
+    <link rel="manifest" href="/api/method/batch_projects.api.pwa.manifest" />
     <link rel="stylesheet" href="/assets/batch_projects/frontend/{{ entry_css }}" />
 </head>
 
@@ -24,6 +33,19 @@
         // /assets/batch_projects/frontend/fonts/ once built) — without this
         // it pulls from a CDN, which breaks on-prem installs.
         window.EXCALIDRAW_ASSET_PATH = "/assets/batch_projects/frontend/";
+
+        // PWA: register the service worker (scope-wide via the
+        // Service-Worker-Allowed header) so /workspace is installable and
+        // gets the safe offline shell. Only runs in a secure context.
+        if ("serviceWorker" in navigator) {
+            window.addEventListener("load", function () {
+                navigator.serviceWorker
+                    .register("/api/method/batch_projects.api.pwa.service_worker", { scope: "/" })
+                    .catch(function (err) {
+                        console.warn("[BP] service worker registration failed", err);
+                    });
+            });
+        }
     </script>
     <script type="module" src="/assets/batch_projects/frontend/{{ entry_js }}"></script>
 </body>
