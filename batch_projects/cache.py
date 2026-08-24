@@ -15,7 +15,7 @@ Design principles:
 
 Cache key structure:
   bp:v{VERSION}:{view}:{project}:{generation}:{user}
-  e.g. bp:v1:board:Freedom Website Development:3:jane@example.com
+  e.g. bp:v1:board:Freedom Website Development:3:test1+info@batchnepal.com
 
 The generation component (see _current_gen/invalidate_project) is what makes
 invalidation work without Redis pattern-delete support: bumping it makes

@@ -159,8 +159,8 @@ def _make_dashboard(project, dashboard_name, visibility="private", owner=None):
 
 class TestReportOwnershipBoundary(FrappeTestCase):
     KEY = "RBOWNR"
-    OWNER = "rbr-own-report@example.com"
-    OTHER = "rbr-other-report@example.com"
+    OWNER = "test58+info@batchnepal.com"
+    OTHER = "test55+info@batchnepal.com"
 
     def setUp(self):
         frappe.set_user("Administrator")
@@ -255,8 +255,8 @@ class TestReportOwnershipBoundary(FrappeTestCase):
 
 class TestDashboardOwnershipBoundary(FrappeTestCase):
     KEY = "RBOWND"
-    OWNER = "rbr-own-dash@example.com"
-    OTHER = "rbr-other-dash@example.com"
+    OWNER = "test56+info@batchnepal.com"
+    OTHER = "test53+info@batchnepal.com"
 
     def setUp(self):
         # require_feature resolves through the licensed tier, which is
@@ -351,8 +351,8 @@ class TestDashboardOwnershipBoundary(FrappeTestCase):
 
 
 class TestPersonalRowOwnershipBoundary(FrappeTestCase):
-    OWNER = "rbr-own-personal@example.com"
-    OTHER = "rbr-other-personal@example.com"
+    OWNER = "test57+info@batchnepal.com"
+    OTHER = "test54+info@batchnepal.com"
 
     def setUp(self):
         frappe.set_user("Administrator")
@@ -451,7 +451,7 @@ class TestPersonalRowOwnershipBoundary(FrappeTestCase):
 class TestIntakeFormProjectMoveBoundary(FrappeTestCase):
     KEY_A = "RBIFA"
     KEY_B = "RBIFB"
-    MANAGER = "rbr-form-manager@example.com"
+    MANAGER = "test51+info@batchnepal.com"
 
     def setUp(self):
         # Same rationale as TestDashboardOwnershipBoundary: the entitlement

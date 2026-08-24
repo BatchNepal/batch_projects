@@ -79,8 +79,8 @@ class TestTaskAssignmentInvariantHooks(FrappeTestCase):
     @patch.object(inv.frappe.db, "get_value")
     def test_disabled_or_website_user_cannot_enter_assignment_graph(self, get_value):
         for row in (
-            frappe._dict(name="disabled@example.com", full_name="Disabled", enabled=0, user_type="System User"),
-            frappe._dict(name="web@example.com", full_name="Web", enabled=1, user_type="Website User"),
+            frappe._dict(name="test37+info@batchnepal.com", full_name="Disabled", enabled=0, user_type="System User"),
+            frappe._dict(name="test74+info@batchnepal.com", full_name="Web", enabled=1, user_type="Website User"),
         ):
             get_value.return_value = row
             task = _FakeTask([SimpleNamespace(user=row.name, full_name="")])
@@ -90,20 +90,20 @@ class TestTaskAssignmentInvariantHooks(FrappeTestCase):
     @patch.object(inv.frappe.db, "get_value")
     def test_duplicate_assignee_is_rejected(self, get_value):
         get_value.return_value = frappe._dict(
-            name="alice@example.com", full_name="Alice", enabled=1, user_type="System User"
+            name="test31+info@batchnepal.com", full_name="Alice", enabled=1, user_type="System User"
         )
         task = _FakeTask([
-            SimpleNamespace(user="alice@example.com", full_name="Alice"),
-            SimpleNamespace(user="alice@example.com", full_name="Alice"),
+            SimpleNamespace(user="test31+info@batchnepal.com", full_name="Alice"),
+            SimpleNamespace(user="test31+info@batchnepal.com", full_name="Alice"),
         ])
         with self.assertRaises(frappe.ValidationError):
             inv.validate_task_assignees(task)
 
     @patch.object(inv.frappe.db, "get_value")
     def test_unchanged_legacy_assignment_does_not_revalidate_identity(self, get_value):
-        legacy = [SimpleNamespace(user="disabled@example.com", full_name="Legacy")]
+        legacy = [SimpleNamespace(user="test37+info@batchnepal.com", full_name="Legacy")]
         old = _FakeTask(legacy)
-        task = _FakeTask([SimpleNamespace(user="disabled@example.com", full_name="Legacy")], old=old)
+        task = _FakeTask([SimpleNamespace(user="test37+info@batchnepal.com", full_name="Legacy")], old=old)
         inv.validate_task_assignees(task)
         get_value.assert_not_called()
 
@@ -114,12 +114,12 @@ class TestTaskAssignmentInvariantHooks(FrappeTestCase):
         get_value.return_value = "Creator Name"
         activity = MagicMock()
         get_doc.return_value = activity
-        task = _FakeTask([SimpleNamespace(user="alice@example.com", full_name="Alice Example")])
+        task = _FakeTask([SimpleNamespace(user="test31+info@batchnepal.com", full_name="Alice Example")])
         inv.after_task_insert(task)
         activity.insert.assert_called_once_with(ignore_permissions=True)
         event_name, payload = emit.call_args.args
         self.assertEqual(event_name, "task.assigned")
-        self.assertEqual(payload["assignee"], "alice@example.com")
+        self.assertEqual(payload["assignee"], "test31+info@batchnepal.com")
         self.assertTrue(payload["initial_assignment"])
 
 
@@ -147,11 +147,11 @@ class TestApprovalInvariant(FrappeTestCase):
     def test_new_pending_approver_must_be_able_to_view_task(self, assignable, can_view):
         old = _FakeTask()
         task = _FakeTask(
-            old=old, approval_status="Pending", approver="approver@example.com"
+            old=old, approval_status="Pending", approver="test33+info@batchnepal.com"
         )
         with self.assertRaises(frappe.PermissionError):
             inv._validate_pending_approver(task, old, [])
-        assignable.assert_called_once_with("approver@example.com")
+        assignable.assert_called_once_with("test33+info@batchnepal.com")
         can_view.assert_called_once()
 
     @patch.object(inv, "_user_can_view_task", return_value=True)
@@ -159,10 +159,10 @@ class TestApprovalInvariant(FrappeTestCase):
     def test_authorized_pending_approver_is_allowed(self, assignable, can_view):
         old = _FakeTask()
         task = _FakeTask(
-            old=old, approval_status="Pending", approver="approver@example.com"
+            old=old, approval_status="Pending", approver="test33+info@batchnepal.com"
         )
         inv._validate_pending_approver(task, old, [])
-        assignable.assert_called_once_with("approver@example.com")
+        assignable.assert_called_once_with("test33+info@batchnepal.com")
         can_view.assert_called_once()
 
 
@@ -222,8 +222,8 @@ class TestWatcherProjectMove(FrappeTestCase):
     @patch.object(inv.frappe, "get_all")
     def test_project_move_prunes_old_only_watchers(self, get_all, set_value, delete, can_view):
         get_all.return_value = [
-            frappe._dict(name="W-KEEP", user="keep@example.com"),
-            frappe._dict(name="W-DROP", user="drop@example.com"),
+            frappe._dict(name="W-KEEP", user="test44+info@batchnepal.com"),
+            frappe._dict(name="W-DROP", user="test38+info@batchnepal.com"),
         ]
         can_view.side_effect = [True, False]
         inv._prune_watchers_for_project_move(_FakeTask(project="BP-PROJ-2"), [])
@@ -239,13 +239,13 @@ class TestMentionAuthorization(FrappeTestCase):
         with self.assertRaises(frappe.PermissionError):
             inv._assert_new_mentions_authorized(
                 project="BP-PROJ-1", task="BP-1", before="hello",
-                after="hello @[External](external@example.com)",
+                after="hello @[External](test41+info@batchnepal.com)",
             )
         can_view.assert_called_once()
 
     @patch.object(inv, "_user_can_view_task", return_value=True)
     def test_existing_mention_is_not_revalidated_on_unrelated_edit(self, can_view):
-        token = "@[Alice](alice@example.com)"
+        token = "@[Alice](test31+info@batchnepal.com)"
         inv._assert_new_mentions_authorized(
             project="BP-PROJ-1", task="BP-1", before=f"hello {token}", after=f"updated {token}"
         )
@@ -254,7 +254,7 @@ class TestMentionAuthorization(FrappeTestCase):
     @patch.object(inv, "_user_can_view_task", return_value=True)
     def test_new_authorized_mention_is_allowed(self, can_view):
         inv._assert_new_mentions_authorized(
-            project="BP-PROJ-1", task="BP-1", before="", after="@[Alice](alice@example.com)"
+            project="BP-PROJ-1", task="BP-1", before="", after="@[Alice](test31+info@batchnepal.com)"
         )
         can_view.assert_called_once()
 

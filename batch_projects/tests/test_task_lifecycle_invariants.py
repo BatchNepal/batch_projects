@@ -59,7 +59,7 @@ class TestActiveTimerTrashInvariant(FrappeTestCase):
         get_all.return_value = [
             frappe._dict(
                 name="TIMER-1",
-                user="alice@example.com",
+                user="test31+info@batchnepal.com",
                 started_at="2026-08-21 07:30:00",
             )
         ]
@@ -80,7 +80,7 @@ class TestActiveTimerTrashInvariant(FrappeTestCase):
         )
         args = append_time_log.call_args.args
         self.assertIs(args[0], doc)
-        self.assertEqual(args[1], "alice@example.com")
+        self.assertEqual(args[1], "test31+info@batchnepal.com")
         self.assertEqual(args[4], 0.5)
         self.assertIn("moved to Trash", append_time_log.call_args.kwargs["description"])
 
@@ -96,7 +96,7 @@ class TestActiveTimerTrashInvariant(FrappeTestCase):
         get_all.return_value = [
             frappe._dict(
                 name="TIMER-1",
-                user="alice@example.com",
+                user="test31+info@batchnepal.com",
                 started_at="2026-08-21 07:30:00",
             )
         ]
@@ -142,7 +142,7 @@ class TestRestoreCascadeProvenance(FrappeTestCase):
         self.assertEqual(schedule.call_args.args[0], "task.restored")
 
     @patch.object(task_lifecycle, "_schedule_lifecycle")
-    @patch.object(task_lifecycle, "_assignees", return_value=["alice@example.com"])
+    @patch.object(task_lifecycle, "_assignees", return_value=["test31+info@batchnepal.com"])
     @patch.object(task_lifecycle, "_stop_active_timers", return_value=[])
     @patch.object(task_lifecycle.frappe.db, "set_value")
     @patch.object(task_lifecycle.frappe, "get_all", return_value=[])
@@ -155,14 +155,14 @@ class TestRestoreCascadeProvenance(FrappeTestCase):
             title="Parent", is_deleted=0,
         )
         stamp = "2026-08-21 06:00:00"
-        changed = task_lifecycle._trash_tree("TASK-1", stamp, "actor@example.com")
+        changed = task_lifecycle._trash_tree("TASK-1", stamp, "test30+info@batchnepal.com")
         self.assertEqual(changed, ["TASK-1"])
         stop_timers.assert_called_once_with(get_doc.return_value, stamp)
         values = set_value.call_args.args[2]
         self.assertEqual(values["deleted_on"], stamp)
-        self.assertEqual(values["deleted_by"], "actor@example.com")
+        self.assertEqual(values["deleted_by"], "test30+info@batchnepal.com")
         self.assertEqual(schedule.call_args.args[0], "task.trashed")
-        self.assertEqual(schedule.call_args.args[2], ["alice@example.com"])
+        self.assertEqual(schedule.call_args.args[2], ["test31+info@batchnepal.com"])
 
 
 if __name__ == "__main__":

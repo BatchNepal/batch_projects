@@ -19,7 +19,8 @@ TEST_KEY = "TMBRSH"
 
 def _ensure_user(email):
     """Throwaway System User fixture for Link-field validity only — never a
-    real signup, never a real email (send_welcome_email=0, @example.com is
+    real signup, never a real email (send_welcome_email=0, plus-addressed
+    testN+info@batchnepal.com addresses are used — SES bounce protection).
     IANA-reserved, matches this test suite's existing convention)."""
     if frappe.db.exists("User", email):
         return email
@@ -72,7 +73,7 @@ class TestUserCanViewTask(FrappeTestCase):
             return_value=frappe._dict(enabled=0, user_type="System User"),
         ):
             self.assertFalse(
-                membership_invariants._user_can_view_task("P", "T", "someone@example.com")
+                membership_invariants._user_can_view_task("P", "T", "test64+info@batchnepal.com")
             )
 
     def test_project_viewer_role_grants_visibility(self):
@@ -85,7 +86,7 @@ class TestUserCanViewTask(FrappeTestCase):
             patch("batch_projects.access.has_at_least", return_value=True),
         ):
             self.assertTrue(
-                membership_invariants._user_can_view_task("P", "T", "someone@example.com")
+                membership_invariants._user_can_view_task("P", "T", "test64+info@batchnepal.com")
             )
 
     def test_plain_assignee_without_project_role_still_sees_task(self):
@@ -99,7 +100,7 @@ class TestUserCanViewTask(FrappeTestCase):
             patch("batch_projects.access.is_task_assignee", return_value=True),
         ):
             self.assertTrue(
-                membership_invariants._user_can_view_task("P", "T", "someone@example.com")
+                membership_invariants._user_can_view_task("P", "T", "test64+info@batchnepal.com")
             )
 
     def test_no_role_no_assignment_denies_visibility(self):
@@ -113,7 +114,7 @@ class TestUserCanViewTask(FrappeTestCase):
             patch("batch_projects.access.is_task_assignee", return_value=False),
         ):
             self.assertFalse(
-                membership_invariants._user_can_view_task("P", "T", "someone@example.com")
+                membership_invariants._user_can_view_task("P", "T", "test64+info@batchnepal.com")
             )
 
 
@@ -138,9 +139,9 @@ class TestPruneStaleWatchersAndDelegation(FrappeTestCase):
     def tearDown(self):
         _delete_project(TEST_KEY)
         for email in (
-            "dropped@example.com", "watcher@example.com", "still-has-access@example.com",
-            "ghost@example.com", "revoked@example.com", "single-delete@example.com",
-            "x@example.com",
+            "test39+info@batchnepal.com", "test73+info@batchnepal.com", "test65+info@batchnepal.com",
+            "test43+info@batchnepal.com", "test18+info@batchnepal.com", "test62+info@batchnepal.com",
+            "test75+info@batchnepal.com",
         ):
             if frappe.db.exists("User", email):
                 frappe.delete_doc("User", email, ignore_permissions=True, force=True)
@@ -164,37 +165,37 @@ class TestPruneStaleWatchersAndDelegation(FrappeTestCase):
             }).insert(ignore_permissions=True)
 
     def test_watcher_removed_when_user_has_no_remaining_access(self):
-        watcher = self._watch("revoked@example.com")
+        watcher = self._watch("test18+info@batchnepal.com")
         with patch.object(membership_invariants, "_user_can_view_task", return_value=False):
-            removed = membership_invariants.prune_stale_watchers(self.project, {"revoked@example.com"})
+            removed = membership_invariants.prune_stale_watchers(self.project, {"test18+info@batchnepal.com"})
         self.assertEqual(removed, [watcher.name])
         self.assertFalse(frappe.db.exists("BP Task Watcher", watcher.name))
 
     def test_watcher_kept_when_user_still_has_access(self):
-        watcher = self._watch("still-has-access@example.com")
+        watcher = self._watch("test65+info@batchnepal.com")
         with patch.object(membership_invariants, "_user_can_view_task", return_value=True):
             removed = membership_invariants.prune_stale_watchers(
-                self.project, {"still-has-access@example.com"}
+                self.project, {"test65+info@batchnepal.com"}
             )
         self.assertEqual(removed, [])
         self.assertTrue(frappe.db.exists("BP Task Watcher", watcher.name))
 
     def test_watcher_kept_across_soft_trash_regardless_of_access(self):
-        watcher = self._watch("watcher@example.com")
+        watcher = self._watch("test73+info@batchnepal.com")
         frappe.db.set_value("BP Task", self.task, "is_deleted", 1)
         with patch.object(membership_invariants, "_user_can_view_task", return_value=False):
-            removed = membership_invariants.prune_stale_watchers(self.project, {"watcher@example.com"})
+            removed = membership_invariants.prune_stale_watchers(self.project, {"test73+info@batchnepal.com"})
         self.assertEqual(removed, [])
         self.assertTrue(frappe.db.exists("BP Task Watcher", watcher.name))
 
     def test_watcher_removed_when_task_row_gone(self):
-        watcher = self._watch("ghost@example.com")
+        watcher = self._watch("test43+info@batchnepal.com")
         frappe.db.set_value("BP Task Watcher", watcher.name, "task", "does-not-exist")
-        removed = membership_invariants.prune_stale_watchers(self.project, {"ghost@example.com"})
+        removed = membership_invariants.prune_stale_watchers(self.project, {"test43+info@batchnepal.com"})
         self.assertEqual(removed, [watcher.name])
 
     def test_update_project_members_prunes_only_removed_users(self):
-        watcher = self._watch("dropped@example.com")
+        watcher = self._watch("test39+info@batchnepal.com")
         with (
             patch("batch_projects.api.board.update_project_members") as real_update,
             patch.object(membership_invariants, "prune_stale_watchers") as prune,
@@ -208,23 +209,23 @@ class TestPruneStaleWatchersAndDelegation(FrappeTestCase):
                 """INSERT INTO `tabBP Project Member`
                    (name, parent, parenttype, parentfield, idx, user, role, creation, modified, owner, modified_by)
                    VALUES (%s, %s, 'BP Project', 'members', 1, %s, 'Member', NOW(), NOW(), %s, %s)""",
-                (frappe.generate_hash(length=10), self.project, "dropped@example.com",
+                (frappe.generate_hash(length=10), self.project, "test39+info@batchnepal.com",
                  "Administrator", "Administrator"),
             )
             membership_invariants.update_project_members(self.project, "[]")
         # create_project already auto-adds Administrator as a member, so the
         # real before/after diff (fake_update deletes ALL members) includes it.
-        prune.assert_called_once_with(self.project, {"dropped@example.com", "Administrator"})
+        prune.assert_called_once_with(self.project, {"test39+info@batchnepal.com", "Administrator"})
 
     def test_after_project_member_delete_prunes_that_users_watchers(self):
-        watcher = self._watch("single-delete@example.com")
-        doc = frappe._dict(parent=self.project, user="single-delete@example.com")
+        watcher = self._watch("test62+info@batchnepal.com")
+        doc = frappe._dict(parent=self.project, user="test62+info@batchnepal.com")
         with patch.object(membership_invariants, "_user_can_view_task", return_value=False):
             membership_invariants.after_project_member_delete(doc)
         self.assertFalse(frappe.db.exists("BP Task Watcher", watcher.name))
 
     def test_after_project_member_delete_logs_and_reraises_on_failure(self):
-        doc = frappe._dict(parent=self.project, user="x@example.com")
+        doc = frappe._dict(parent=self.project, user="test75+info@batchnepal.com")
         with (
             patch.object(
                 membership_invariants, "prune_stale_watchers", side_effect=RuntimeError("boom")

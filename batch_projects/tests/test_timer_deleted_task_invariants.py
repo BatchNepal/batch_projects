@@ -50,7 +50,7 @@ class TestStopCapsDurationAtDeletion(FrappeTestCase):
     def test_legacy_timer_on_a_deleted_task_is_capped_at_deleted_on(self):
         started_at = now_datetime() - timedelta(hours=5)
         deleted_on = now_datetime() - timedelta(hours=2)
-        active_timer = frappe._dict(user="u@example.com", task="TASK-1", started_at=started_at)
+        active_timer = frappe._dict(user="test28+info@batchnepal.com", task="TASK-1", started_at=started_at)
 
         with (
             patch.object(frappe, "get_doc") as get_doc,
@@ -72,7 +72,7 @@ class TestStopCapsDurationAtDeletion(FrappeTestCase):
         self.assertAlmostEqual(logged_hours, 3.0, places=1)
 
     def test_timer_on_a_hard_deleted_task_logs_nothing(self):
-        active_timer = frappe._dict(user="u@example.com", task="TASK-GONE", started_at=now_datetime())
+        active_timer = frappe._dict(user="test28+info@batchnepal.com", task="TASK-GONE", started_at=now_datetime())
         with (
             patch.object(frappe, "get_doc", return_value=active_timer),
             patch.object(frappe, "delete_doc"),
@@ -86,7 +86,7 @@ class TestStopCapsDurationAtDeletion(FrappeTestCase):
 
     def test_timer_on_a_live_task_is_uncapped(self):
         started_at = now_datetime() - timedelta(hours=1)
-        active_timer = frappe._dict(user="u@example.com", task="TASK-1", started_at=started_at)
+        active_timer = frappe._dict(user="test28+info@batchnepal.com", task="TASK-1", started_at=started_at)
         with (
             patch.object(frappe, "get_doc", return_value=active_timer),
             patch.object(frappe, "delete_doc"),
@@ -106,7 +106,7 @@ class TestStopCapsDurationAtDeletion(FrappeTestCase):
         close: falling back to now() when deleted_on is missing (a legacy
         row predating that field, or corrupted data) would log however long
         the timer had silently kept running as real, billable time."""
-        active_timer = frappe._dict(user="u@example.com", task="TASK-1", started_at=now_datetime() - timedelta(hours=5))
+        active_timer = frappe._dict(user="test28+info@batchnepal.com", task="TASK-1", started_at=now_datetime() - timedelta(hours=5))
         with (
             patch.object(frappe, "get_doc", return_value=active_timer),
             patch.object(frappe, "delete_doc") as delete_doc,
@@ -132,7 +132,7 @@ class TestStopCapsDurationAtDeletion(FrappeTestCase):
         negative-then-inflated span; it must simply log nothing."""
         started_at = now_datetime()
         deleted_on = started_at - timedelta(hours=1)
-        active_timer = frappe._dict(user="u@example.com", task="TASK-1", started_at=started_at)
+        active_timer = frappe._dict(user="test28+info@batchnepal.com", task="TASK-1", started_at=started_at)
         with (
             patch.object(frappe, "get_doc", return_value=active_timer),
             patch.object(frappe, "delete_doc"),
@@ -170,7 +170,7 @@ class TestGetActiveTimerSelfHealsTrashedTask(FrappeTestCase):
 
 class TestTimerRemindersSkipDeletedTasks(FrappeTestCase):
     def test_no_reminder_is_sent_for_a_deleted_tasks_timer(self):
-        rows = [frappe._dict(name="AT-1", user="u@example.com", task="TASK-1", started_at=now_datetime() - timedelta(hours=9))]
+        rows = [frappe._dict(name="AT-1", user="test28+info@batchnepal.com", task="TASK-1", started_at=now_datetime() - timedelta(hours=9))]
         with (
             patch.object(frappe, "get_all", return_value=rows),
             patch("batch_projects.events._reminder_sent_today", return_value=False),

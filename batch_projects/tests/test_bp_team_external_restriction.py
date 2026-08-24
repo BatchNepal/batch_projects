@@ -90,10 +90,10 @@ def _make_team(team_name, members=None):
 class TestBpTeamExternalRestriction(FrappeTestCase):
     TEAM_A = "V117 Team Alpha"
     TEAM_B = "V117 Team Beta"
-    WS_MEMBER = "v117-ws-member@example.com"
-    WS_NONMEMBER = "v117-ws-nonmember@example.com"
-    BP_GUEST = "v117-bpguest@example.com"
-    SYS_USER = "v117-sys@example.com"
+    WS_MEMBER = "test70+info@batchnepal.com"
+    WS_NONMEMBER = "test71+info@batchnepal.com"
+    BP_GUEST = "test68+info@batchnepal.com"
+    SYS_USER = "test69+info@batchnepal.com"
 
     def setUp(self):
         frappe.set_user("Administrator")

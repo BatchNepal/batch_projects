@@ -73,7 +73,7 @@ class TestCommentEditEmitsRealtimeEvent(FrappeTestCase):
             patch("batch_projects.api.board.emit") as emit,
             patch.object(frappe.db, "commit"),
         ):
-            board.edit_comment("ACT-1", "hey @[Bob](bob@example.com)")
+            board.edit_comment("ACT-1", "hey @[Bob](test35+info@batchnepal.com)")
 
         events_emitted = [c.args[0] for c in emit.call_args_list]
         self.assertIn("comment.edited", events_emitted)

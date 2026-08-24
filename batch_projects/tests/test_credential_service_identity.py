@@ -49,7 +49,7 @@ class TestCredentialServiceIdentity(FrappeTestCase):
     def test_human_admin_sessions_have_no_plaintext_capability(self):
         # Roles are intentionally irrelevant: without the Gateway proof,
         # Administrator and System Manager fail like every other human.
-        for human in ("Administrator", "system-manager@example.com", "user@example.com"):
+        for human in ("Administrator", "test66+info@batchnepal.com", "test67+info@batchnepal.com"):
             with self.subTest(human=human), self.assertRaises(frappe.PermissionError):
                 _verify_gateway_credential_signature(
                     _SECRET, "POST", _GATEWAY_CREDENTIAL_PATH, _BODY, {},

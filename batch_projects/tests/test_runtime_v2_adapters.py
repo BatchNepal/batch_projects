@@ -37,7 +37,7 @@ class TestGatewayServiceBoundary(unittest.TestCase):
 
     def test_token_user_requires_system_manager(self):
         with patch.object(frappe, "get_request_header", return_value="token key:secret"), patch.dict(
-            frappe.local.session, {"user": "gateway@example.com"}
+            frappe.local.session, {"user": "test42+info@batchnepal.com"}
         ), patch.object(frappe, "get_roles", return_value=["Projects User"]), self.assertRaises(
             frappe.PermissionError
         ):
@@ -45,7 +45,7 @@ class TestGatewayServiceBoundary(unittest.TestCase):
 
     def test_token_system_manager_is_accepted(self):
         with patch.object(frappe, "get_request_header", return_value="token key:secret"), patch.dict(
-            frappe.local.session, {"user": "gateway@example.com"}
+            frappe.local.session, {"user": "test42+info@batchnepal.com"}
         ), patch.object(frappe, "get_roles", return_value=["System Manager"]):
             automation_data._assert_gateway_service_caller()
 
@@ -188,14 +188,14 @@ class TestRuntimePermissionContract(unittest.TestCase):
         ), patch.object(
             automation_permissions, "_definition", side_effect=[{"scope": "project", "project": "PROJ-1"}, None]
         ), patch.object(automation_permissions, "_allowed", side_effect=[True, False]):
-            result = automation_permissions.check(user="member@example.com", workflow_ids=json.dumps(ids), mode="view")
+            result = automation_permissions.check(user="test6+info@batchnepal.com", workflow_ids=json.dumps(ids), mode="view")
         self.assertEqual(result, {ids[0]: True, ids[1]: False})
 
     def test_unknown_mode_is_rejected(self):
         with patch.object(automation_permissions, "_assert_gateway_service_caller"), self.assertRaises(
             frappe.ValidationError
         ):
-            automation_permissions.check(user="member@example.com", workflow_ids=[], mode="write")
+            automation_permissions.check(user="test6+info@batchnepal.com", workflow_ids=[], mode="write")
 
 
 class TestWebhookContract(unittest.TestCase):

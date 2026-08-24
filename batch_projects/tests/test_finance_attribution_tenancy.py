@@ -269,7 +269,7 @@ class TestPurchaseInvoiceProjectProjection(unittest.TestCase):
             insights_data.get_margin_inputs(
                 "2026-08-01",
                 "2026-08-31",
-                "user@example.com",
+                "test67+info@batchnepal.com",
             )
 
         purchase = next(
